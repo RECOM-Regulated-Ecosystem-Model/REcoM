@@ -1,1 +1,0 @@
-/albedo/soft/sw/spack-sw/intel-oneapi-mpi/2021.6.0-ypwmdz5/mpi/2021.6.0/bin/mpiifort  -qmkl -O3 CMakeFiles/FortranCInterface.dir/main.F.o CMakeFiles/FortranCInterface.dir/call_sub.f.o CMakeFiles/FortranCInterface.dir/call_mod.f90.o -o FortranCInterface  libsymbols.a libmyfort.a -lirng -ldecimal -lcilkrts -lstdc++ 

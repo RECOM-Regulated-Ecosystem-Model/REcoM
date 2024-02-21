@@ -1,2 +1,0 @@
-/usr/bin/ar qc libfesom_C.a CMakeFiles/fesom_C.dir/psolve.c.o
-/usr/bin/ranlib libfesom_C.a

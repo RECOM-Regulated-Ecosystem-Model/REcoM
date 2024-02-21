@@ -1,2 +1,0 @@
-/usr/bin/ar qc libasync_threads_cpp.a CMakeFiles/async_threads_cpp.dir/ThreadsManager.cpp.o CMakeFiles/async_threads_cpp.dir/ThreadsManagerFC.cpp.o
-/usr/bin/ranlib libasync_threads_cpp.a
