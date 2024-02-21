@@ -1,0 +1,1 @@
+/albedo/home/ogurses/GCB2024/fesom2_sp/src/../bin/fesom.x

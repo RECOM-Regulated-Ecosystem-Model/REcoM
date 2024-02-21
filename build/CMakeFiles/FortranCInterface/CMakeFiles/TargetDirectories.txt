@@ -1,0 +1,5 @@
+/albedo/home/ogurses/GCB2024/fesom2_sp/build/CMakeFiles/FortranCInterface/CMakeFiles/edit_cache.dir
+/albedo/home/ogurses/GCB2024/fesom2_sp/build/CMakeFiles/FortranCInterface/CMakeFiles/FortranCInterface.dir
+/albedo/home/ogurses/GCB2024/fesom2_sp/build/CMakeFiles/FortranCInterface/CMakeFiles/myfort.dir
+/albedo/home/ogurses/GCB2024/fesom2_sp/build/CMakeFiles/FortranCInterface/CMakeFiles/rebuild_cache.dir
+/albedo/home/ogurses/GCB2024/fesom2_sp/build/CMakeFiles/FortranCInterface/CMakeFiles/symbols.dir
