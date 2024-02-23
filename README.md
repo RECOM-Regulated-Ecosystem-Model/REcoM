@@ -1,20 +1,29 @@
-The Finite Element Sea Ice-Ocean Model (FESOM2) 
+Regulated Ecosystem Model (REcoM)
 ======
 [![Build Status](https://github.com/FESOM/fesom2/workflows/FESOM2%20main%20test/badge.svg)](https://github.com/FESOM/fesom2/actions)
 
-Multi-resolution ocean general circulation model that solves the equations of motion describing the ocean and sea ice using finite-element and finite-volume methods on unstructured computational grids. The model is developed and supported by researchers at the Alfred Wegener Institute, Helmholtz Centre for Polar and Marine Research (AWI), in Bremerhaven, Germany.
+REcoM is a water column biogeochemistry and ecosystem model which incorporates cycles of carbon and nutrients (nitrogen, iron, and silicon) with varying intracellular stoichiometry in phytoplankton, zooplankton and detritus. It is coupled to variable-resolution ocean general circulation model that solves the equations of motion describing the ocean and sea ice using finite-element and finite-volume methods on unstructured computational grids (FESOM). REcoM and FESOM models are developed and supported by researchers at the Alfred Wegener Institute, Helmholtz Centre for Polar and Marine Research (AWI), in Bremerhaven, Germany.
+
+<p align="center">
+  <img src="gmd-2023-2-f02-thumb.png" width=350 title="REcoM">
+</p>
 
 **Website:** [fesom.de](https://fesom.de/)
 
-**Documentation:** [fesom2.readthedocs.io](https://fesom2.readthedocs.io/en/latest/index.html)
+**Documentation:** 
+[recom.readthedocs.io](https://recom.readthedocs.io/en/latest/intro.html)
+[fesom2.readthedocs.io](https://fesom2.readthedocs.io/en/latest/index.html)
 
 **Basic tutorial:** [Getting started](https://fesom2.readthedocs.io/en/latest/getting_started/getting_started.html)
-
 
 References
 ----------
 
 [Complete list of references on fesom.de](https://fesom.de/publications/)
+
+* **[REcoM model formulation and evaluation, coupled to FESOM2.1]** Gürses, Ö., Oziel, L., Karakuş, O., Sidorenko, D., Völker, C., Ye, Y., Zeising, M., Butzin, M., and Hauck, J.: Ocean biogeochemistry in the coupled ocean–sea ice–biogeochemistry model FESOM2.1–REcoM3, Geosci. Model Dev., 16, 4883–4936, https://doi.org/10.5194/gmd-16-4883-2023, 2023
+
+* **[REcoM skill assessment, coupled to FESOM1.3]** Schourup-Kristensen, V., Sidorenko, D., Wolf-Gladrow, D. A., and Völker, C.: A skill assessment of the biogeochemical model REcoM2 coupled to the Finite Element Sea Ice–Ocean Model (FESOM 1.3), Geosci. Model Dev., 7, 2769–2802, https://doi.org/10.5194/gmd-7-2769-2014, 2014.
 
 * **[Ocean model formulation]** Danilov, S., Sidorenko, D., Wang, Q., and Jung, T.: The Finite-volumE Sea ice–Ocean Model (FESOM2), Geosci. Model Dev., 10, 765–789, https://doi.org/10.5194/gmd-10-765-2017, 2017. 
 
