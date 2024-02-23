@@ -5,8 +5,9 @@ Regulated Ecosystem Model (REcoM)
 REcoM is a water column biogeochemistry and ecosystem model which incorporates cycles of carbon and nutrients (nitrogen, iron, and silicon) with varying intracellular stoichiometry in phytoplankton, zooplankton and detritus. It is coupled to variable-resolution ocean general circulation model that solves the equations of motion describing the ocean and sea ice using finite-element and finite-volume methods on unstructured computational grids (FESOM). REcoM and FESOM models are developed and supported by researchers at the Alfred Wegener Institute, Helmholtz Centre for Polar and Marine Research (AWI), in Bremerhaven, Germany.
 
 <p align="center">
-  <img_src="gmd-2023-2-f02-thumb.png" width=350 title="REcoM">
+  <img src="gmd-2023-2-f02-thumb.png" width=350 title="REcoM">
 </p>
+
 **Website:** [fesom.de](https://fesom.de/)
 
 **Documentation:** 
