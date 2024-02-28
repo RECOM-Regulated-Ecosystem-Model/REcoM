@@ -39,7 +39,7 @@ subroutine recom_sinking_new(tr_num,mesh)
 
 #include "../associate_mesh.h"
 
-!< Constant sinking velocities (we prescribe themunder namelist recom)
+!< Constant sinking velocities (we prescribe them under namelist recom)
 !< This hardcoded part is temporary 
 !< .OG. 07.07.2021
 

@@ -54,7 +54,7 @@ subroutine Depth_calculations(n,Nn,wF,zF,thick,recipthick,mesh)
   wF(Nn+1,:)      = 0.d0
 
 !----------------------------------------------------
-! calculate thickness of vertical layers
+! Layer thickness
 
     thick   =0.0_WP
     recipthick=0.0_WP

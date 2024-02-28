@@ -37,7 +37,7 @@ use cpl_driver
 #if defined(__recom)
   use REcoM_GloVar
   use recom_config
-  use recom_diag                                                                                           
+  use recom_diag
 #endif
 
 IMPLICIT NONE

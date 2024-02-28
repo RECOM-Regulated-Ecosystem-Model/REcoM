@@ -46,19 +46,29 @@ subroutine recom_init(mesh)
 
     if (.not. use_REcoM) return
     
-    !___allocate________________________________________________________________
+    ! *** allocate and initialize ***
+
     ! GloFeDust and AtmFeInput: atm dep of iron and arrays for diagnostics.
     ! When felimit is not used, arrays are set to zero.
+
     allocate(GloFeDust(node_size))
+    GloFeDust = 0.d0
+
     allocate(AtmFeInput(node_size))
+    AtmFeInput = 0.d0
 
     ! GloNDust AtmNInput: atm dep of nitrogen sources and sinks. 
     ! They are allocated even nitrogen sources and sinks are not used
+
     allocate(GloNDust(node_size))
+    GloNDust = 0.d0
+
     allocate(AtmNInput(node_size))
+    AtmNInput = 0.d0
     
     ! cosAI: cos of angle of incidence
     allocate(cosAI(node_size))
+    cosAI = 0.d0
 
     allocate(GloPCO2surf(node_size))
     allocate(GloCO2flux(node_size))
@@ -148,14 +158,6 @@ end if
     allocate(ErosionTOC2D(node_size))
     allocate(ErosionTSi2D(node_size))
 
-    !___initialize______________________________________________________________
-    GloFeDust = 0.d0
-    AtmFeInput = 0.d0
-
-    GloNDust = 0.d0
-    AtmNInput = 0.d0
-
-    cosAI = 0.d0
 
     ! initialise 2d field of CO2 related diagnostics
     GloPCO2surf = 0.d0

@@ -58,12 +58,14 @@ MODULE io_RESTART
 !
 !--------------------------------------------------------------------------------------------
 ! id will keep the IDs of all required dimentions and variables
+! Recom: bid
   type(nc_file), save       :: oid, iid, bid
   integer,       save       :: globalstep=0
   type(nc_file), save       :: ip_id
   real(kind=WP)             :: ctime !current time in seconds from the beginning of the year
 
   PRIVATE
+! Recom: bid
   PUBLIC :: restart, oid, iid, bid
   PUBLIC :: ip_id, def_dim, def_variable_1d, def_variable_2d 
 !

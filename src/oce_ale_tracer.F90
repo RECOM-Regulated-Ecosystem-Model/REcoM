@@ -139,9 +139,10 @@ subroutine solve_tracers_ale(mesh)
     use Toy_Channel_Soufflet
     use adv_tracers_ale_interface
     use diff_tracers_ale_interface
+#if defined(__recom)
     use REcom_config, only: ciso     ! to calculation radioactive decay of 14C
     use REcoM_ciso, only: lambda_14  ! decay constant of 14C
-    
+#endif
     implicit none
     type(t_mesh), intent(in) , target :: mesh
     integer                  :: tr_num, node, nzmax, nzmin
@@ -289,9 +290,9 @@ subroutine diff_tracers_ale(tr_num, mesh)
     use diff_ver_part_redi_expl_interface
     use diff_ver_part_impl_ale_interface
     use diff_part_bh_interface
+#if defined(__recom)
     use diff_ver_recom_expl_interface
     use ver_sinking_recom_benthos_interface
-#if defined(__recom)
     USE REcoM_GloVar
     use recom_config !, recom_debug
 use g_support
@@ -869,6 +870,7 @@ end subroutine diff_ver_part_impl_ale
 !
 !
 !===============================================================================
+#if defined(__recom)
 subroutine ver_sinking_recom_benthos(tr_num,mesh)
     use o_ARRAYS
     use g_PARSUP
@@ -1144,6 +1146,7 @@ id = tracer_id(tr_num)
         end do
     end do
 end subroutine diff_ver_recom_expl
+#endif
 !
 !
 !===============================================================================
