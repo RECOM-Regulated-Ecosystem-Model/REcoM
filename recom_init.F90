@@ -640,7 +640,7 @@ subroutine recom_init(nl, ulevels_nod2D, nlevels_nod2D, geo_coord_nod2D, Z_3d_n,
     tracers_info%data_pointers(21)%tracer_data(:,:) = max(tiny, tracers_info%data_pointers(21)%tracer_data(:,:))
 !------------------------------------------
 
-    if(mype==0) write(*,*),'Tracers have been initialized as spinup from WOA/glodap netcdf files'
+    if(mype==0) write(*,*) 'Tracers have been initialized as spinup from WOA/glodap netcdf files'
         locDINmax = -66666
         locDINmin = 66666
         locDICmax = locDINmax
