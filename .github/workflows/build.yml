@@ -1,0 +1,22 @@
+name: build
+
+on: pull_request
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup
+      run: |
+        sudo apt update -y
+        sudo apt install -y cmake libopenmpi-dev openmpi-bin
+
+    - name: Build
+      run: |
+        mkdir build
+        cd build
+        cmake .. 
+        make
