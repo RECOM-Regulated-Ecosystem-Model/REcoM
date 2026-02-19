@@ -5,58 +5,59 @@
 ! allocate & initialise arrays for REcoM
 module recom_init_interface
     interface
-        subroutine recom_init(tracers, partit, mesh)
-        USE MOD_MESH
-        USE MOD_PARTIT
-        USE MOD_PARSUP
-        use mod_tracer
-        type(t_tracer), intent(inout), target :: tracers
-        type(t_partit), intent(inout), target :: partit
-        type(t_mesh),   intent(in)  ,  target :: mesh
+        subroutine recom_init(nl, ulevels_nod2D, nlevels_nod2D, geo_coord_nod2D, Z_3d_n,   &
+                              myDim_nod2d, eDim_nod2D, mype, MPI_COMM_FESOM, myDim_elem2D, &
+                              eDim_elem2D, tracers_info, num_tracers, rad)
+        use recom_glovar, only: tracers_info_type
+        use recom_declarations, only: wp
+        integer,        intent(in)                  :: nl, mydim_nod2d, edim_nod2d, mype, num_tracers
+        integer,        intent(in)                  :: mpi_comm_fesom, mydim_elem2d, edim_elem2d
+        integer,        intent(in), dimension(:)    :: ulevels_nod2d, nlevels_nod2d
+        real(kind=WP), intent(in)                  :: rad
+        real(kind=wp),  intent(in), dimension(:, :) :: geo_coord_nod2d, z_3d_n
+        type(tracers_info_type), intent(in) :: tracers_info
         end subroutine
     end interface
 end module
 !
 !
 !_______________________________________________________________________________
-subroutine recom_init(tracers, partit, mesh)
-    USE MOD_MESH
-    USE MOD_PARTIT
-    USE MOD_PARSUP
-    USE MOD_TRACER
-    use g_clock
+subroutine recom_init(nl, ulevels_nod2D, nlevels_nod2D, geo_coord_nod2D, Z_3d_n,   &
+                      myDim_nod2d, eDim_nod2D, mype, MPI_COMM_FESOM, myDim_elem2D, &
+                      eDim_elem2D, tracers_info, num_tracers, rad)
+
+    use mpi
+
     use REcoM_declarations
     use REcoM_GloVar
     use REcoM_locVar
     use recom_config
     use REcoM_ciso
+
     implicit none
-#include "netcdf.inc"
+
+    integer,        intent(in)                  :: nl, mydim_nod2d, edim_nod2d, mype, num_tracers
+    integer,        intent(in)                  :: mpi_comm_fesom, mydim_elem2d, edim_elem2d
+    real(kind=WP), intent(in)                  :: rad
+    integer,        intent(in), dimension(:)    :: ulevels_nod2d, nlevels_nod2d
+    real(kind=wp),  intent(in), dimension(:, :) :: geo_coord_nod2d, z_3d_n
+    type(tracers_info_type), intent(in) :: tracers_info
+
     !___________________________________________________________________________
     ! pointer on necessary derived types
     integer                                 :: n, k, row, nzmin, nzmax, i, id
-    integer                                 :: elem_size, node_size, num_tracers
+    integer                                 :: elem_size, node_size
+    integer                                 :: MPIerr
 
     real(kind=WP)                           :: locDINmax, locDINmin, locDICmax, locDICmin, locAlkmax, glo
     real(kind=WP)                           :: locAlkmin, locDSimax, locDSimin, locDFemax, locDFemin
     real(kind=WP)                           :: locO2max, locO2min
 
-    type(t_tracer), intent(inout), target   :: tracers
-    type(t_partit), intent(inout), target   :: partit
-    type(t_mesh),   intent(in) ,   target   :: mesh
-
     ! After reading tracer namelist - validate actual IDs
-    integer, dimension(tracers%num_tracers) :: tracer_id_array
+    integer, dimension(num_tracers) :: tracer_id_array
 
-#include "../associate_part_def.h"
-#include "../associate_mesh_def.h"
-#include "../associate_part_ass.h"
-#include "../associate_mesh_ass.h"
-
-    elem_size   = myDim_elem2D+eDim_elem2D
-    node_size   = myDim_nod2D+eDim_nod2D
-    num_tracers = tracers%num_tracers
-
+    elem_size   = myDim_elem2D + eDim_elem2D
+    node_size   = myDim_nod2D + eDim_nod2D
 
 !! *** Allocate and initialize ***
 
@@ -403,7 +404,8 @@ subroutine recom_init(tracers, partit, mesh)
     call validate_recom_tracers(num_tracers, mype)
 
     ! ... populate tracer_id_array from namelist ...
-    tracer_id_array = tracers%data(1:tracers%num_tracers)%ID
+    !tracer_id_array = tracers%data(1:tracers%num_tracers)%ID
+    tracer_id_array = tracers_info%ids(1:num_tracers)
     call validate_tracer_id_sequence(tracer_id_array, num_tracers, mype)
 
     !===============================================================================
@@ -431,7 +433,7 @@ subroutine recom_init(tracers, partit, mesh)
     !===============================================================================
 
     DO i=num_tracers-bgc_num+1, num_tracers
-        id=tracers%data(i)%ID
+        id=tracers_info%ids(i)
 
         SELECT CASE (id)
 
@@ -443,61 +445,61 @@ subroutine recom_init(tracers, partit, mesh)
 
         ! --- Small Phytoplankton
         CASE (1004)  ! PhyN - Phytoplankton Nitrogen
-            tracers%data(i)%values(:,:) = tiny_chl/chl2N_max
+            tracers_info%data_pointers(i)%tracer_data(:,:) = tiny_chl/chl2N_max
 
         CASE (1005)  ! PhyC - Phytoplankton Carbon
-            tracers%data(i)%values(:,:) = tiny_chl/chl2N_max/NCmax
+            tracers_info%data_pointers(i)%tracer_data(:,:) = tiny_chl/chl2N_max/NCmax
 
         CASE (1006)  ! PhyChl - Phytoplankton Chlorophyll
-            tracers%data(i)%values(:,:) = tiny_chl
+            tracers_info%data_pointers(i)%tracer_data(:,:) = tiny_chl
 
         ! --- Detritus (Non-living organic matter) ---
         CASE (1007)  ! DetN - Detrital Nitrogen
-            tracers%data(i)%values(:,:) = tiny
+            tracers_info%data_pointers(i)%tracer_data(:,:) = tiny
 
         CASE (1008)  ! DetC - Detrital Carbon
-            tracers%data(i)%values(:,:) = tiny
+            tracers_info%data_pointers(i)%tracer_data(:,:) = tiny
 
         ! --- Mesozooplankton (Heterotrophs) ---
         CASE (1009)  ! HetN - Heterotroph Nitrogen
-            tracers%data(i)%values(:,:) = tiny
+            tracers_info%data_pointers(i)%tracer_data(:,:) = tiny
 
         CASE (1010)  ! HetC - Heterotroph Carbon (using Redfield ratio)
-            tracers%data(i)%values(:,:) = tiny * Redfield
+            tracers_info%data_pointers(i)%tracer_data(:,:) = tiny * Redfield
 
         ! --- Dissolved Organic Matter ---
         CASE (1011)  ! DON - Dissolved Organic Nitrogen
-            tracers%data(i)%values(:,:) = tiny
+            tracers_info%data_pointers(i)%tracer_data(:,:) = tiny
 
         CASE (1012)  ! DOC - Dissolved Organic Carbon
-            tracers%data(i)%values(:,:) = tiny
+            tracers_info%data_pointers(i)%tracer_data(:,:) = tiny
 
         ! --- Diatoms ---
         CASE (1013)  ! DiaN - Diatom Nitrogen
-            tracers%data(i)%values(:,:) = tiny_chl/chl2N_max
+            tracers_info%data_pointers(i)%tracer_data(:,:) = tiny_chl/chl2N_max
 
         CASE (1014)  ! DiaC - Diatom Carbon
-            tracers%data(i)%values(:,:) = tiny_chl/chl2N_max/NCmax
+            tracers_info%data_pointers(i)%tracer_data(:,:) = tiny_chl/chl2N_max/NCmax
 
         CASE (1015)  ! DiaChl - Diatom Chlorophyll
-            tracers%data(i)%values(:,:) = tiny_chl
+            tracers_info%data_pointers(i)%tracer_data(:,:) = tiny_chl
 
         CASE (1016)  ! DiaSi - Diatom Silica
-            tracers%data(i)%values(:,:) = tiny_chl/chl2N_max_d/NCmax_d/SiCmax
+            tracers_info%data_pointers(i)%tracer_data(:,:) = tiny_chl/chl2N_max_d/NCmax_d/SiCmax
 
         CASE (1017)  ! DetSi - Detrital Silica
-            tracers%data(i)%values(:,:) = tiny
+            tracers_info%data_pointers(i)%tracer_data(:,:) = tiny
 
         ! --- Iron (micronutrient) ---
         CASE (1019)  ! Fe - Iron (unit conversion: mol/L => umol/m3)
-            tracers%data(i)%values(:,:) = tracers%data(i)%values(:,:)* 1.e9
+            tracers_info%data_pointers(i)%tracer_data(:,:) = tracers_info%data_pointers(i)%tracer_data(:,:)* 1.e9
 
         ! --- Calcium Carbonate (Calcite) ---
         CASE (1020)  ! PhyCalc - Phytoplankton Calcite
-            tracers%data(i)%values(:,:) = tiny * Redfield
+            tracers_info%data_pointers(i)%tracer_data(:,:) = tiny * Redfield
 
         CASE (1021)  ! DetCalc - Detrital Calcite
-            tracers%data(i)%values(:,:) = tiny
+            tracers_info%data_pointers(i)%tracer_data(:,:) = tiny
 
         !---------------------------------------------------------------------------
         ! Extended Model: Additional Zooplankton and Detritus (enable_3zoo2det)
@@ -506,55 +508,55 @@ subroutine recom_init(tracers, partit, mesh)
         CASE (1023)
             IF (enable_3zoo2det .AND. .NOT. enable_coccos) THEN
                 ! Zoo2N - Macrozooplankton Nitrogen
-                tracers%data(i)%values(:,:) = tiny
+                tracers_info%data_pointers(i)%tracer_data(:,:) = tiny
             ELSE IF (enable_coccos .AND. .NOT. enable_3zoo2det) THEN
                 ! CoccoN - Coccolithophore Nitrogen
-                tracers%data(i)%values(:,:) = tiny_chl / chl2N_max
+                tracers_info%data_pointers(i)%tracer_data(:,:) = tiny_chl / chl2N_max
             END IF
 
         CASE (1024)
             IF (enable_3zoo2det .AND. .NOT. enable_coccos) THEN
                 ! Zoo2C - Macrozooplankton Carbon
-                tracers%data(i)%values(:,:) = tiny * Redfield
+                tracers_info%data_pointers(i)%tracer_data(:,:) = tiny * Redfield
             ELSE IF (enable_coccos .AND. .NOT. enable_3zoo2det) THEN
                 ! CoccoC - Coccolithophore Carbon
-                tracers%data(i)%values(:,:) = tiny_chl / chl2N_max / NCmax
+                tracers_info%data_pointers(i)%tracer_data(:,:) = tiny_chl / chl2N_max / NCmax
             END IF
 
         CASE (1025)
             IF (enable_3zoo2det .AND. .NOT. enable_coccos) THEN
                 ! DetZ2N - Macrozooplankton Detrital Nitrogen
-                tracers%data(i)%values(:,:) = tiny
+                tracers_info%data_pointers(i)%tracer_data(:,:) = tiny
             ELSE IF (enable_coccos .AND. .NOT. enable_3zoo2det) THEN
                 ! CoccoChl - Coccolithophore Chlorophyll
-                tracers%data(i)%values(:,:) = tiny_chl
+                tracers_info%data_pointers(i)%tracer_data(:,:) = tiny_chl
             END IF
 
         CASE (1026)
             IF (enable_3zoo2det .AND. .NOT. enable_coccos) THEN
                 ! DetZ2C - Macrozooplankton Detrital Carbon
-                tracers%data(i)%values(:,:) = tiny
+                tracers_info%data_pointers(i)%tracer_data(:,:) = tiny
             ELSE IF (enable_coccos .AND. .NOT. enable_3zoo2det) THEN
                 ! PhaeoN - Phaeocystis Nitrogen
-                tracers%data(i)%values(:,:) = tiny_chl / chl2N_max
+                tracers_info%data_pointers(i)%tracer_data(:,:) = tiny_chl / chl2N_max
             END IF
 
         CASE (1027)
             IF (enable_3zoo2det .AND. .NOT. enable_coccos) THEN
                 ! DetZ2Si - Zooplankton 2 Detrital Silica
-                tracers%data(i)%values(:,:) = tiny
+                tracers_info%data_pointers(i)%tracer_data(:,:) = tiny
             ELSE IF (enable_coccos .AND. .NOT. enable_3zoo2det) THEN
                 ! PhaeoC - Phaeocystis Carbon
-                tracers%data(i)%values(:,:) = tiny_chl / chl2N_max / NCmax
+                tracers_info%data_pointers(i)%tracer_data(:,:) = tiny_chl / chl2N_max / NCmax
             END IF
 
         CASE (1028)
             IF (enable_3zoo2det .AND. .NOT. enable_coccos) THEN
                 ! DetZ2Calc - Macrozooplankton Detrital Calcite
-                tracers%data(i)%values(:,:) = tiny
+                tracers_info%data_pointers(i)%tracer_data(:,:) = tiny
             ELSE IF (enable_coccos .AND. .NOT. enable_3zoo2det) THEN
                 ! PhaeoChl - Phaeocystis Chlorophyll
-                tracers%data(i)%values(:,:) = tiny_chl
+                tracers_info%data_pointers(i)%tracer_data(:,:) = tiny_chl
             END IF
 
         !---------------------------------------------------------------------------
@@ -564,55 +566,55 @@ subroutine recom_init(tracers, partit, mesh)
         CASE (1029)
             IF (enable_coccos .AND. enable_3zoo2det) THEN
                 ! CoccoN - Coccolithophore Nitrogen
-                tracers%data(i)%values(:,:) = tiny_chl / chl2N_max
+                tracers_info%data_pointers(i)%tracer_data(:,:) = tiny_chl / chl2N_max
             ELSE IF (enable_3zoo2det .AND. .NOT. enable_coccos) THEN
                 ! Zoo3N - Microzooplankton Nitrogen
-                tracers%data(i)%values(:,:) = tiny
+                tracers_info%data_pointers(i)%tracer_data(:,:) = tiny
             END IF
 
         CASE (1030)
             IF (enable_coccos .AND. enable_3zoo2det) THEN
                 ! CoccoC - Coccolithophore Carbon
-                tracers%data(i)%values(:,:) = tiny_chl / chl2N_max / NCmax
+                tracers_info%data_pointers(i)%tracer_data(:,:) = tiny_chl / chl2N_max / NCmax
             ELSE IF (enable_3zoo2det .AND. .NOT. enable_coccos) THEN
                 ! Zoo3C - Microzooplankton Carbon
-                tracers%data(i)%values(:,:) = tiny * Redfield
+                tracers_info%data_pointers(i)%tracer_data(:,:) = tiny * Redfield
             END IF
 
         CASE (1031)
             IF (enable_coccos .AND. enable_3zoo2det) THEN
                 ! CoccoChl - Coccolithophore Chlorophyll
-                tracers%data(i)%values(:,:) = tiny_chl
+                tracers_info%data_pointers(i)%tracer_data(:,:) = tiny_chl
             END IF
 
         CASE (1032)
             IF (enable_coccos .AND. enable_3zoo2det) THEN
                 ! PhaeoN - Phaeocystis Nitrogen
-                tracers%data(i)%values(:,:) = tiny_chl / chl2N_max
+                tracers_info%data_pointers(i)%tracer_data(:,:) = tiny_chl / chl2N_max
             END IF
 
         CASE (1033)
             IF (enable_coccos .AND. enable_3zoo2det) THEN
                 ! PhaeoC - Phaeocystis Carbon
-                tracers%data(i)%values(:,:) = tiny_chl / chl2N_max / NCmax
+                tracers_info%data_pointers(i)%tracer_data(:,:) = tiny_chl / chl2N_max / NCmax
             END IF
 
         CASE (1034)
             IF (enable_coccos .AND. enable_3zoo2det) THEN
                 ! PhaeoChl - Phaeocystis Chlorophyll
-                tracers%data(i)%values(:,:) = tiny_chl
+                tracers_info%data_pointers(i)%tracer_data(:,:) = tiny_chl
             END IF
 
         CASE (1035)
             IF (enable_coccos .AND. enable_3zoo2det) THEN
                 ! Zoo3N - Zooplankton 3 Nitrogen
-                tracers%data(i)%values(:,:) = tiny
+                tracers_info%data_pointers(i)%tracer_data(:,:) = tiny
             END IF
 
         CASE (1036)
             IF (enable_coccos .AND. enable_3zoo2det) THEN
                 ! Zoo3C - Zooplankton 3 Carbon
-                tracers%data(i)%values(:,:) = tiny * Redfield
+                tracers_info%data_pointers(i)%tracer_data(:,:) = tiny * Redfield
             END IF
 
         END SELECT
@@ -629,13 +631,13 @@ subroutine recom_init(tracers, partit, mesh)
             if (((geo_coord_nod2D(2,row) > -12.5*rad) .and. (geo_coord_nod2D(2,row) < 9.5*rad))&
                 .and.((geo_coord_nod2D(1,row)> -106.0*rad) .and. (geo_coord_nod2D(1,row) < -72.0*rad))) then
                 if (abs(Z_3d_n(k,row))<2000.0_WP) cycle
-                tracers%data(21)%values(k,row) = min(0.3, tracers%data(21)%values(k,row)) ! OG todo: try 0.6
+                tracers_info%data_pointers(21)%tracer_data(k,row) = min(0.3, tracers_info%data_pointers(21)%tracer_data(k,row)) ! OG todo: try 0.6
             end if
         end do
     end do
 
     !< Mask negative values
-    tracers%data(21)%values(:,:) = max(tiny, tracers%data(21)%values(:,:))
+    tracers_info%data_pointers(21)%tracer_data(:,:) = max(tiny, tracers_info%data_pointers(21)%tracer_data(:,:))
 !------------------------------------------
 
     if(mype==0) write(*,*),'Tracers have been initialized as spinup from WOA/glodap netcdf files'
@@ -653,18 +655,18 @@ subroutine recom_init(tracers, partit, mesh)
         locO2min  = locDINmin
 
         do n=1, myDim_nod2d
-            locDINmax = max(locDINmax,maxval(tracers%data(3)%values(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
-            locDINmin = min(locDINmin,minval(tracers%data(3)%values(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
-            locDICmax = max(locDICmax,maxval(tracers%data(4)%values(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
-            locDICmin = min(locDICmin,minval(tracers%data(4)%values(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
-            locAlkmax = max(locAlkmax,maxval(tracers%data(5)%values(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
-            locAlkmin = min(locAlkmin,minval(tracers%data(5)%values(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
-            locDSimax = max(locDSimax,maxval(tracers%data(20)%values(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
-            locDSimin = min(locDSimin,minval(tracers%data(20)%values(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
-            locDFemax = max(locDFemax,maxval(tracers%data(21)%values(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
-            locDFemin = min(locDFemin,minval(tracers%data(21)%values(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
-            locO2max  = max(locO2max,maxval(tracers%data(24)%values(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
-            locO2min  = min(locO2min,minval(tracers%data(24)%values(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
+            locDINmax = max(locDINmax,maxval(tracers_info%data_pointers(3)%tracer_data(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
+            locDINmin = min(locDINmin,minval(tracers_info%data_pointers(3)%tracer_data(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
+            locDICmax = max(locDICmax,maxval(tracers_info%data_pointers(4)%tracer_data(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
+            locDICmin = min(locDICmin,minval(tracers_info%data_pointers(4)%tracer_data(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
+            locAlkmax = max(locAlkmax,maxval(tracers_info%data_pointers(5)%tracer_data(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
+            locAlkmin = min(locAlkmin,minval(tracers_info%data_pointers(5)%tracer_data(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
+            locDSimax = max(locDSimax,maxval(tracers_info%data_pointers(20)%tracer_data(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
+            locDSimin = min(locDSimin,minval(tracers_info%data_pointers(20)%tracer_data(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
+            locDFemax = max(locDFemax,maxval(tracers_info%data_pointers(21)%tracer_data(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
+            locDFemin = min(locDFemin,minval(tracers_info%data_pointers(21)%tracer_data(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
+            locO2max  = max(locO2max,maxval( tracers_info%data_pointers(24)%tracer_data(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
+            locO2min  = min(locO2min,minval( tracers_info%data_pointers(24)%tracer_data(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
         end do
 
         if (mype==0) write(*,*) "Sanity check for REcoM variables after recom_init call"

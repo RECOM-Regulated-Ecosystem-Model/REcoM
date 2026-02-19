@@ -12,7 +12,6 @@ module recom_sms_module
             use recom_config
             use recoM_ciso
             use recom_extra
-            use g_config, only: wp
             use mvars, only: vars_sprac
 
             implicit none
@@ -59,7 +58,6 @@ subroutine REcoM_sms(n, Nn, state, thick, SurfSR, sms, Temp, Sali_depth, CO2_wat
     use recom_config
     use recoM_ciso
     use recom_extra
-    use g_config, only: wp
     use mvars, only: vars_sprac
 
     implicit none
@@ -5283,7 +5281,7 @@ real(kind=8) :: &
                 print*,'grazingFlux_Cocco2: ', grazingFlux_Cocco2
                 print*,'grazingFlux_Cocco3: ', grazingFlux_Cocco3
                 print*,'recipQuota_cocco: ', recipQuota_cocco
-                call par_ex(MPI_COMM_FESOM, mype)
+                call MPI_ABORT(MPI_COMM_FESOM, 1)
                 stop
             endif
 

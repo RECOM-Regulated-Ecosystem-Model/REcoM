@@ -14,7 +14,6 @@ module recom_forcing_module
             use recom_extra
             use recom_sms_module
             use recom_ciso
-            use g_config, only: wp
 
             implicit none
 
@@ -66,7 +65,6 @@ subroutine REcoM_Forcing(n, Nn, state, SurfSW, Loc_slp, Temp, Sali, Sali_depth, 
     use recom_sms_module
     use recom_ciso
     use gasx
-    use g_config, only: wp
 
     implicit none
 

@@ -596,6 +596,8 @@ contains
 !          biogeochemical model setup (enable_3zoo2det, enable_coccos)
 ! ==============================================================================
 subroutine validate_recom_tracers(num_tracers, mype)
+  use mpi
+
   implicit none
 
   ! Arguments
@@ -607,6 +609,7 @@ subroutine validate_recom_tracers(num_tracers, mype)
   integer :: actual_bgc_num
   integer :: expected_total_tracers
   integer :: num_physical_tracers
+  integer :: MPIErr
   logical :: config_error
   character(len=200) :: error_msg
 
@@ -941,7 +944,7 @@ subroutine validate_recom_tracers(num_tracers, mype)
       write(*,*) ''
     end if
     deallocate(expected_tracer_ids, tracer_found)
-    call par_ex(0)  ! Stop execution (use appropriate stop routine for your model)
+    call MPI_ABORT(MPI_COMM_WORLD, 1, MPIErr)  ! Stop execution (use appropriate stop routine for your model)
     stop
   end if
 
@@ -957,6 +960,8 @@ end subroutine validate_recom_tracers
 !          Call this after reading the tracer namelist
 ! ==============================================================================
 subroutine validate_tracer_id_sequence(tracer_ids, num_tracers, mype)
+  use mpi
+
   implicit none
 
   ! Arguments
@@ -968,6 +973,7 @@ subroutine validate_tracer_id_sequence(tracer_ids, num_tracers, mype)
   integer :: i, j
   integer, dimension(:), allocatable :: expected_ids
   integer :: num_expected
+  integer :: MPIErr
   logical :: error_found
   logical :: duplicate_found
   integer :: num_physical_tracers
@@ -1083,7 +1089,7 @@ subroutine validate_tracer_id_sequence(tracer_ids, num_tracers, mype)
       write(*,*) ''
     end if
     deallocate(expected_ids)
-    call par_ex(0)
+    call MPI_ABORT(MPI_COMM_WORLD, 1, MPIErr)  ! Stop execution (use appropriate stop routine for your model)
     stop
   else
     if (mype == 0) then
@@ -1108,6 +1114,9 @@ end module recom_config
 Module REcoM_declarations
   implicit none
   save
+
+  integer, parameter            :: WP=8        ! Working precision
+  real(kind=WP), parameter      :: pi=3.14159265358979
 
   Integer       :: save_count_recom
   Real(kind=8)  :: tiny_N                 ! Min PhyN
@@ -1540,6 +1549,17 @@ Module REcoM_GloVar
   real(kind=8), allocatable,dimension(:)    :: ErosionTSi2D, ErosionTON2D, ErosionTOC2D
 !! Cobeta, Cos(Angle of incidence)
   Real(kind=8), allocatable,dimension(:)    ::  cosAI
+
+  type :: tracer_data_pointer
+      real(kind = 8), dimension(:, :), pointer :: tracer_data
+  end type
+
+  type :: tracers_info_type
+      integer, dimension(:), allocatable                   :: ids
+      logical, dimension(:), allocatable                   :: ltra_diag
+      type(tracer_data_pointer), dimension(:), allocatable :: data_pointers
+  end type
+
 end module REcoM_GloVar
 
 !===============================================================================

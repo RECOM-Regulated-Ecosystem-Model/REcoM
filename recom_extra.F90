@@ -1,7 +1,7 @@
 module recom_extra
     interface
         subroutine Depth_calculations(n, nn, wf, zf, thick, recipthick, myDim_nod2D, eDim_nod2D, nl, hnode, zbar_3d_n)
-            use o_param, only: wp
+            use recom_declarations, only: wp
 
             ! Input parameters
             integer, intent(in)                        :: n           ! Current node
@@ -17,20 +17,20 @@ module recom_extra
         end subroutine Depth_calculations
 
         subroutine Cobeta(daynew, ndpyr, myDim_nod2D, eDim_nod2D, geo_coord_nod2D)
-            use o_PARAM, only: wp
+            use recom_declarations, only: wp
             integer, intent(in)                       :: daynew, ndpyr, myDim_nod2D, eDim_nod2D
             real(kind=WP), intent(in), dimension(:,:) :: geo_coord_nod2D
         end subroutine Cobeta
 
         subroutine krill_resp(n, daynew, myDim_nod2D, eDim_nod2D, geo_coord_nod2D)
-            use o_PARAM, only: wp
+            use recom_declarations, only: wp
             integer, intent(in)                       :: n, daynew
             integer, intent(in)                       :: myDim_nod2D, eDim_nod2D
             real(kind=WP), intent(in), dimension(:,:) :: geo_coord_nod2D
         end subroutine krill_resp
 
         subroutine integrate_nod_2D_recom(data, int2D, MPI_COMM_FESOM, myDim_nod2D, eDim_nod2D, ulevels_nod2D, areasvol)
-            use g_config, only: wp
+            use recom_declarations, only: wp
 
             implicit none
 
@@ -49,7 +49,7 @@ end module recom_extra
 !===============================================================================
 subroutine Depth_calculations(n, nn, wf, zf, thick, recipthick, myDim_nod2D, eDim_nod2D, nl, hnode, zbar_3d_n)
     use recom_config
-    use o_param, only: wp
+    use recom_declarations, only: wp
 
     implicit none
 
@@ -127,7 +127,7 @@ end subroutine Depth_calculations
 !===============================================================================
 subroutine Cobeta(daynew, ndpyr, myDim_nod2D, eDim_nod2D, geo_coord_nod2D)
     use REcoM_GloVar
-    use o_PARAM, only: wp, pi
+    use recom_declarations, only: wp, pi
 
     implicit none
 
@@ -178,7 +178,6 @@ subroutine krill_resp(n, daynew, myDim_nod2D, eDim_nod2D, geo_coord_nod2D)
     use REcoM_declarations
     use REcoM_LocVar
     use REcoM_GloVar
-    use o_PARAM, only: wp
 
     implicit none
 
@@ -218,7 +217,7 @@ subroutine krill_resp(n, daynew, myDim_nod2D, eDim_nod2D, geo_coord_nod2D)
 
 
 subroutine integrate_nod_2D_recom(data, int2D, MPI_COMM_FESOM, myDim_nod2D, eDim_nod2D, ulevels_nod2D, areasvol)
-    use g_config, only: wp
+    use recom_declarations, only: wp
     use mpi
 
     implicit none
