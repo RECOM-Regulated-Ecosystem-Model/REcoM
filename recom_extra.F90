@@ -1,48 +1,5 @@
 module recom_extra
-    interface
-        subroutine Depth_calculations(n, nn, wf, zf, thick, recipthick, myDim_nod2D, eDim_nod2D, nl, hnode, zbar_3d_n)
-            use recom_declarations, only: wp
-
-            ! Input parameters
-            integer, intent(in)                        :: n           ! Current node
-            integer, intent(in)                        :: nn	    ! Total number of vertical nodes
-            integer, intent(in)                        :: myDim_nod2D, eDim_nod2D, nl
-            real(kind=WP), intent(in), dimension(:,:)  :: hnode, zbar_3d_n
-
-            ! Output arrays
-            real(kind=8), dimension(nl,6), intent(out) :: wf          ! [m/day] Flux velocities at the border of the control volumes
-            real(kind=8), dimension(nl),   intent(out) :: zf          ! [m] Depth of vertical fluxes
-            real(kind=8), dimension(nl-1), intent(out) :: thick       ! [m] Distance between two nodes = layer thickness
-            real(kind=8), dimension(nl-1), intent(out) :: recipthick  ! [1/m] Reciprocal thickness
-        end subroutine Depth_calculations
-
-        subroutine Cobeta(daynew, ndpyr, myDim_nod2D, eDim_nod2D, geo_coord_nod2D)
-            use recom_declarations, only: wp
-            integer, intent(in)                       :: daynew, ndpyr, myDim_nod2D, eDim_nod2D
-            real(kind=WP), intent(in), dimension(:,:) :: geo_coord_nod2D
-        end subroutine Cobeta
-
-        subroutine krill_resp(n, daynew, myDim_nod2D, eDim_nod2D, geo_coord_nod2D)
-            use recom_declarations, only: wp
-            integer, intent(in)                       :: n, daynew
-            integer, intent(in)                       :: myDim_nod2D, eDim_nod2D
-            real(kind=WP), intent(in), dimension(:,:) :: geo_coord_nod2D
-        end subroutine krill_resp
-
-        subroutine integrate_nod_2D_recom(data, int2D, MPI_COMM_FESOM, myDim_nod2D, eDim_nod2D, ulevels_nod2D, areasvol)
-            use recom_declarations, only: wp
-
-            implicit none
-
-            integer,       intent(in)    :: MPI_COMM_FESOM, myDim_nod2D, eDim_nod2D
-            real(kind=WP), intent(inout) :: int2D
-
-            integer,       intent(in), dimension(:)   :: ulevels_nod2D
-            real(kind=WP), intent(in), dimension(:)   :: data
-            real(kind=WP), intent(in), dimension(:,:) :: areasvol
-        end subroutine
-    end interface
-end module recom_extra
+contains
 
 !===============================================================================
 ! Subroutine for calculating flux-depth and thickness of control volumes
@@ -241,3 +198,5 @@ subroutine integrate_nod_2D_recom(data, int2D, MPI_COMM_FESOM, myDim_nod2D, eDim
     call MPI_Allreduce(lval, int2D, 1, MPI_DOUBLE_PRECISION, MPI_SUM, &
                        MPI_COMM_FESOM, MPIerr)
 end subroutine integrate_nod_2D_recom
+
+end module recom_extra
