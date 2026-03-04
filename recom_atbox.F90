@@ -1,16 +1,5 @@
 module recom_atbox_module
-    interface
-        subroutine recom_atbox(MPI_COMM_FESOM, myDim_nod2D, eDim_nod2D, ulevels_nod2D, areasvol, dt)
-            use recom_declarations, only: wp
-
-            integer,       intent(in) :: MPI_COMM_FESOM, myDim_nod2D, eDim_nod2D
-            real(kind=WP), intent(in)                 :: dt
-            integer,       intent(in), dimension(:)   :: ulevels_nod2D
-            real(kind=WP), intent(in), dimension(:,:) :: areasvol
-        end subroutine
-    end interface
-end module recom_atbox_module
-
+contains
     subroutine recom_atbox(MPI_COMM_FESOM, myDim_nod2D, eDim_nod2D, ulevels_nod2D, areasvol, dt)
 !     Simple 0-d box model to calculate the temporal evolution of atmospheric CO2.
 !     Initially the box model was part of module recom_ciso. Now it can be run also
@@ -92,3 +81,4 @@ end module recom_atbox_module
 
       return
     end subroutine recom_atbox
+end module recom_atbox_module
