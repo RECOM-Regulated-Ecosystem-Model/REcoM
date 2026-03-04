@@ -1,51 +1,5 @@
 module recom_forcing_module
-    interface
-        subroutine REcoM_Forcing(n, Nn, state, SurfSW, Loc_slp, Temp, Sali, Sali_depth,    &
-                                 CO2_watercolumn, pH_watercolumn, pCO2_watercolumn,        &
-                                 HCO3_watercolumn, CO3_watercolumn, OmegaC_watercolumn,    &
-                                 kspc_watercolumn, rhoSW_watercolumn, PAR, MPI_COMM_FESOM, &
-                                 mype, myDim_nod2D, eDim_nod2D, nl, hnode, zbar_3d_n,      &
-                                 geo_coord_nod2D, daynew, ndpyr, dt, kappa, mstep, rad)
-
-            use recom_declarations
-            use recom_locvar
-            use recom_config
-            use recom_glovar
-            use recom_extra
-            use recom_sms_module
-            use recom_ciso
-
-            implicit none
-
-            integer, intent(in) :: daynew, ndpyr, mype, myDim_nod2D, eDim_nod2D, nl, mstep
-            integer, intent(in) :: MPI_COMM_FESOM, n, Nn         ! Nn -Total number of nodes
-
-            real(kind=8), intent(in)    :: rad
-            real(kind=8), intent(in)    :: Sali              ! Salinity of current surface layer
-            real(kind=8), intent(in)    :: SurfSW        ! [W/m2] ShortWave radiation at surface
-            real(kind=8), intent(in)    :: Loc_slp       ! [Pa] sea-level pressure
-            real(kind=8), intent(inout) :: kappa, dt
-
-            real(kind=8), intent(in), dimension(nl - 1) :: Temp          ! [degrees C] Ocean temperature
-            real(kind=8), intent(in), dimension(nl - 1) :: Sali_depth    ! Salinity for the whole water column
-
-            !!---- Watercolumn carbonate chemistry
-            real(kind=8), intent(inout), dimension(nl - 1) :: CO2_watercolumn
-            real(kind=8), intent(inout), dimension(nl - 1) :: pH_watercolumn
-            real(kind=8), intent(inout), dimension(nl - 1) :: pCO2_watercolumn
-            real(kind=8), intent(inout), dimension(nl - 1) :: HCO3_watercolumn
-            real(kind=8), intent(inout), dimension(nl - 1) :: CO3_watercolumn
-            real(kind=8), intent(inout), dimension(nl - 1) :: OmegaC_watercolumn
-            real(kind=8), intent(inout), dimension(nl - 1) :: kspc_watercolumn
-            real(kind=8), intent(inout), dimension(nl - 1) :: rhoSW_watercolumn
-            real(kind=8), intent(inout), dimension(nl - 1) :: PAR
-
-            real(kind=WP), intent(in),    dimension(:, :) :: hnode, zbar_3d_n
-            real(kind=WP), intent(in),    dimension(:, :) :: geo_coord_nod2D
-            real(kind=8),  intent(inout), dimension(nl - 1, bgc_num) :: state
-        end subroutine recom_forcing
-    end interface
-end module recom_forcing_module
+contains
 
 !===============================================================================
 ! REcoM_Forcing
@@ -427,3 +381,5 @@ endif
 
   end if
 end subroutine REcoM_Forcing
+
+end module recom_forcing_module
