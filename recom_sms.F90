@@ -1,50 +1,5 @@
 module recom_sms_module
-    interface
-        subroutine REcoM_sms(n, Nn, state, thick, SurfSR, sms, Temp, Sali_depth, CO2_watercolumn, &
-                             pH_watercolumn, pCO2_watercolumn, HCO3_watercolumn, CO3_watercolumn, &
-                             OmegaC_watercolumn, kspc_watercolumn, rhoSW_watercolumn, Loc_slp,    &
-                             zF, PAR, Latd, daynew, dt, kappa, mstep, MPI_COMM_FESOM, mype,       &
-                             myDim_nod2D, eDim_nod2D, nl, geo_coord_nod2D)
-
-            use recom_declarations
-            use recom_locvar
-            use recom_glovar
-            use recom_config
-            use recoM_ciso
-            use recom_extra
-            use mvars, only: vars_sprac
-
-            implicit none
-
-            integer, intent(in) :: n, daynew, mype, myDim_nod2D, eDim_nod2D, nl, mstep
-            integer, intent(in) :: MPI_COMM_FESOM
-            integer, intent(in) :: Nn                   !< Total number of nodes in the vertical
-
-            real(kind=8),  intent(in) :: SurfSR, dt  !< [W/m2] ShortWave radiation at surface
-            real(kind=8),  intent(in) :: Loc_slp     ![Pa] sea-level pressure
-            real(kind=8),  intent(in) :: Latd(1)     ! latitude in degree
-
-            real(kind=8),  intent(in),    dimension(nl - 1) :: thick           !< [m] Vertical distance between two nodes = Thickness
-            real(kind=8),  intent(in),    dimension(nl - 1) :: Temp            !< [degrees C] Ocean temperature
-            real(kind=8),  intent(in),    dimension(nl - 1) :: Sali_depth      !< NEW MOCSY Salinity for the whole water column
-            real(kind=8),  intent(in),    dimension(nl)     :: zF              !< [m] Depth of fluxes
-            real(kind=WP), intent(in),    dimension(:,:)    :: geo_coord_nod2D
-
-            real(kind=8),  intent(inout)                             :: kappa
-            real(kind=8),  intent(inout), dimension(nl - 1)          :: CO2_watercolumn      !< [mol/m3]
-            real(kind=8),  intent(inout), dimension(nl - 1)          :: pH_watercolumn       !< on total scale
-            real(kind=8),  intent(inout), dimension(nl - 1)          :: pCO2_watercolumn     !< [uatm]
-            real(kind=8),  intent(inout), dimension(nl - 1)          :: HCO3_watercolumn     !< [mol/m3]
-            real(kind=8),  intent(inout), dimension(nl - 1)          :: CO3_watercolumn      !< [mol/m3]
-            real(kind=8),  intent(inout), dimension(nl - 1)          :: OmegaC_watercolumn   !< calcite saturation state
-            real(kind=8),  intent(inout), dimension(nl - 1)          :: kspc_watercolumn     !< stoichiometric solubility product [mol^2/kg^2]
-            real(kind=8),  intent(inout), dimension(nl - 1)          :: rhoSW_watercolumn    !< in-situ density of seawater [kg/m3]
-            real(kind=8),  intent(inout), dimension(nl - 1)          :: PAR
-            real(kind=8),  intent(inout), dimension(nl - 1, bgc_num) :: state                !< ChlA conc in phytoplankton [mg/m3]
-            real(kind=8),  intent(inout), dimension(nl - 1, bgc_num) :: sms                  !< Source-Minus-Sinks term
-        end subroutine
-    end interface
-end module
+contains
 
 subroutine REcoM_sms(n, Nn, state, thick, SurfSR, sms, Temp, Sali_depth, CO2_watercolumn, &
                      pH_watercolumn, pCO2_watercolumn, HCO3_watercolumn, CO3_watercolumn, &
@@ -7407,6 +7362,8 @@ real(kind=8) :: &
     end do ! Main time loop ends
 
 end subroutine REcoM_sms
+
+end module
 
 !-------------------------------------------------------------------------------
 ! Function for calculating limiter
