@@ -12,8 +12,6 @@ subroutine recom_init(nl, ulevels_nod2D, nlevels_nod2D, geo_coord_nod2D, Z_3d_n,
                       myDim_nod2d, eDim_nod2D, mype, MPI_COMM_FESOM, myDim_elem2D, &
                       eDim_elem2D, tracers_info, num_tracers, rad)
 
-    use mpi
-
     use REcoM_declarations
     use REcoM_GloVar
     use REcoM_locVar
@@ -33,11 +31,6 @@ subroutine recom_init(nl, ulevels_nod2D, nlevels_nod2D, geo_coord_nod2D, Z_3d_n,
     ! pointer on necessary derived types
     integer                                 :: n, k, row, nzmin, nzmax, i, id
     integer                                 :: elem_size, node_size
-    integer                                 :: MPIerr
-
-    real(kind=WP)                           :: locDINmax, locDINmin, locDICmax, locDICmin, locAlkmax, glo
-    real(kind=WP)                           :: locAlkmin, locDSimax, locDSimin, locDFemax, locDFemin
-    real(kind=WP)                           :: locO2max, locO2min
 
     ! After reading tracer namelist - validate actual IDs
     integer, dimension(num_tracers) :: tracer_id_array
@@ -65,73 +58,7 @@ subroutine recom_init(nl, ulevels_nod2D, nlevels_nod2D, geo_coord_nod2D, Z_3d_n,
     call mask_hydrothermal_vents(tracers_info, myDim_nod2D, eDim_nod2D, ulevels_nod2D, nlevels_nod2D, geo_coord_nod2D, Z_3d_n, rad)
 !------------------------------------------
 
-    if(mype==0) write(*,*) 'Tracers have been initialized as spinup from WOA/glodap netcdf files'
-        locDINmax = -66666
-        locDINmin = 66666
-        locDICmax = locDINmax
-        locDICmin = locDINmin
-        locAlkmax = locDINmax
-        locAlkmin = locDINmin
-        locDSimax = locDINmax
-        locDSimin = locDINmin
-        locDFemax = locDINmax
-        locDFemin = locDINmin
-        locO2max  = locDINmax
-        locO2min  = locDINmin
-
-        do n=1, myDim_nod2d
-            locDINmax = max(locDINmax,maxval(tracers_info%data_pointers(3)%tracer_data(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
-            locDINmin = min(locDINmin,minval(tracers_info%data_pointers(3)%tracer_data(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
-            locDICmax = max(locDICmax,maxval(tracers_info%data_pointers(4)%tracer_data(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
-            locDICmin = min(locDICmin,minval(tracers_info%data_pointers(4)%tracer_data(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
-            locAlkmax = max(locAlkmax,maxval(tracers_info%data_pointers(5)%tracer_data(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
-            locAlkmin = min(locAlkmin,minval(tracers_info%data_pointers(5)%tracer_data(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
-            locDSimax = max(locDSimax,maxval(tracers_info%data_pointers(20)%tracer_data(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
-            locDSimin = min(locDSimin,minval(tracers_info%data_pointers(20)%tracer_data(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
-            locDFemax = max(locDFemax,maxval(tracers_info%data_pointers(21)%tracer_data(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
-            locDFemin = min(locDFemin,minval(tracers_info%data_pointers(21)%tracer_data(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
-            locO2max  = max(locO2max,maxval( tracers_info%data_pointers(24)%tracer_data(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
-            locO2min  = min(locO2min,minval( tracers_info%data_pointers(24)%tracer_data(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
-        end do
-
-        if (mype==0) write(*,*) "Sanity check for REcoM variables after recom_init call"
-        call MPI_AllREDUCE(locDINmax , glo  , 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
-        if (mype==0) write(*,*) '  |-> gobal max init. DIN. =', glo
-        call MPI_AllREDUCE(locDINmin , glo  , 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, MPIerr)
-        if (mype==0) write(*,*) '  |-> gobal min init. DIN. =', glo
-
-        call MPI_AllREDUCE(locDICmax , glo  , 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
-        if (mype==0) write(*,*) '  |-> gobal max init. DIC. =', glo
-        call MPI_AllREDUCE(locDICmin , glo  , 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, MPIerr)
-        if (mype==0) write(*,*) '  |-> gobal min init. DIC. =', glo
-        call MPI_AllREDUCE(locAlkmax , glo  , 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
-        if (mype==0) write(*,*) '  |-> gobal max init. Alk. =', glo
-        call MPI_AllREDUCE(locAlkmin , glo  , 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, MPIerr)
-        if (mype==0) write(*,*) '  |-> gobal min init. Alk. =', glo
-        call MPI_AllREDUCE(locDSimax , glo  , 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
-        if (mype==0) write(*,*) '  |-> gobal max init. DSi. =', glo
-        call MPI_AllREDUCE(locDSimin , glo  , 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, MPIerr)
-        if (mype==0) write(*,*) '  |-> gobal min init. DSi. =', glo
-        call MPI_AllREDUCE(locDFemax , glo  , 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
-        if (mype==0) write(*,*) '  |-> gobal max init. DFe. =', glo
-        call MPI_AllREDUCE(locDFemin , glo  , 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, MPIerr)
-        if (mype==0) write(*,*) '  `-> gobal min init. DFe. =', glo
-        call MPI_AllREDUCE(locO2max , glo  , 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
-        if (mype==0) write(*,*) '  |-> gobal max init. O2. =', glo
-        call MPI_AllREDUCE(locO2min , glo  , 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, MPIerr)
-        if (mype==0) write(*,*) '  `-> gobal min init. O2. =', glo
-
-        if (enable_3zoo2det) then
-            is_3zoo2det=1.0_WP
-        else
-            is_3zoo2det=0.0_WP
-        endif
-
-        if (enable_coccos) then
-            is_coccos=1.0_WP
-        else
-            is_coccos=0.0_WP
-        endif
+    call initialization_diagnostics(tracers_info, myDim_nod2D, ulevels_nod2D, nlevels_nod2D, MPI_COMM_FESOM, mype)
     end subroutine recom_init
 
     subroutine initialize_memory(node_size, nl, num_tracers)
@@ -732,5 +659,94 @@ subroutine recom_init(nl, ulevels_nod2D, nlevels_nod2D, geo_coord_nod2D, Z_3d_n,
         !< Mask negative values
         tracers_info%data_pointers(21)%tracer_data(:,:) = max(tiny, tracers_info%data_pointers(21)%tracer_data(:,:))
     end subroutine mask_hydrothermal_vents
+
+    subroutine initialization_diagnostics(tracers_info, myDim_nod2D, ulevels_nod2D, nlevels_nod2D, MPI_COMM_FESOM, mype)
+        use REcoM_glovar
+        use recom_declarations
+        use recom_config
+
+        use mpi
+
+        implicit none
+
+        type(tracers_info_type), intent(in) :: tracers_info
+        integer, intent(in) :: myDim_nod2D
+        integer, intent(in) :: ulevels_nod2D(:), nlevels_nod2D(:)
+        integer, intent(in) :: MPI_COMM_FESOM, mype
+
+        integer       :: MPIerr, n
+        real(kind=WP) :: locDINmax, locDINmin, locDICmax, locDICmin, locAlkmax, glo
+        real(kind=WP) :: locAlkmin, locDSimax, locDSimin, locDFemax, locDFemin
+        real(kind=WP) :: locO2max, locO2min
+
+
+        if(mype==0) write(*,*) 'Tracers have been initialized as spinup from WOA/glodap netcdf files'
+        locDINmax = -66666
+        locDINmin = 66666
+        locDICmax = locDINmax
+        locDICmin = locDINmin
+        locAlkmax = locDINmax
+        locAlkmin = locDINmin
+        locDSimax = locDINmax
+        locDSimin = locDINmin
+        locDFemax = locDINmax
+        locDFemin = locDINmin
+        locO2max  = locDINmax
+        locO2min  = locDINmin
+
+        do n=1, myDim_nod2d
+            locDINmax = max(locDINmax,maxval(tracers_info%data_pointers(3)%tracer_data(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
+            locDINmin = min(locDINmin,minval(tracers_info%data_pointers(3)%tracer_data(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
+            locDICmax = max(locDICmax,maxval(tracers_info%data_pointers(4)%tracer_data(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
+            locDICmin = min(locDICmin,minval(tracers_info%data_pointers(4)%tracer_data(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
+            locAlkmax = max(locAlkmax,maxval(tracers_info%data_pointers(5)%tracer_data(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
+            locAlkmin = min(locAlkmin,minval(tracers_info%data_pointers(5)%tracer_data(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
+            locDSimax = max(locDSimax,maxval(tracers_info%data_pointers(20)%tracer_data(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
+            locDSimin = min(locDSimin,minval(tracers_info%data_pointers(20)%tracer_data(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
+            locDFemax = max(locDFemax,maxval(tracers_info%data_pointers(21)%tracer_data(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
+            locDFemin = min(locDFemin,minval(tracers_info%data_pointers(21)%tracer_data(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
+            locO2max  = max(locO2max,maxval( tracers_info%data_pointers(24)%tracer_data(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
+            locO2min  = min(locO2min,minval( tracers_info%data_pointers(24)%tracer_data(ulevels_nod2D(n):nlevels_nod2D(n)-1,n)) )
+        end do
+
+        if (mype==0) write(*,*) "Sanity check for REcoM variables after recom_init call"
+        call MPI_AllREDUCE(locDINmax , glo  , 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
+        if (mype==0) write(*,*) '  |-> gobal max init. DIN. =', glo
+        call MPI_AllREDUCE(locDINmin , glo  , 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, MPIerr)
+        if (mype==0) write(*,*) '  |-> gobal min init. DIN. =', glo
+
+        call MPI_AllREDUCE(locDICmax , glo  , 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
+        if (mype==0) write(*,*) '  |-> gobal max init. DIC. =', glo
+        call MPI_AllREDUCE(locDICmin , glo  , 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, MPIerr)
+        if (mype==0) write(*,*) '  |-> gobal min init. DIC. =', glo
+        call MPI_AllREDUCE(locAlkmax , glo  , 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
+        if (mype==0) write(*,*) '  |-> gobal max init. Alk. =', glo
+        call MPI_AllREDUCE(locAlkmin , glo  , 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, MPIerr)
+        if (mype==0) write(*,*) '  |-> gobal min init. Alk. =', glo
+        call MPI_AllREDUCE(locDSimax , glo  , 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
+        if (mype==0) write(*,*) '  |-> gobal max init. DSi. =', glo
+        call MPI_AllREDUCE(locDSimin , glo  , 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, MPIerr)
+        if (mype==0) write(*,*) '  |-> gobal min init. DSi. =', glo
+        call MPI_AllREDUCE(locDFemax , glo  , 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
+        if (mype==0) write(*,*) '  |-> gobal max init. DFe. =', glo
+        call MPI_AllREDUCE(locDFemin , glo  , 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, MPIerr)
+        if (mype==0) write(*,*) '  `-> gobal min init. DFe. =', glo
+        call MPI_AllREDUCE(locO2max , glo  , 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
+        if (mype==0) write(*,*) '  |-> gobal max init. O2. =', glo
+        call MPI_AllREDUCE(locO2min , glo  , 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, MPIerr)
+        if (mype==0) write(*,*) '  `-> gobal min init. O2. =', glo
+
+        if (enable_3zoo2det) then
+            is_3zoo2det=1.0_WP
+        else
+            is_3zoo2det=0.0_WP
+        endif
+
+        if (enable_coccos) then
+            is_coccos=1.0_WP
+        else
+            is_coccos=0.0_WP
+        endif
+    end subroutine initialization_diagnostics
 
 end module
