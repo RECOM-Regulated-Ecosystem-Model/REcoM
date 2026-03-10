@@ -29,16 +29,9 @@ contains
 
         !___________________________________________________________________________
         ! pointer on necessary derived types
-        integer                                 :: n, k, row, nzmin, nzmax, i, id
-        integer                                 :: elem_size, node_size
+        integer                                 :: n, k, row, nzmin, nzmax, i, id, node_size
 
-        ! After reading tracer namelist - validate actual IDs
-        integer, dimension(num_tracers) :: tracer_id_array
-
-        elem_size   = myDim_elem2D + eDim_elem2D
-        node_size   = myDim_nod2D + eDim_nod2D
-
-        call initialize_memory(node_size, nl, num_tracers)
+        call initialize_memory(myDim_nod2D + eDim_nod2D, nl, num_tracers)
 
         ! After reading parecomsetup namelist
         call initialize_tracer_indices
@@ -46,18 +39,11 @@ contains
         ! Validation check here
         call validate_recom_tracers(num_tracers, mype)
 
-        ! ... populate tracer_id_array from namelist ...
-        !tracer_id_array = tracers%data(1:tracers%num_tracers)%ID
-        tracer_id_array = tracers_info%ids(1:num_tracers)
-        call validate_tracer_id_sequence(tracer_id_array, num_tracers, mype)
+        ! After reading tracer namelist - validate actual IDs
+        call validate_tracer_id_sequence(tracers_info%ids(1:num_tracers), num_tracers, mype)
 
         call initialize_tracer_data(num_tracers, tracers_info)
-
-    !------------------------------------------
-
         call mask_hydrothermal_vents(tracers_info, myDim_nod2D, eDim_nod2D, ulevels_nod2D, nlevels_nod2D, geo_coord_nod2D, Z_3d_n, rad)
-    !------------------------------------------
-
         call initialization_diagnostics(tracers_info, myDim_nod2D, ulevels_nod2D, nlevels_nod2D, MPI_COMM_FESOM, mype)
     end subroutine recom_init
 
