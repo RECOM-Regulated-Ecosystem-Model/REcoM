@@ -62,23 +62,7 @@ subroutine recom_init(nl, ulevels_nod2D, nlevels_nod2D, geo_coord_nod2D, Z_3d_n,
 
 !------------------------------------------
 
-    !< Mask hydrothermal vent in Eastern Equatorial Pacific GO
-    do row=1, myDim_nod2D+eDim_nod2D
-        !if (ulevels_nod2D(row)>1) cycle
-        nzmin = ulevels_nod2D(row)
-        nzmax = nlevels_nod2D(row)-1
-        do k=nzmin, nzmax
-            ! do not take regions shallower than 2000 m into account
-            if (((geo_coord_nod2D(2,row) > -12.5*rad) .and. (geo_coord_nod2D(2,row) < 9.5*rad))&
-                .and.((geo_coord_nod2D(1,row)> -106.0*rad) .and. (geo_coord_nod2D(1,row) < -72.0*rad))) then
-                if (abs(Z_3d_n(k,row))<2000.0_WP) cycle
-                tracers_info%data_pointers(21)%tracer_data(k,row) = min(0.3, tracers_info%data_pointers(21)%tracer_data(k,row)) ! OG todo: try 0.6
-            end if
-        end do
-    end do
-
-    !< Mask negative values
-    tracers_info%data_pointers(21)%tracer_data(:,:) = max(tiny, tracers_info%data_pointers(21)%tracer_data(:,:))
+    call mask_hydrothermal_vents(tracers_info, myDim_nod2D, eDim_nod2D, ulevels_nod2D, nlevels_nod2D, geo_coord_nod2D, Z_3d_n, rad)
 !------------------------------------------
 
     if(mype==0) write(*,*) 'Tracers have been initialized as spinup from WOA/glodap netcdf files'
@@ -714,5 +698,39 @@ subroutine recom_init(nl, ulevels_nod2D, nlevels_nod2D, geo_coord_nod2D, Z_3d_n,
             END SELECT
         END DO
     end subroutine initialize_tracer_data
+
+    subroutine mask_hydrothermal_vents(tracers_info, myDim_nod2D, eDim_nod2D, ulevels_nod2D, nlevels_nod2D, geo_coord_nod2D, Z_3d_n, rad)
+
+        use REcoM_glovar
+        use REcoM_config
+        use recom_declarations
+
+        implicit none
+
+        type(tracers_info_type), intent(in) :: tracers_info
+        integer, intent(in) :: myDim_nod2D, eDim_nod2D
+        integer, intent(in) :: ulevels_nod2D(:), nlevels_nod2D(:)
+        real(wp), intent(in) :: rad, geo_coord_nod2D(:, :), Z_3d_n(:,:)
+
+        integer :: row, k, nzmin, nzmax
+
+        !< Mask hydrothermal vent in Eastern Equatorial Pacific GO
+        do row=1, myDim_nod2D+eDim_nod2D
+            !if (ulevels_nod2D(row)>1) cycle
+            nzmin = ulevels_nod2D(row)
+            nzmax = nlevels_nod2D(row)-1
+            do k=nzmin, nzmax
+                ! do not take regions shallower than 2000 m into account
+                if (((geo_coord_nod2D(2,row) > -12.5*rad) .and. (geo_coord_nod2D(2,row) < 9.5*rad))&
+                    .and.((geo_coord_nod2D(1,row)> -106.0*rad) .and. (geo_coord_nod2D(1,row) < -72.0*rad))) then
+                    if (abs(Z_3d_n(k,row))<2000.0_WP) cycle
+                    tracers_info%data_pointers(21)%tracer_data(k,row) = min(0.3, tracers_info%data_pointers(21)%tracer_data(k,row)) ! OG todo: try 0.6
+                end if
+            end do
+        end do
+
+        !< Mask negative values
+        tracers_info%data_pointers(21)%tracer_data(:,:) = max(tiny, tracers_info%data_pointers(21)%tracer_data(:,:))
+    end subroutine mask_hydrothermal_vents
 
 end module
