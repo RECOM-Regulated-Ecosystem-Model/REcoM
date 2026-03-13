@@ -2,55 +2,81 @@
 ! OG
 !===============================================================================
 ! Main REcoM
-module recom_interface
-    interface
-            subroutine recom(ice_data_values, nl, ulevels_nod2D, nlevels_nod2D, hnode,           &
-                             z_3d_n, zbar_3d_n, geo_coord_nod2D, ocean_area, areasvol, myDim_nod2d,      &
-                             eDim_nod2D, mype, MPI_COMM_FESOM, tracers_info, num_tracers, tra_recom_sms, &
-                             npes, sn, rn, s_mpitype_nod2D, r_mpitype_nod2D, s_mpitype_nod3D, r_mpitype_nod3D, &
-                             sPE, rPE, requests, nreq, dt, daynew, month, mstep, ndpyr, yearold, timenew, rad, kappa, &
-                             press_air, u_wind, v_wind, shortwave)
-            use recom_glovar
-            use recom_declarations, only: wp
-
-            integer, intent(in)                              :: nl, myDim_nod2d, eDim_nod2D
-            integer, intent(in)                              :: mype, MPI_COMM_FESOM, num_tracers
-            integer, intent(in)                              :: mstep, daynew, yearold, month, ndpyr
-            integer, intent(in), dimension(:)                :: ulevels_nod2D, nlevels_nod2D
-            real(kind=WP), intent(inout)                     :: dt, kappa, timenew
-            real(kind=WP), intent(in)                        :: ocean_area, rad
-            real(kind=WP), intent(in), dimension(:)          :: ice_data_values, press_air
-            real(kind=WP), intent(in), dimension(:)          :: u_wind, v_wind, shortwave
-            real(kind=WP), intent(in), dimension(:, :)       :: hnode, z_3d_n, zbar_3d_n
-            real(kind=WP), intent(in), dimension(:, :)       :: geo_coord_nod2D, areasvol
-            real(kind=WP), intent(inout), dimension(:, :, :) :: tra_recom_sms
-
-            integer, intent(in)                                 :: sn, rn, npes
-            integer, intent(inout)                              :: nreq
-            integer, intent(in),    dimension(:)                :: sPE, rPE
-            integer, intent(inout), dimension(:)                :: requests
-            integer, intent(in),    dimension(:),       pointer :: s_mpitype_nod2D, r_mpitype_nod2D
-            integer, intent(in),    dimension(:, :, :), pointer :: s_mpitype_nod3D, r_mpitype_nod3D
-
-            type(tracers_info_type), intent(in) :: tracers_info
-        end subroutine
-    end interface
-end module
 
 module bio_fluxes_interface
-    interface
-        subroutine bio_fluxes(alkalinity, MPI_COMM_FESOM, myDim_nod2D, eDim_nod2D, ocean_area, ulevels_nod2D, areasvol)
-            use recom_declarations, only: wp
+contains
 
-            integer, intent(in)               :: MPI_COMM_FESOM, myDim_nod2D, eDim_nod2D
-            integer, intent(in), dimension(:) :: ulevels_nod2D
+! ======================================================================================
+! Alkalinity restoring to climatology
+! ======================================================================================
+subroutine bio_fluxes(alkalinity, MPI_COMM_FESOM, myDim_nod2D, eDim_nod2D, ocean_area, ulevels_nod2D, areasvol)
+    use recom_declarations
+    use recom_locvar
+    use recom_glovar
+    use recom_config
+    use recom_extra, only: integrate_nod_2d_recom
 
-            real(kind=WP), intent(in)                 :: ocean_area
-            real(kind=WP), intent(in), dimension(:,:) :: areasvol
-            real(kind=WP), intent(in), dimension(:,:) :: alkalinity
-      end subroutine
-    end interface
+    implicit none
+
+    integer, intent(in)               :: MPI_COMM_FESOM, myDim_nod2D, eDim_nod2D
+    integer, intent(in), dimension(:) :: ulevels_nod2D
+
+    real(kind=WP), intent(in)                 :: ocean_area
+    real(kind=WP), intent(in), dimension(:,:) :: areasvol
+    real(kind=WP), intent(in), dimension(:,:) :: alkalinity
+
+    integer       :: n, elem, elnodes(3), n1
+    real(kind=WP) :: ralk, net
+
+!___________________________________________________________________
+! on freshwater inflow/outflow or virtual alkalinity:
+  ! 1. In zlevel & zstar the freshwater flux is applied in the update of the
+  ! ssh matrix when solving the continuity equation of vertically
+  ! integrated flow. The alkalinity concentration in the first layer will
+  ! be then adjusted according to the change in volume.
+
+  ! In this case ralk is forced to be zero by setting ref_alk=0. and ref_alk_local=.false.
+
+  ! 2. In cases where the volume of the upper layer is fixed (i.e. linfs)  the freshwater flux
+  ! 'ralk*water_flux(n)' is applied as a virtual alkalinity boundary condition via the vertical
+  ! diffusion operator.
+
+  ! --> ralk*water_flux(n) : virtual alkalinity flux
+  ! virtual alkalinity flux
+
+!  if (use_virt_alk) then ! OG in case of virtual alkalinity flux
+!     ralk=ref_alk
+!     do n=1, myDim_nod2D+eDim_nod2D
+!        if (ref_alk_local) ralk = tracers%data(2+ialk)%values(1, n)
+!        virtual_alk(n)=ralk*water_flux(n)
+!     end do
+!  end if
+
+    !___________________________________________________________________________
+    ! Balance alkalinity restoring to climatology
+    do n=1, myDim_nod2D + eDim_nod2D
+!        relax_alk(n)=surf_relax_Alk * (Alk_surf(n) - tracers%data(2+ialk)%values(1, n))
+!        relax_alk(n)=surf_relax_Alk * (Alk_surf(n) - alkalinity(ulevels_nod2d(n),n)
+        relax_alk(n)=surf_relax_Alk * (Alk_surf(n) - alkalinity(1, n))
+    end do
+
+  ! 2. virtual alkalinity flux
+!  if (use_virt_alk) then ! is already zero otherwise
+!     call integrate_nod(virtual_alk, net, partit, mesh)
+!     virtual_alk=virtual_alk-net/ocean_area
+!  end if
+
+
+  ! 3. restoring to Alkalinity climatology
+    call integrate_nod_2D_recom(relax_alk, net, MPI_COMM_FESOM, myDim_nod2D, eDim_nod2D, ulevels_nod2D, areasvol)
+
+    relax_alk = relax_alk - net / ocean_area  ! at ocean surface layer
+
+end subroutine bio_fluxes
 end module
+
+module recom_interface
+contains
 
 subroutine recom(ice_data_values, nl, ulevels_nod2D, nlevels_nod2D, hnode,           &
                  z_3d_n, zbar_3d_n, geo_coord_nod2D, ocean_area, areasvol, myDim_nod2d,      &
@@ -821,70 +847,4 @@ subroutine recom(ice_data_values, nl, ulevels_nod2D, nlevels_nod2D, hnode,      
 
 end subroutine recom
 
-! ======================================================================================
-! Alkalinity restoring to climatology
-! ======================================================================================
-subroutine bio_fluxes(alkalinity, MPI_COMM_FESOM, myDim_nod2D, eDim_nod2D, ocean_area, ulevels_nod2D, areasvol)
-    use recom_declarations
-    use recom_locvar
-    use recom_glovar
-    use recom_config
-    use recom_extra, only: integrate_nod_2d_recom
-
-    implicit none
-
-    integer, intent(in)               :: MPI_COMM_FESOM, myDim_nod2D, eDim_nod2D
-    integer, intent(in), dimension(:) :: ulevels_nod2D
-
-    real(kind=WP), intent(in)                 :: ocean_area
-    real(kind=WP), intent(in), dimension(:,:) :: areasvol
-    real(kind=WP), intent(in), dimension(:,:) :: alkalinity
-
-    integer       :: n, elem, elnodes(3), n1
-    real(kind=WP) :: ralk, net
-
-!___________________________________________________________________
-! on freshwater inflow/outflow or virtual alkalinity:
-  ! 1. In zlevel & zstar the freshwater flux is applied in the update of the
-  ! ssh matrix when solving the continuity equation of vertically
-  ! integrated flow. The alkalinity concentration in the first layer will
-  ! be then adjusted according to the change in volume.
-
-  ! In this case ralk is forced to be zero by setting ref_alk=0. and ref_alk_local=.false.
-
-  ! 2. In cases where the volume of the upper layer is fixed (i.e. linfs)  the freshwater flux
-  ! 'ralk*water_flux(n)' is applied as a virtual alkalinity boundary condition via the vertical
-  ! diffusion operator.
-
-  ! --> ralk*water_flux(n) : virtual alkalinity flux
-  ! virtual alkalinity flux
-
-!  if (use_virt_alk) then ! OG in case of virtual alkalinity flux
-!     ralk=ref_alk
-!     do n=1, myDim_nod2D+eDim_nod2D
-!        if (ref_alk_local) ralk = tracers%data(2+ialk)%values(1, n)
-!        virtual_alk(n)=ralk*water_flux(n)
-!     end do
-!  end if
-
-    !___________________________________________________________________________
-    ! Balance alkalinity restoring to climatology
-    do n=1, myDim_nod2D + eDim_nod2D
-!        relax_alk(n)=surf_relax_Alk * (Alk_surf(n) - tracers%data(2+ialk)%values(1, n))
-!        relax_alk(n)=surf_relax_Alk * (Alk_surf(n) - alkalinity(ulevels_nod2d(n),n)
-        relax_alk(n)=surf_relax_Alk * (Alk_surf(n) - alkalinity(1, n))
-    end do
-
-  ! 2. virtual alkalinity flux
-!  if (use_virt_alk) then ! is already zero otherwise
-!     call integrate_nod(virtual_alk, net, partit, mesh)
-!     virtual_alk=virtual_alk-net/ocean_area
-!  end if
-
-
-  ! 3. restoring to Alkalinity climatology
-    call integrate_nod_2D_recom(relax_alk, net, MPI_COMM_FESOM, myDim_nod2D, eDim_nod2D, ulevels_nod2D, areasvol)
-
-    relax_alk = relax_alk - net / ocean_area  ! at ocean surface layer
-
-end subroutine bio_fluxes
+end module

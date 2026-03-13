@@ -1,120 +1,6 @@
-module diff_ver_recom_expl_interface
-  interface
-subroutine diff_ver_recom_expl(nl, ulevels_nod2D, nlevels_nod2D, nod_in_elem2D_num, nod_in_elem2D, &
-                               nlevels, area, areasvol, hnode_new, tracer_id, myDim_nod2d,         &
-                               eDim_nod2D, mype, MPI_COMM_FESOM, dtr_bf, dt)
-        use recom_declarations, only: wp
-        integer,       intent(in)                    :: myDim_nod2d, eDim_nod2D, mype, MPI_COMM_FESOM
-        integer,       intent(in)                    :: nl, tracer_id
-        integer,       intent(in),    dimension(:)   :: ulevels_nod2D, nlevels_nod2D
-        integer,       intent(in),    dimension(:)   :: nod_in_elem2D_num, nlevels
-        integer,       intent(in),    dimension(:,:) :: nod_in_elem2D
-        real(kind=WP), intent(in)                    :: dt
-        real(kind=WP), intent(in),    dimension(:,:) :: area, areasvol, hnode_new
-        real(kind=WP), intent(inout), dimension(:,:) :: dtr_bf
-    end subroutine
-  end interface
-end module
+module recom_sinking
+contains
 
-module ver_sinking_recom_interface
-  interface
-        subroutine ver_sinking_recom(tr_num, nl, ulevels_nod2D, nlevels_nod2D, zbar_3d_n, z_3d_n, &
-                                     nod_in_elem2D_num, nod_in_elem2D, nlevels, area, areasvol,   &
-                                     hnode, hnode_new, tracer_id, tracer_data_values,             &
-                                     myDim_nod2d, vert_sink, dt)
-        use recom_declarations, only: wp
-
-        integer,       intent(in)                    :: tr_num, myDim_nod2d
-        integer,       intent(in)                    :: nl, tracer_id
-        integer,       intent(in),    dimension(:)   :: ulevels_nod2D, nlevels_nod2D
-        integer,       intent(in),    dimension(:)   :: nod_in_elem2D_num, nlevels
-        integer,       intent(in),    dimension(:,:) :: nod_in_elem2D
-        real(kind=WP), intent(in)                    :: dt
-        real(kind=WP), intent(in),    dimension(:,:) :: zbar_3d_n, z_3d_n, area, areasvol, hnode, hnode_new
-        real(kind=WP), intent(in),    dimension(:,:) :: tracer_data_values
-        real(kind=WP), intent(inout), dimension(:,:) :: vert_sink
-    end subroutine
-  end interface
-end module
-
-module ver_sinking_recom_benthos_interface
-  interface
-        subroutine ver_sinking_recom_benthos(tr_num, nl, ulevels_nod2D, nlevels_nod2D, zbar_3d_n, &
-                                             nod_in_elem2D_num, nod_in_elem2D, nlevels, area, tracer_id,  &
-                                             tracer_data_values, myDim_nod2d, str_bf, mype,               &
-                                             MPI_COMM_FESOM, npes, sn, rn, s_mpitype_nod2D,               &
-                                             r_mpitype_nod2D, s_mpitype_nod3D,           &
-                                             r_mpitype_nod3D, sPE, rPE, requests, nreq, dt)
-        use recom_declarations, only: wp
-
-        integer,       intent(in)                    :: tr_num, nl, tracer_id, myDim_nod2D
-        integer,       intent(in)                    :: mype, MPI_COMM_FESOM
-        integer,       intent(in),    dimension(:)   :: ulevels_nod2D, nlevels_nod2D
-        integer,       intent(in),    dimension(:)   :: nod_in_elem2D_num, nlevels
-        integer,       intent(in),    dimension(:,:) :: nod_in_elem2D
-        real(kind=WP), intent(in)                    :: dt
-        real(kind=WP), intent(in),    dimension(:,:) :: zbar_3d_n, area, tracer_data_values
-        real(kind=WP), intent(inout), dimension(:,:) :: str_bf
-
-        ! These should all go into a dedicated REcoM type
-        integer, intent(in)                                 :: sn, rn, npes
-        integer, intent(inout)                              :: nreq
-        integer, intent(in),    dimension(:)                :: sPE, rPE
-        integer, intent(inout), dimension(:)                :: requests
-        integer, intent(in),    dimension(:),       pointer :: s_mpitype_nod2D, r_mpitype_nod2D
-        integer, intent(in),    dimension(:, :, :), pointer :: s_mpitype_nod3D, r_mpitype_nod3D
-    end subroutine
-  end interface
-end module
-
-module ballast_interface
-  interface
-    subroutine ballast(myDim_nod2d, ulevels_nod2D, nlevels_nod2D, &
-                         geo_coord_nod2D, Z_3d_n, tracer_data_values_1, tracer_data_values_2, rad)
-
-      use recom_declarations, only: wp
-
-      implicit none
-
-      integer,       intent(in)                  :: myDim_nod2D
-      integer,       intent(in), dimension(:)    :: ulevels_nod2D, nlevels_nod2D
-      real(kind=WP), intent(in)                  :: rad
-      real(kind=WP), intent(in), dimension(:, :) :: geo_coord_nod2D, Z_3d_n
-      real(kind=WP), intent(in), dimension(:, :) :: tracer_data_values_1, tracer_data_values_2
-    end subroutine
-  end interface
-end module
-
-module get_particle_density_interface
-  interface
-    subroutine get_particle_density(num_tracers, myDim_nod2d, eDim_nod2D, nl, ulevels_nod2D, &
-                                    nlevels_nod2D, tracers_info)
-        use recom_declarations, only: wp
-        use recom_glovar, only: tracers_info_type
-
-        implicit none
-
-        integer, intent(in)                 :: myDim_nod2d, eDim_nod2D, nl, num_tracers
-        integer, intent(in), dimension(:)   :: ulevels_nod2D, nlevels_nod2D
-        type(tracers_info_type), intent(in) :: tracers_info
-      end subroutine
-  end interface
-end module
-
-module get_seawater_viscosity_interface
-  interface
-    subroutine get_seawater_viscosity(tr_num, myDim_nod2d, ulevels_nod2D, nlevels_nod2D, &
-                                      tracer_data_values_1, tracer_data_values_2)
-        use recom_config
-        use recom_glovar
-
-        integer,      intent(in)                  :: myDim_nod2d
-        integer,      intent(in), target          :: tr_num
-        real(kind=8), intent(in), dimension(:, :) :: tracer_data_values_1, tracer_data_values_2
-        integer,      intent(in), dimension(:)    :: ulevels_nod2D, nlevels_nod2D
-      end subroutine
-  end interface
-end module
 !===============================================================================
 ! YY: sinking of second detritus adapted from Ozgur's code
 ! but not using recom_det_tracer_id, since
@@ -985,3 +871,5 @@ subroutine get_seawater_viscosity(tr_num, myDim_nod2d, ulevels_nod2D, nlevels_no
     end do
 
 end subroutine get_seawater_viscosity
+
+end module
