@@ -17,3 +17,11 @@ repos:
       exclude: 'mocsy'
       args: [--on-error, skip, --extensions, "f90,F90,inc,incf"]
       types: [file]
+
+-   repo: https://github.com/PlasmaFAIR/fortitude-pre-commit
+    # Fortitude version.
+    rev: v0.8.0
+    hooks:
+      - id: fortitude
+        exclude: 'mocsy'
+        args: [--target-std, "f2008", --line-length, "101"]
