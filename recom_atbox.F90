@@ -1,15 +1,21 @@
 module recom_atbox_module
+    implicit none
+    private
+
+    public :: recom_atbox
 contains
     subroutine recom_atbox(MPI_COMM_FESOM, myDim_nod2D, eDim_nod2D, ulevels_nod2D, areasvol, dt)
         ! Simple 0-d box model to calculate the temporal evolution of atmospheric CO2.
         ! Initially the box model was part of module recom_ciso. Now it can be run also
         ! without carbon isotopes (ciso==.false.)
         ! mbutzin, 2021-07-08
-        use REcoM_GloVar
-        use recom_config
-        use recom_ciso
+        use recom_glovar, only: x_co2atm, gloco2flux_seaicemask
+        use recom_config, only: ciso
         use recom_extra, only: integrate_nod_2d_recom
         use recom_declarations, only: wp
+        use recom_ciso, only: ciso_14, cosmic_14, lambda_14, r_atm_spinup_14, atbox_spinup, &
+                x_co2atm_13, x_co2atm_14, gloco2flux_seaicemask_13, gloco2flux_seaicemask_14, &
+                r_atm_14
 
         implicit none
 
@@ -19,7 +25,9 @@ contains
         real(kind=WP), intent(in), dimension(:, :) :: areasvol
 
         integer :: n, elem, elnodes(3), n1
-        real(kind=WP), parameter :: mol_allatm = 1.7726e20 ! atmospheric inventory of all compounds (mol)
+
+        ! atmospheric inventory of all compounds (mol)
+        real(kind=WP), parameter :: mol_allatm = 1.7726e20
         real(kind=WP) :: total_co2flux, & ! (mol / s)
                 total_co2flux_13, & ! (mol / s) carbon-13
                 total_co2flux_14 ! (mol / s) radiocarbon
