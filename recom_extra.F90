@@ -1,4 +1,12 @@
 module recom_extra
+    implicit none
+    private
+
+    public :: integrate_nod_2D_recom
+    public :: krill_resp
+    public :: Cobeta
+    public :: Depth_calculations
+
 contains
 
     !===============================================================================
@@ -6,7 +14,10 @@ contains
     !===============================================================================
     subroutine Depth_calculations(n, nn, wf, zf, thick, recipthick, myDim_nod2D, eDim_nod2D, nl, &
             hnode, zbar_3d_n)
-        use recom_config
+
+        use recom_config, only: ivcoc, ivdia, ivdet, ivdetsc, ivpha, ivphy, VCalc, VDet, &
+                VDet_zoo2, VCocco, VPhaeo, VDia, VPhy
+
         use recom_declarations, only: wp
 
         implicit none
@@ -18,10 +29,17 @@ contains
         real(kind=WP), intent(in), dimension(:, :) :: hnode, zbar_3d_n
 
         ! Output arrays
-        real(kind=8), dimension(nl, 6), intent(out) :: wf ! [m/day] Flux velocities at the border of the control volumes
-        real(kind=8), dimension(nl), intent(out) :: zf ! [m] Depth of vertical fluxes
-        real(kind=8), dimension(nl - 1), intent(out) :: thick ! [m] Distance between two nodes = layer thickness
-        real(kind=8), dimension(nl - 1), intent(out) :: recipthick ! [1/m] Reciprocal thickness
+        ! [m/day] Flux velocities at the border of the control volumes
+        real(kind=wp), dimension(nl, 6), intent(out) :: wf
+
+        ! [m] Depth of vertical fluxes
+        real(kind=wp), dimension(nl), intent(out) :: zf
+
+        ! [m] Distance between two nodes = layer thickness
+        real(kind=wp), dimension(nl - 1), intent(out) :: thick
+
+        ! [1/m] Reciprocal thickness
+        real(kind=wp), dimension(nl - 1), intent(out) :: recipthick
 
         ! Local variables
         integer :: k ! Layer index
@@ -84,23 +102,26 @@ contains
     ! Subroutine for calculating cos(AngleOfIncidence)
     !===============================================================================
     subroutine Cobeta(daynew, ndpyr, myDim_nod2D, eDim_nod2D, geo_coord_nod2D)
-        use REcoM_GloVar
+        use REcoM_GloVar, only: cosAI
         use recom_declarations, only: wp, pi
 
         implicit none
 
         ! Local variables
-        real(kind=8) :: yearfrac ! Fraction of year [0 1]
-        real(kind=8) :: yDay ! Year fraction in radians [0 2*pi]
-        real(kind=8) :: declination = 0.d0 ! Declination of the sun at present lat and time
-        real(kind=8) :: CosAngleNoon = 0.d0 ! Cosine of Angle of Incidence at noon
+        real(kind=wp) :: yearfrac ! Fraction of year [0 1]
+        real(kind=wp) :: yDay ! Year fraction in radians [0 2*pi]
+        real(kind=wp) :: declination ! Declination of the sun at present lat and time
+        real(kind=wp) :: CosAngleNoon ! Cosine of Angle of Incidence at noon
         integer :: n
 
         ! Constants
-        real(kind=8), parameter :: nWater = 1.33 ! Refractive indices of water
+        real(kind=wp), parameter :: nWater = 1.33 ! Refractive indices of water
 
         integer, intent(in) :: daynew, ndpyr, myDim_nod2D, eDim_nod2D
         real(kind=WP), intent(in), dimension(:, :) :: geo_coord_nod2D
+
+        declination = 0.d0
+        cosangleNoon = 0.d0
 
         !! find day (****NOTE for year starting in winter*****)
         !! Paltridge, G. W. and C. M. R. Platt, Radiative Processes
@@ -134,9 +155,8 @@ contains
     ! Calculating second zooplankton respiration rates
     !================================================================================
     subroutine krill_resp(n, daynew, myDim_nod2D, eDim_nod2D, geo_coord_nod2D)
-        use REcoM_declarations
-        use REcoM_LocVar
-        use REcoM_GloVar
+        use REcoM_declarations, only: wp
+        use REcoM_LocVar, only: res_zoo2_a
 
         implicit none
 
@@ -177,7 +197,7 @@ contains
     subroutine integrate_nod_2D_recom(data, int2D, MPI_COMM_FESOM, myDim_nod2D, eDim_nod2D, &
             ulevels_nod2D, areasvol)
         use recom_declarations, only: wp
-        use mpi
+        use mpi, only: MPI_DOUBLE_PRECISION, MPI_SUM, MPI_Allreduce
 
         implicit none
 
