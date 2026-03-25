@@ -30,8 +30,8 @@ contains
         real(kind=WP), intent(in), dimension(:, :) :: areasvol
         real(kind=WP), intent(in), dimension(:, :) :: alkalinity
 
-        integer :: n, elem, elnodes(3), n1
-        real(kind=WP) :: ralk, net
+        integer :: n
+        real(kind=WP) :: net
 
         !___________________________________________________________________
         ! on freshwater inflow/outflow or virtual alkalinity:
@@ -103,7 +103,7 @@ contains
 
         use recom_config, only: benthos_num, bgc_num, ciso, diags, dust_sol, enable_3zoo2det, &
             enable_coccos, ialk, parfrac, recom_debug, restore_alkalinity, secondsperday, &
-            use_atbox, tiny
+            use_atbox
 
         use recom_locvar, only: LocBenthos, locatmco2, fedust, hplus, loc_ice_conc, ndust, uloc, &
             ph, kw660, k0, pco2surf, dpco2surf, dflux, co2flux_seaicemask, o2flux_seaicemask, oflux
