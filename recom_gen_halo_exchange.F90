@@ -136,7 +136,7 @@ contains
         real(kind=real64), intent(inout) :: nod_array3D(:, :)
 
         integer :: n, MPIerr
-        integer :: nz, nl1
+        integer :: nl1
         logical :: lg2g
 
         if (present(luse_g2g)) then
