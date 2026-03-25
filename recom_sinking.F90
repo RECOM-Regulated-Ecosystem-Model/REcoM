@@ -799,7 +799,7 @@ contains
                 scaling_visc_3D(k, row) = 1.0
 
                 if (use_viscosity_scaling) then
-                    if (seawater_visc_3D(k, row) == 0) then
+                    if (seawater_visc_3D(k, row) < tiny) then
                         scaling_visc_3D(k, row) = 1.0
                     else
                         scaling_visc_3D(k, row) = visc_ref_water / seawater_visc_3D(k, row)
