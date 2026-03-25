@@ -13,6 +13,8 @@ contains
             zF, PAR, Latd, daynew, dt, kappa, mstep, MPI_COMM_FESOM, mype, &
             myDim_nod2D, eDim_nod2D, nl, geo_coord_nod2D)
 
+        use, intrinsic :: ieee_arithmetic, only: ieee_is_nan
+
         use recom_declarations, only: wp, decaybenthos, vertrespp, vertrespc, vertrespd, &
                 vertrespn, vertcalcif, vertdocexp, vertdocexc, vertdocexd, vertdocexn, vertaggp, &
                 vertaggc, vertaggd, vertaggn, vertcalcdiss, vertrespmicro, vertrespmacro, &
@@ -2152,7 +2154,7 @@ contains
                 ! Small Phytoplankton Photosynthesis
                 !-------------------------------------------------------------------------------
 
-                if (pMax < tiny .or. PARave /= PARave .or. CHL2C /= CHL2C) then
+                if (pMax < tiny .or. ieee_is_nan(PARave) .or. ieee_is_nan(CHL2C)) then
                     ! No photosynthesis in darkness or under invalid conditions
                     Cphot = zero
                 else
@@ -2178,7 +2180,7 @@ contains
                 ! Diatom Photosynthesis
                 !-------------------------------------------------------------------------------
 
-                if (pMax_dia < tiny .or. PARave /= PARave .or. CHL2C_dia /= CHL2C_dia) then
+                if (pMax_dia < tiny .or. ieee_is_nan(PARave) .or. ieee_is_nan(CHL2C_dia)) then
                     Cphot_dia = zero
                 else
                     ! Diatom P-I curve with species-specific parameters
@@ -2200,7 +2202,7 @@ contains
 
                 if (enable_coccos) then
 
-                    if (pMax_cocco < tiny .or. PARave /= PARave .or. CHL2C_cocco /= CHL2C_cocco) &
+                    if (pMax_cocco < tiny .or. ieee_is_nan(PARave) .or. ieee_is_nan(CHL2C_cocco)) &
                             then
                         Cphot_cocco = zero
                     else
@@ -2222,7 +2224,7 @@ contains
                     ! Phaeocystis Photosynthesis (Optional)
                     !---------------------------------------------------------------------------
 
-                    if (pMax_phaeo < tiny .or. PARave /= PARave .or. CHL2C_phaeo /= CHL2C_phaeo) &
+                    if (pMax_phaeo < tiny .or. ieee_is_nan(PARave) .or. ieee_is_nan(CHL2C_phaeo)) &
                             then
                         Cphot_phaeo = zero
                     else
@@ -2299,7 +2301,7 @@ contains
                     ! Small Phytoplankton Chlorophyll Loss
                     !---------------------------------------------------------------------------
 
-                    if (pMax < tiny .or. PARave /= PARave .or. CHL2C_plast /= CHL2C_plast) then
+                    if (pMax < tiny .or. ieee_is_nan(PARave) .or. ieee_is_nan(CHL2C_plast)) then
                         ! Minimum degradation in darkness (10% of base rate)
                         KOchl = deg_Chl * 0.1d0
                     else
@@ -2323,8 +2325,8 @@ contains
                     ! Diatom Chlorophyll Loss
                     !---------------------------------------------------------------------------
 
-                    if (pMax_dia < tiny .or. PARave /= PARave .or. CHL2C_plast_dia /= &
-                            CHL2C_plast_dia) then
+                    if (pMax_dia < tiny .or. ieee_is_nan(PARave) .or. &
+                            ieee_is_nan(CHL2C_plast_dia)) then
                         KOchl_dia = deg_Chl_d * 0.1d0
                     else
                         ! Diatom-specific photodamage model
@@ -2343,8 +2345,8 @@ contains
                         ! Coccolithophore Chlorophyll Loss
                         !-----------------------------------------------------------------------
 
-                        if (pMax_cocco < tiny .or. PARave /= PARave .or. CHL2C_plast_cocco /= &
-                                CHL2C_plast_cocco) then
+                        if (pMax_cocco < tiny .or. ieee_is_nan(PARave) .or. &
+                                ieee_is_nan(CHL2C_plast_cocco)) then
                             KOchl_cocco = deg_Chl_c * 0.1d0
                         else
                             ! Coccolithophore-specific photodamage model
@@ -2362,8 +2364,8 @@ contains
                         ! Phaeocystis Chlorophyll Loss
                         !-----------------------------------------------------------------------
 
-                        if (pMax_phaeo < tiny .or. PARave /= PARave .or. CHL2C_plast_phaeo /= &
-                                CHL2C_plast_phaeo) then
+                        if (pMax_phaeo < tiny .or. ieee_is_nan(PARave) .or. &
+                                ieee_is_nan(CHL2C_plast_phaeo)) then
                             KOchl_phaeo = deg_Chl_p * 0.1d0
                         else
                             ! Phaeocystis-specific photodamage model
@@ -2387,7 +2389,7 @@ contains
                 !---------------------------------------------------------------------------
 
                 ! Small phytoplankton
-                if (KOchl /= KOchl) then
+                if (ieee_is_nan(KOchl)) then
                     print*, 'ERROR: KOchl is NaN'
                     print*, '  deg_Chl =', deg_Chl
                     print*, '  alfa =', alfa
@@ -2398,7 +2400,7 @@ contains
                 end if
 
                 ! Diatoms
-                if (KOchl_dia /= KOchl_dia) then
+                if (ieee_is_nan(KOchl_dia)) then
                     print*, 'ERROR: KOchl_dia is NaN'
                     print*, '  deg_Chl_d =', deg_Chl_d
                     print*, '  alfa_d =', alfa_d
@@ -2410,7 +2412,7 @@ contains
 
                 ! Additional species (if enabled)
                 if (enable_coccos) then
-                    if (KOchl_cocco /= KOchl_cocco) then
+                    if (ieee_is_nan(KOchl_cocco)) then
                         print*, 'ERROR: KOchl_cocco is NaN'
                         print*, '  deg_Chl_c =', deg_Chl_c
                         print*, '  alfa_c =', alfa_c
@@ -2420,7 +2422,7 @@ contains
                         stop
                     end if
 
-                    if (KOchl_phaeo /= KOchl_phaeo) then
+                    if (ieee_is_nan(KOchl_phaeo)) then
                         print*, 'ERROR: KOchl_phaeo is NaN'
                         print*, '  deg_Chl_p =', deg_Chl_p
                         print*, '  alfa_p =', alfa_p
@@ -2547,14 +2549,14 @@ contains
 
                 ! --- Small phytoplankton Chlorophyll Synthesis ---
                 chlSynth = zero
-                if (PARave >= tiny .and. PARave == PARave) then
+                if (PARave >= tiny .and. .not.ieee_is_nan(PARave)) then
                     chlSynth = N_assim * Chl2N_max * &
                             min(real(one), Cphot / (alfa * Chl2C * PARave))
                 end if
 
                 ! --- Diatom Chlorophyll Synthesis ---
                 ChlSynth_dia = zero
-                if (PARave >= tiny .and. PARave == PARave) then
+                if (PARave >= tiny .and. .not.ieee_is_nan(PARave)) then
                     ChlSynth_dia = N_assim_dia * Chl2N_max_d * &
                             min(real(one), Cphot_dia / (alfa_d * Chl2C_dia * PARave))
                 end if
@@ -2563,14 +2565,14 @@ contains
                 if (enable_coccos) then
                     ! Coccolithophore chlorophyll synthesis
                     ChlSynth_cocco = zero
-                    if (PARave >= tiny .and. PARave == PARave) then
+                    if (PARave >= tiny .and. .not.ieee_is_nan(PARave)) then
                         ChlSynth_cocco = N_assim_cocco * Chl2N_max_c * &
                                 min(real(one), Cphot_cocco / (alfa_c * Chl2C_cocco * PARave))
                     end if
 
                     ! Phaeocystis chlorophyll synthesis
                     ChlSynth_phaeo = zero
-                    if (PARave >= tiny .and. PARave == PARave) then
+                    if (PARave >= tiny .and. .not.ieee_is_nan(PARave)) then
                         ChlSynth_phaeo = N_assim_phaeo * Chl2N_max_p * &
                                 min(real(one), Cphot_phaeo / (alfa_p * Chl2C_phaeo * PARave))
                     end if
