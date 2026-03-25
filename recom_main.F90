@@ -103,7 +103,7 @@ contains
 
         use recom_config, only: benthos_num, bgc_num, ciso, diags, dust_sol, enable_3zoo2det, &
             enable_coccos, ialk, parfrac, recom_debug, restore_alkalinity, secondsperday, &
-            use_atbox
+            use_atbox, tiny
 
         use recom_locvar, only: LocBenthos, locatmco2, fedust, hplus, loc_ice_conc, ndust, uloc, &
             ph, kw660, k0, pco2surf, dpco2surf, dflux, co2flux_seaicemask, o2flux_seaicemask, oflux
@@ -224,7 +224,7 @@ contains
             ! optional I/O of isoCO2 and inferred cosmogenic 14C production; this may cost some
             ! CPU time
             if (ciso .and. ciso_14) then
-                if ((daynew == ndpyr) .and. (timenew == 86400.)) then
+                if ((daynew == ndpyr) .and. abs(timenew - 86400.) < tiny) then
                     do_update = .true.
                 else
                     do_update = .false.
