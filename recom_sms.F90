@@ -7670,6 +7670,7 @@ contains
     !-------------------------------------------------------------------------------
     function iron_chemistry(Fe, totalLigand, ligandStabConst)
         use recom_declarations, only: wp
+        use recom_config, only: tiny
 
         implicit none
 
@@ -7685,7 +7686,7 @@ contains
         c = -totalLigand
         discrim = b * b - 4.d0 * a * c
 
-        if (a /= 0.d0 .and. discrim >= 0.d0) then
+        if (abs(a) > tiny .and. discrim >= tiny) then
             ligand = (-b + sqrt(discrim)) / (2.d0 * a)
             FeL = totalLigand - ligand
             freeFe = Fe - FeL
