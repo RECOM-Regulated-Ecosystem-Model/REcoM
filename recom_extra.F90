@@ -101,7 +101,7 @@ contains
     !===============================================================================
     ! Subroutine for calculating cos(AngleOfIncidence)
     !===============================================================================
-    subroutine Cobeta(daynew, ndpyr, myDim_nod2D, eDim_nod2D, geo_coord_nod2D)
+    subroutine Cobeta(daynew, ndpyr, myDim_nod2D, geo_coord_nod2D)
         use REcoM_GloVar, only: cosAI
         use recom_declarations, only: wp, pi
 
@@ -117,7 +117,7 @@ contains
         ! Constants
         real(kind=wp), parameter :: nWater = 1.33 ! Refractive indices of water
 
-        integer, intent(in) :: daynew, ndpyr, myDim_nod2D, eDim_nod2D
+        integer, intent(in) :: daynew, ndpyr, myDim_nod2D
         real(kind=WP), intent(in), dimension(:, :) :: geo_coord_nod2D
 
         declination = 0.d0
