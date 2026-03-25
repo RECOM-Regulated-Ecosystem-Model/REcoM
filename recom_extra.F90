@@ -154,7 +154,7 @@ contains
     !================================================================================
     ! Calculating second zooplankton respiration rates
     !================================================================================
-    subroutine krill_resp(n, daynew, myDim_nod2D, eDim_nod2D, geo_coord_nod2D)
+    subroutine krill_resp(n, daynew, geo_coord_nod2D)
         use REcoM_declarations, only: wp
         use REcoM_LocVar, only: res_zoo2_a
 
@@ -162,7 +162,6 @@ contains
 
         ! Input parameters
         integer, intent(in) :: n, daynew
-        integer, intent(in) :: myDim_nod2D, eDim_nod2D
         real(kind=WP), intent(in), dimension(:, :) :: geo_coord_nod2D
 
         ! Values from FESOM
