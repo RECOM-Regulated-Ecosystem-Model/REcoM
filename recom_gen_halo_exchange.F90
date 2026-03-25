@@ -19,6 +19,10 @@ module recom_g_comm
     use, intrinsic :: ISO_FORTRAN_ENV, only: int16, int32, real32, real64
 
     implicit none
+    private
+
+    public :: recom_exchange_nod2D, recom_exchange_nod3D, recom_exchange_nod2D_begin, &
+            recom_exchange_nod3D_begin, recom_exchange_nod_end
 
 contains
 
@@ -145,7 +149,8 @@ contains
 
             nl1 = ubound(nod_array3D, 1)
 
-            if ((nl1 < ubound(r_mpitype_nod3D, 2) - 1) .or. (nl1 > ubound(r_mpitype_nod3D, 2))) then
+            if ((nl1 < ubound(r_mpitype_nod3D, 2) - 1) .or. &
+                    (nl1 > ubound(r_mpitype_nod3D, 2))) then
                 if (mype == 0) then
                     print *, 'Subroutine recom_exchange_nod3D not implemented for', nl1, 'layers.'
                     print *, 'Adding the MPI datatypes is easy, see oce_modules.F90.'
@@ -175,7 +180,7 @@ contains
     !=======================================
 
     subroutine recom_exchange_nod_end(npes, request_count, array_of_requests)
-        use mpi
+        use mpi, only: MPI_WAITALL, MPI_STATUSES_IGNORE
         implicit none
 
         integer, intent(in) :: request_count, npes
@@ -191,7 +196,9 @@ contains
 end module recom_g_comm
 
 module recom_g_comm_auto
-    use recom_g_comm
+    use recom_g_comm, only: recom_exchange_nod2D, recom_exchange_nod3D, &
+            recom_exchange_nod2D_begin, recom_exchange_nod3D_begin, &
+            recom_exchange_nod_end
     implicit none
     interface recom_exchange_nod
         module procedure recom_exchange_nod2D
