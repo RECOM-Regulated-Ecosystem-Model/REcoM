@@ -321,13 +321,11 @@ contains
         real(kind=WP), intent(in), dimension(:, :) :: area, areasvol, hnode_new
         real(kind=WP), intent(inout), dimension(:, :) :: dtr_bf
 
-        integer :: elem, k
-        integer :: n2, nl1, nl2, nz, n, ul1
+        integer :: k
+        integer :: nl1, nz, n, ul1
         real(kind=WP) :: vd_flux(nl)
         integer :: nlevels_nod2D_minimum
         real(kind=WP) :: bottom_flux(myDim_nod2D + eDim_nod2D)
-
-        real(kind=WP), dimension(:, :), pointer :: trarr
 
         bottom_flux = 0._WP
 
