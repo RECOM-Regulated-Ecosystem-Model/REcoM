@@ -1,4 +1,9 @@
 module recom_forcing_module
+    implicit none
+    private
+
+    public :: recom_forcing
+
 contains
 
     !===============================================================================
@@ -11,82 +16,126 @@ contains
             mype, myDim_nod2D, eDim_nod2D, nl, hnode, zbar_3d_n, &
             geo_coord_nod2D, daynew, ndpyr, dt, kappa, mstep, rad)
 
-        use recom_declarations
-        use recom_locvar
-        use recom_config
-        use recom_glovar
-        use recom_extra
-        use recom_sms_module
-        use recom_ciso
-        use gasx
+        use recom_declarations, only: wp, tiny_si, tiny_n, tiny_c, tiny_n_d, tiny_n_c, tiny_n_p, &
+                tiny_c_p, tiny_c_d, tiny_c_c, vertNPPn, vertGPPn, locGPPn, locNPPn, vertNNAn, &
+                locNNAn, &
+                vertChldegn, vertNPPd, locNPPd, locchldegn, vertGPPd, locGPPd, vertNNAd, locNNAd, &
+                vertChldegd, locChldegd, vertNPPc, vertGPPc, locNPPc, locGPPc, vertNNAc, &
+                vertChldegc, &
+                locNNAc, locChldegc, vertNPPp, locNPPp, vertGPPp, vertNNAp, vertchldegp, locNNAp, &
+                locGPPp, locChldegp, vertgrazmeso_tot, vertgrazmeso_n, vertgrazmeso_d, &
+                vertgrazmeso_c, &
+                vertgrazmeso_p, vertgrazmeso_det, vertgrazmeso_mic, vertgrazmeso_det2, &
+                vertgrazmacro_tot, vertgrazmacro_n, vertgrazmacro_d, vertgrazmacro_c, &
+                vertgrazmacro_p, &
+                vertgrazmacro_mes, vertgrazmacro_det, vertgrazmacro_mic, vertgrazmacro_det2, &
+                vertgrazmicro_tot, vertgrazmicro_n, vertgrazmicro_d, vertgrazmicro_c, &
+                locgrazmacro_c, locgrazmacro_c, locgrazmacro_d, locgrazmacro_det, locgrazmacro_det2&
+                , &
+                locgrazmacro_mes, locgrazmacro_mic, locgrazmacro_n, locgrazmacro_p, &
+                locgrazmacro_tot, &
+                locgrazmeso_c, locgrazmeso_d, locgrazmeso_det, locgrazmeso_det2, locgrazmeso_mic, &
+                locgrazmeso_n, locgrazmeso_p, locgrazmeso_tot, locgrazmicro_c, locgrazmicro_d, &
+                locgrazmicro_n, locgrazmicro_p, locgrazmicro_tot, vertgrazmicro_p
+
+        use recom_config, only: bgc_num, chl2n_max, chl2n_max_c, chl2n_max_d, chl2n_max_p, ciso, &
+                diags, enable_3zoo2det, enable_coccos, grazing_detritus, ialk, icchl, icocc, &
+                icocn, &
+                idchl, idiac, idian, idiasi, idic, idin, imiczooc, imiczoon, ioxy, ipchl, iphac, &
+                iphachl, iphan, iphyc, iphyn, isi, ncmax, ncmax_c, ncmax_d, ncmax_p, nmocsy, one, &
+                pa2atm, recom_debug, secondsperday, sicmax, tiny, tiny_chl
+
+        use recom_ciso, only: alpha_aq_13, alpha_aq_14, alpha_dic_13, alpha_dic_14, alpha_k_13, &
+                alpha_k_14, alpha_p_13, alpha_p_14, alpha_p_dia_13, alpha_p_dia_14, ciso_14, &
+                ciso_organic_14, co2flux_13, co2flux_14, co2flux_seaicemask_13, &
+                recom_ciso_airsea, recom_ciso_photo, &
+                co2flux_seaicemask_14, &
+                co2sat, idiac_13, idiac_14, idic_13, idic_14, iphyc_13, iphyc_14, kwco2, r_atm_13, &
+                r_atm_14, r_co2s_13, r_co2s_14, r_diac_13, r_diac_14, r_dic_13, r_dic_14, r_phyc_13&
+                , &
+                r_phyc_14
+
+        use recom_locvar, only: betad, co2, co2ex, dpco2surf, fco2, hco3, k0, kw660, loc_ice_conc, &
+                locatmco2, o2ex, o2flux_seaicemask, oflux, omegaa, omegac, p, pco2surf, ph, rhosw, &
+                tempis, uloc, co2flux, co2flux, co3, co2flux_seaicemask, dflux
+
+        use recom_extra, only: cobeta, depth_calculations
+        use recom_sms_module, only: recom_sms
+        use gasx, only: scco2, flxco2, pistonvel, o2flux
 
         implicit none
 
         integer, intent(in) :: daynew, ndpyr, mype, myDim_nod2D, eDim_nod2D, nl, mstep
         integer, intent(in) :: MPI_COMM_FESOM, n, Nn ! Nn -Total number of nodes
 
-        real(kind=8), intent(in) :: rad
-        real(kind=8), intent(in) :: Sali ! Salinity of current surface layer
-        real(kind=8), intent(in) :: SurfSW ! [W/m2] ShortWave radiation at surface
-        real(kind=8), intent(in) :: Loc_slp ! [Pa] sea-level pressure
-        real(kind=8), intent(inout) :: kappa, dt
+        real(kind=wp), intent(in) :: rad
+        real(kind=wp), intent(in) :: Sali ! Salinity of current surface layer
+        real(kind=wp), intent(in) :: SurfSW ! [W/m2] ShortWave radiation at surface
+        real(kind=wp), intent(in) :: Loc_slp ! [Pa] sea-level pressure
+        real(kind=wp), intent(inout) :: kappa, dt
 
-        real(kind=8), intent(in), dimension(nl - 1) :: Temp ! [degrees C] Ocean temperature
-        real(kind=8), intent(in), dimension(nl - 1) :: Sali_depth ! Salinity for the whole water column
+        real(kind=wp), intent(in), dimension(nl - 1) :: Temp ! [degrees C] Ocean temperature
+        ! Salinity for the whole water column
+        real(kind=wp), intent(in), dimension(nl - 1) :: Sali_depth
 
         !!---- Watercolumn carbonate chemistry
-        real(kind=8), intent(inout), dimension(nl - 1) :: CO2_watercolumn
-        real(kind=8), intent(inout), dimension(nl - 1) :: pH_watercolumn
-        real(kind=8), intent(inout), dimension(nl - 1) :: pCO2_watercolumn
-        real(kind=8), intent(inout), dimension(nl - 1) :: HCO3_watercolumn
-        real(kind=8), intent(inout), dimension(nl - 1) :: CO3_watercolumn
-        real(kind=8), intent(inout), dimension(nl - 1) :: OmegaC_watercolumn
-        real(kind=8), intent(inout), dimension(nl - 1) :: kspc_watercolumn
-        real(kind=8), intent(inout), dimension(nl - 1) :: rhoSW_watercolumn
-        real(kind=8), intent(inout), dimension(nl - 1) :: PAR
+        real(kind=wp), intent(inout), dimension(nl - 1) :: CO2_watercolumn
+        real(kind=wp), intent(inout), dimension(nl - 1) :: pH_watercolumn
+        real(kind=wp), intent(inout), dimension(nl - 1) :: pCO2_watercolumn
+        real(kind=wp), intent(inout), dimension(nl - 1) :: HCO3_watercolumn
+        real(kind=wp), intent(inout), dimension(nl - 1) :: CO3_watercolumn
+        real(kind=wp), intent(inout), dimension(nl - 1) :: OmegaC_watercolumn
+        real(kind=wp), intent(inout), dimension(nl - 1) :: kspc_watercolumn
+        real(kind=wp), intent(inout), dimension(nl - 1) :: rhoSW_watercolumn
+        real(kind=wp), intent(inout), dimension(nl - 1) :: PAR
 
         real(kind=WP), intent(in), dimension(:, :) :: hnode, zbar_3d_n
         real(kind=WP), intent(in), dimension(:, :) :: geo_coord_nod2D
-        real(kind=8), intent(inout), dimension(nl - 1, bgc_num) :: state
+        real(kind=wp), intent(inout), dimension(nl - 1, bgc_num) :: state
 
-        integer :: tr_num
-        real(kind=8) :: Latr
+        real(kind=wp) :: Latr
 
         !!---- Subroutine CO2Flux /mocsy
-        real(kind=8) :: REcoM_DIC(1) ! [mol/m3] Conc of DIC in the surface water, used to calculate CO2 flux
-        real(kind=8) :: REcoM_Alk(1) ! [mol/m3] Conc of Alk in the surface water, used to calculate CO2 flux
-        real(kind=8) :: REcoM_Si(1) ! [mol/m3] Conc of Si in the surface water, used to calculate CO2 flux
-        real(kind=8) :: REcoM_Phos(1) ! [mol/m3] Conc of Phos in the surface water, used to calculate the CO2 flux
-        real(kind=8) :: Latd(1) ! latitude in degree
-        real(kind=8) :: Lond(1) ! longitude in degree
-        real(kind=8) :: REcoM_T(1) ! temperature again, for mocsy minimum defined as -2
-        real(kind=8) :: REcoM_S(1) ! temperature again, for mocsy minimum defined as 21
+        ! [mol/m3] Conc of DIC in the surface water, used to calculate CO2 flux
+        real(kind=wp) :: REcoM_DIC(1)
+        ! [mol/m3] Conc of Alk in the surface water, used to calculate CO2 flux
+        real(kind=wp) :: REcoM_Alk(1)
+        ! [mol/m3] Conc of Si in the surface water, used to calculate CO2 flux
+        real(kind=wp) :: REcoM_Si(1)
+        ! [mol/m3] Conc of Phos in the surface water, used to calculate the CO2 flux
+        real(kind=wp) :: REcoM_Phos(1)
+        real(kind=wp) :: Latd(1) ! latitude in degree
+        real(kind=wp) :: Lond(1) ! longitude in degree
+        real(kind=wp) :: REcoM_T(1) ! temperature again, for mocsy minimum defined as -2
+        real(kind=wp) :: REcoM_S(1) ! temperature again, for mocsy minimum defined as 21
 
         ! atm pressure, now read in as forcing!!
         !!---- atm pressure
-        real(kind=8) :: Patm(1) ! atmospheric pressure [atm]
+        real(kind=wp) :: Patm(1) ! atmospheric pressure [atm]
 
         !!---- Subroutine o2flux /mocsy
-        real(kind=8) :: ppo(1) ! atmospheric pressure, divided by 1 atm
-        real(kind=8) :: REcoM_O2(1) ! [mmol/m3] Conc of O2 in the surface water, used to calculate O2 flux
-
-        !!---- Diagnostics
-        integer :: idiags, k
+        real(kind=wp) :: ppo(1) ! atmospheric pressure, divided by 1 atm
+        ! [mmol/m3] Conc of O2 in the surface water, used to calculate O2 flux
+        real(kind=wp) :: REcoM_O2(1)
 
         !!---- Subroutine Depth
 
-        real(kind=8), dimension(nl) :: zF ! [m] Depth of fluxes
-        real(kind=8), dimension(nl, 6) :: SinkVel ! [m/day]
-        real(kind=8), dimension(nl - 1) :: thick ! [m] Vertical distance between two nodes = Thickness
-        real(kind=8), dimension(nl - 1) :: recipthick ! [1/m] reciprocal of thick
+        real(kind=wp), dimension(nl) :: zF ! [m] Depth of fluxes
+        real(kind=wp), dimension(nl, 6) :: SinkVel ! [m/day]
+        ! [m] Vertical distance between two nodes = Thickness
+        real(kind=wp), dimension(nl - 1) :: thick
+        real(kind=wp), dimension(nl - 1) :: recipthick ! [1/m] reciprocal of thick
 
         !!---- Subroutine REcoM_sms
-        real(kind=8), dimension(nl - 1, bgc_num) :: sms ! matrix that entail changes in tracer concentrations
+        ! matrix that entail changes in tracer concentrations
+        real(kind=wp), dimension(nl - 1, bgc_num) :: sms
 
-        tiny_N = tiny_chl / chl2N_max ! 0.00001/ 3.15d0   Chl2N_max [mg CHL/mmol N] Maximum CHL a : N ratio = 0.3 gCHL gN^-1
+        ! 0.00001/ 3.15d0   Chl2N_max [mg CHL/mmol N] Maximum CHL a : N ratio = 0.3 gCHL gN^-1
+        tiny_N = tiny_chl / chl2N_max
         tiny_N_d = tiny_chl / chl2N_max_d ! 0.00001/ 4.2d0
 
-        tiny_C = tiny_N / NCmax ! NCmax   = 0.2d0   [mmol N/mmol C] Maximum cell quota of nitrogen (N:C)
+        ! NCmax   = 0.2d0   [mmol N/mmol C] Maximum cell quota of nitrogen (N:C)
+        tiny_C = tiny_N / NCmax
         tiny_C_d = tiny_N_d / NCmax_d ! NCmax_d = 0.2d0
 
         tiny_Si = tiny_C_d / SiCmax ! SiCmax = 0.8d0
@@ -216,7 +265,9 @@ contains
 
         ! then oxygen
         ppo = Loc_slp / Pa2atm !1 !slp divided by 1 atm
-        REcoM_O2 = max(tiny * 1e-3, state(one, ioxy) * 1e-3) ! convert from mmol/m3 to mol/m3 for mocsy
+
+        ! convert from mmol/m3 to mol/m3 for mocsy
+        REcoM_O2 = max(tiny * 1e-3, state(one, ioxy) * 1e-3)
 
         call o2flux(REcoM_T, REcoM_S, kw660, ppo, REcoM_O2, Nmocsy, o2ex)
         oflux = o2ex * 1.e3 * SecondsPerDay !* (1.d0 - Loc_ice_conc) [mmol/m2/d]
@@ -273,14 +324,17 @@ contains
             ! oce_ale_tracer.F90
 
             ! Fractionation due to air-sea exchange and chemical speciation of CO2
-            call recom_ciso_airsea(recom_t(1), co3(1), recom_dic(1)) ! -> alpha_aq, alpha_dic. CO3 is taken from mocsy
+            ! -> alpha_aq, alpha_dic. CO3 is taken from mocsy
+            call recom_ciso_airsea(recom_t(1), co3(1), recom_dic(1))
 
             ! Isotopic ratios of dissolved CO2, also needed to calculate biogenic fractionation
             r_dic_13 = max(tiny * 1e-3, state(1, idic_13) * 1e-3) / recom_dic(1)
             r_co2s_13 = alpha_aq_13 / alpha_dic_13 * r_dic_13
             ! Calculate air-sea fluxes of 13|14CO2 in mmol / m**2 / s
             kwco2 = kw660(1) * (660 / scco2(REcoM_T(1))) ** 0.5 ! Piston velocity (via mocsy)
-            co2sat = co2flux(1) / (kwco2 + tiny) + co2(1) ! Saturation concentration of CO2 (via mocsy)
+
+            ! Saturation concentration of CO2 (via mocsy)
+            co2sat = co2flux(1) / (kwco2 + tiny) + co2(1)
             ! co2flux_13   = kwco2 * alpha_k_13 * (alpha_aq_13 * r_atm_13 * co2sat - r_co2s_13 *
             ! co2(1))
             ! co2flux_13   = alpha_k_13 * alpha_aq_13 * kwco2 * (r_atm_13 * co2sat - r_dic_13 *
@@ -358,7 +412,9 @@ contains
                 locChldegp = sum(vertChldegp(1:nn) * thick(1:nn))
             end if
 
-            if (Grazing_detritus) then ! only for the case if grazing detritus is used, as probably only needed for tuning which uses detritus grazing
+            ! only for the case if grazing detritus is used, as probably only
+            ! needed for tuning which uses detritus grazing
+            if (Grazing_detritus) then
                 ! Mesozooplankton
                 locgrazmeso_tot = sum(vertgrazmeso_tot(1:nn) * thick(1:nn))
                 locgrazmeso_n = sum(vertgrazmeso_n(1:nn) * thick(1:nn))
