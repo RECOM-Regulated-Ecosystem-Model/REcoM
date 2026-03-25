@@ -24,8 +24,6 @@ contains
         integer, intent(in), dimension(:) :: ulevels_nod2D
         real(kind=WP), intent(in), dimension(:, :) :: areasvol
 
-        integer :: n, elem, elnodes(3), n1
-
         ! atmospheric inventory of all compounds (mol)
         real(kind=WP), parameter :: mol_allatm = 1.7726e20
         real(kind=WP) :: total_co2flux, & ! (mol / s)
