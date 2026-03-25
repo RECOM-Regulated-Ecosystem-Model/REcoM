@@ -33,7 +33,7 @@ contains
         ! Globally integrated air-sea CO2 flux (mol / s)
         total_co2flux = 0.
         call integrate_nod_2d_recom(0.001 * GloCO2flux_seaicemask, total_CO2flux, MPI_COMM_FESOM, &
-                myDim_nod2D, eDim_nod2D, ulevels_nod2D, areasvol)
+                myDim_nod2D, ulevels_nod2D, areasvol)
 
         ! Atmospheric carbon budget (mol)
         ! mass of the dry atmosphere = 5.1352e18 kg (Trenberth & Smith 2005,
@@ -54,7 +54,7 @@ contains
             ! Globally integrated air-sea 13CO2 flux (mol / s)
             total_co2flux_13 = 0.
             call integrate_nod_2d_recom(0.001 * GloCO2flux_seaicemask_13, total_co2flux_13, &
-                    MPI_COMM_FESOM, myDim_nod2D, eDim_nod2D, ulevels_nod2D, &
+                    MPI_COMM_FESOM, myDim_nod2D, ulevels_nod2D, &
                     areasvol)
 
             ! Atmospheric carbon-13 budget (mol)
@@ -67,7 +67,7 @@ contains
             if (ciso_14) then
                 total_co2flux_14 = 0. ! globally integrated air-sea 14CO2 flux (mol / s)
                 call integrate_nod_2d_recom(0.001 * GloCO2flux_seaicemask_14, total_co2flux_14, &
-                        MPI_COMM_FESOM, myDim_nod2D, eDim_nod2D, ulevels_nod2D, &
+                        MPI_COMM_FESOM, myDim_nod2D, ulevels_nod2D, &
                         areasvol)
                 ! Atmospheric radiocarbon budget in mol:
                 ! mol_co2atm_14 = mol_co2atm_14  + dt * (cosmic_14(1) - mol_co2atm_14 *

@@ -74,7 +74,7 @@ contains
 
         ! 3. restoring to Alkalinity climatology
         call integrate_nod_2D_recom(relax_alk, net, MPI_COMM_FESOM, myDim_nod2D, &
-                eDim_nod2D, ulevels_nod2D, areasvol)
+                ulevels_nod2D, areasvol)
 
         relax_alk = relax_alk - net / ocean_area ! at ocean surface layer
 

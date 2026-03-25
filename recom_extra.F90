@@ -194,14 +194,14 @@ contains
         end if
     end subroutine krill_resp
 
-    subroutine integrate_nod_2D_recom(data, int2D, MPI_COMM_FESOM, myDim_nod2D, eDim_nod2D, &
-            ulevels_nod2D, areasvol)
+    subroutine integrate_nod_2D_recom(data, int2D, MPI_COMM_FESOM, myDim_nod2D, ulevels_nod2D, &
+            areasvol)
         use recom_declarations, only: wp
         use mpi, only: MPI_DOUBLE_PRECISION, MPI_SUM, MPI_Allreduce
 
         implicit none
 
-        integer, intent(in) :: MPI_COMM_FESOM, myDim_nod2D, eDim_nod2D
+        integer, intent(in) :: MPI_COMM_FESOM, myDim_nod2D
         real(kind=WP), intent(inout) :: int2D
 
         integer, intent(in), dimension(:) :: ulevels_nod2D
