@@ -1,4 +1,10 @@
 module recom_sms_module
+    implicit none
+    private
+
+    public :: REcoM_sms
+    public :: iron_chemistry
+
 contains
 
     subroutine REcoM_sms(n, Nn, state, thick, SurfSR, sms, Temp, Sali_depth, CO2_watercolumn, &
@@ -7,13 +13,106 @@ contains
             zF, PAR, Latd, daynew, dt, kappa, mstep, MPI_COMM_FESOM, mype, &
             myDim_nod2D, eDim_nod2D, nl, geo_coord_nod2D)
 
-        use recom_declarations
-        use recom_locvar
-        use recom_glovar
-        use recom_config
-        use recoM_ciso
-        use recom_extra
+        use recom_declarations, only: wp, decaybenthos, vertrespp, vertrespc, vertrespd, &
+                vertrespn, vertcalcif, vertdocexp, vertdocexc, vertdocexd, vertdocexn, vertaggp, &
+                vertaggc, vertaggd, vertaggn, vertcalcdiss, vertrespmicro, vertrespmacro, &
+                vertrespmeso, vertgrazmicro_p, vertgrazmicro_c, vertgrazmicro_d, vertgrazmicro_n, &
+                vertgrazmicro_tot, vertgrazmacro_det, vertgrazmacro_mic, vertgrazmacro_det2, &
+                vertgrazmacro_mes, vertgrazmacro_p, vertgrazmacro_c, vertgrazmacro_d, &
+                vertgrazmacro_n, vertgrazmeso_det, vertgrazmeso_mic, vertgrazmeso_det2, &
+                vertgrazmeso_p, vertgrazmeso_c, vertgrazmeso_d, vertgrazmeso_n, vertgrazmeso_tot, &
+                vertgrazmacro_tot, aggregationrate, arrfunc, arrfunczoo2, ca, calc_diss, &
+                calc_diss2, calc_diss_ben, calc_loss_agg, calc_loss_gra, calc_loss_gra2, &
+                calc_loss_gra3, calcification, chl2c, chl2c_cocco, chl2c_dia, chl2c_phaeo, &
+                chl2c_plast, chl2c_plast_cocco, chl2c_plast_dia, chl2c_plast_phaeo, chl2n, &
+                chl2n_cocco, chl2n_dia, chl2n_phaeo, chl_lower, chl_upper, chlave, chlsynth, &
+                chlsynth_cocco, chlsynth_dia, chlsynth_phaeo, co3_sat, coccoco2, &
+                cphot, cphot_cocco, cphot_dia, cphot_phaeo, diaco2, fcoccon, fcoccon2, fcoccon3, &
+                fdetn, fdetn2, fdetz2n, fdetz2n2, fdian, fdian2, fdian3, felimitfac, fhetn, &
+                fmiczoon, fmiczoon2, food, food2, food3, foodsq, foodsq2, foodsq3, fphaeon, &
+                fphaeon2, fphaeon3, fphyn, fphyn2, fphyn3, grazeff, grazingflux, grazingflux2, &
+                grazingflux_cocco, grazingflux_cocco2, grazingflux_cocco3, grazingflux_det, &
+                grazingflux_det2, grazingflux_detz2, grazingflux_detz22, grazingflux_dia, &
+                grazingflux_dia2, grazingflux_dia3, grazingflux_het2, grazingflux_miczoo, &
+                grazingflux_miczoo2, grazingflux_phaeo, grazingflux_phaeo2, grazingflux_phaeo3, &
+                grazingflux_phy, grazingflux_phy2, grazingflux_phy3, hetlossflux, hetrespflux, &
+                is_3zoo2det, is_coccos, kappastar, kdzlower, kdzupper, kochl, kochl_cocco, &
+                kochl_phaeo, limitfacn, limitfacn_cocco, limitfacn_dia, limitfacn_phaeo, &
+                lowerlight, mesfecalloss_c, mesfecalloss_n, miczoolossflux, miczoorespflux, &
+                n_assim_cocco, n_assim_dia, n_assim_phaeo, o2func, parave, phaeoco2, phyco2, &
+                phyresprate, phyresprate_cocco, phyresprate_dia, phyresprate_phaeo, pmax, &
+                pmax_dia, pmax_phaeo, q10_mes, q10_mes_res, q10_mic, q10_mic_res, qlimitfac, &
+                qlimitfactmp, qsic, qsin, quota, quota_cocco, quota_dia, quota_phaeo, &
+                kochl_dia, grazingflux3, limitfacsi, n_assim, pmax_cocco, recip_res_zoo22, &
+                recipbiostep, recipdet, recipdet2, recipquota, recipquota_cocco, recipquota_dia, &
+                recipquota_phaeo, recipqzoo, recipqzoo2, recipqzoo3, reminsit, rtloc, rtref, &
+                temp_cocco, temp_diatoms, temp_phaeo, temp_phyto, tiny_c, tiny_c_c, tiny_c_d, &
+                tiny_c_p, tiny_n, tiny_n_c, tiny_n_d, tiny_n_p, tiny_si, v_cm, varpzcocco, &
+                varpzcocco2, varpzcocco3, varpzdet, varpzdet2, varpzdetz2, varpzdetz22, varpzdia, &
+                varpzdia2, varpzdia3, varpzhet, varpzmiczoo, varpzmiczoo2, varpzphaeo, &
+                varpzphaeo3, varpzphy, varpzphy2, varpzphy3, zoo2fecalloss_c, zoo2fecalloss_n, &
+                zoo2lossflux, zoo2respflux, vttemp_phyto, vttemp_diatoms, vttemp_cocco, &
+                h_depth, vtphyco2, vtdiaco2, vtcoccoco2, vtphaeoco2, vtcphotliglim_phyto, &
+                vtcphot_phyto, vtcphotliglim_diatoms, vtcphot_diatoms, vtcphotliglim_cocco, &
+                vtcphot_cocco, vtcphotliglim_phaeo, vtcphot_phaeo, vtsi_assimdia, &
+                vertnppn, vertnppd, vertnppc, vertnppp, vertgppn, vertgppd, vertgppc, vertgppc, &
+                vertgppp, vertgppp, vertnnan, vertnnan, vertnnad, vertnnad, vertnnac, vertnnac, &
+                vertnnap, vertnnap, vertchldegn, vertchldegn, vertchldegd, vertchldegd, &
+                si_assim, varpzphaeo2, vttemp_phaeo, vertchldegc, vertchldegc, vertchldegp, &
+                vertchldegp
+
+        use recom_locvar, only: betad_depth, co2_depth, co3_depth, dpos, fco2_depth, &
+                grazingfluxcarbon_mes, grazingfluxcarbonzoo2, hco3_depth, kspc_depth, locbenthos, &
+                locriverdoc, logfile_outfreq_30, logfile_outfreq_7, omegaa_depth, omegac_depth, &
+                pco2_depth, p_depth, ph_depth, picpocco2, picpocn, picpoctemp, res_zoo2_a, &
+                res_zoo2_f, rhosw_depth, tempis_depth
+
+        use recom_config, only: bgc_num, a_chl, a_co2_calc, a_co2_cocco, a_co2_dia, a_co2_phaeo, &
+                a_co2_phy, ae, agg_pd, agg_pp, alfa, alfa_c, alfa_d, alfa_p, b_co2_calc, &
+                b_co2_cocco, b_co2_dia, b_co2_phaeo, b_co2_phy, beta_phaeo, biostep, biosynth, &
+                biosynthsi, c2k, c_co2_calc, c_co2_cocco, c_co2_dia, c_co2_phaeo, c_co2_phy, &
+                d_co2_cocco, d_co2_dia, d_co2_phaeo, d_co2_phy, decayratebenc, decayratebenn, &
+                decayratebensi, deg_chl, deg_chl_c, deg_chl_d, deg_chl_p, diags, diatom_mucus, &
+                expon_phy, fe2n, fecal_rate_c, fecal_rate_c_mes, fecal_rate_n, fecal_rate_n_mes, &
+                graz_max, graz_max2, graz_max3, grazeff2, grazeff3, grazing_detritus, &
+                het_resp_noredfield, ialk, icchl, icocc, icocn, idchl, idetc, idetcal, idetn, &
+                idetz2c, idetz2calc, idetz2n, idetz2si, idiac, idian, idiasi, idic, idin, idoc, &
+                ife, ihetc, ihetn, imiczooc, imiczoon, ioxy, ipchl, iphac, iphachl, iphan, iphyc, &
+                k_fe_d, k_fe_p, k_o2_remin, k_si, k_w, kscavfe, ligandstabconst, loss_het, &
+                loss_miczoo, loss_zoo2, lossc, lossc_c, lossc_d, lossc_p, lossc_z, lossc_z2, &
+                lossn, lossn_c, lossn_d, lossn_p, lossn_z, lossn_z2, lossn_z3, ncmax, ncmax_c, &
+                ncuptakeratio_d, ncuptakeratio_p, nmaxslope, nminslope, nmocsy, o2dep_remin, &
+                omegac_diss, one, ord_cocco, ord_d, ord_phy, p_cm, p_cm_d, pa2atm, pzcocco, &
+                pzmiczoo2, pzphaeo, pzphaeo2, pzphaeo3, pzphy, pzphy2, pzphy3, &
+                recom_grazing_variable_preference, recom_tref, redfield, redo2c, reminc, reminn, &
+                reminsi, res_het, res_miczoo, res_phy, res_phy_c, res_phy_d, res_phy_p, res_zoo2, &
+                rho_c1, rho_n, secondsperday, sedflx_num, sicmax, sicmin, sicuptakeratio, &
+                calc_diss_exp, gfin, idetsi, idon, k_fe_c, lossc_z3, pzcocco2, simaxslope, &
+                siminslope, t1_zoo2, t2_zoo2, t3_zoo2, t4_zoo2, tiny, tiny_chl, tiny_het, &
+                topt_phaeo, totalligand, uopt_phaeo, use_medusa, use_photodamage, v_cm_fact, &
+                v_cm_fact_c, v_cm_fact_d, v_cm_fact_p, vdet, vdet_a, zero, tmax_phaeo, &
+                calc_diss_guts, calc_diss_omegac, calc_diss_rate, calc_diss_rate2, &
+                calc_prod_ratio, chl2n_max, chl2n_max_c, chl2n_max_d, chl2n_max_p, ciso, co2lim, &
+                cunits, d_co2_calc, enable_3zoo2det, enable_coccos, epsilon2, epsilon3, epsilonr, &
+                expon_cocco, expon_d, iphycal, iphyn, isi, izoo2c, izoo2n, k_din, k_din_c, &
+                k_din_d, k_din_p, k_fe, ncmax_d, ncmax_p, ncmin, ncmin_c, ncmin_d, ncmin_p, &
+                ncuptakeratio, ncuptakeratio_c, pzcocco3, pzdet, pzdet2, pzdetz2, pzdetz22, &
+                pzdia, pzdia2, pzdia3, pzhet, pzmiczoo
+
+        use recoM_ciso, only: alpha_calc_13, alpha_calc_14, alpha_dcal_13, alpha_dcal_14, &
+                calc_diss_13, calc_diss_14, calc_loss_agg_13, calc_loss_agg_14, calc_loss_gra_13, &
+                calc_loss_gra_14, calcification_13, calcification_14, ciso_14, ciso_organic_14, &
+                eoc_14, hetc_13, hetc_14, hetrespflux_13, hetrespflux_14, idetc_13, idetc_14, &
+                idetcal_13, idetcal_14, idiac_13, idiac_14, idic_13, idic_14, idoc_13, idoc_14, &
+                ihetc_13, ihetc_14, iphyc_13, iphyc_14, iphycal_13, iphycal_14, phyc_13, phyc_14, &
+                phycalc_13, phycalc_14, quota_13, quota_14, quota_dia_13, quota_dia_14, r_iorg_13, &
+                r_iorg_14, recipquota_13, recipquota_14, recipquota_dia_13, recipquota_dia_14, &
+                recipqzoo_13, recipqzoo_14, detc_13, detc_14, detcalc_13, detcalc_14, diac_13, &
+                diac_14, dic_13, dic_14, eoc_13
+
         use mvars, only: vars_sprac
+        use recom_glovar, only: cosAI
+        use recom_extra, only: krill_resp
 
         implicit none
 
@@ -21,51 +120,64 @@ contains
         integer, intent(in) :: MPI_COMM_FESOM
         integer, intent(in) :: Nn !< Total number of nodes in the vertical
 
-        real(kind=8), intent(in) :: SurfSR, dt !< [W/m2] ShortWave radiation at surface
-        real(kind=8), intent(in) :: Loc_slp ![Pa] sea-level pressure
-        real(kind=8), intent(in) :: Latd(1) ! latitude in degree
+        real(kind=wp), intent(in) :: SurfSR, dt !< [W/m2] ShortWave radiation at surface
+        real(kind=wp), intent(in) :: Loc_slp ![Pa] sea-level pressure
+        real(kind=wp), intent(in) :: Latd(1) ! latitude in degree
 
-        real(kind=8), intent(in), dimension(nl - 1) :: thick !< [m] Vertical distance between two nodes = Thickness
-        real(kind=8), intent(in), dimension(nl - 1) :: Temp !< [degrees C] Ocean temperature
-        real(kind=8), intent(in), dimension(nl - 1) :: Sali_depth !< NEW MOCSY Salinity for the whole water column
-        real(kind=8), intent(in), dimension(nl) :: zF !< [m] Depth of fluxes
+        !< [m] Vertical distance between two nodes = Thickness
+        real(kind=wp), intent(in), dimension(nl - 1) :: thick
+        real(kind=wp), intent(in), dimension(nl - 1) :: Temp !< [degrees C] Ocean temperature
+
+        !< NEW MOCSY Salinity for the whole water column
+        real(kind=wp), intent(in), dimension(nl - 1) :: Sali_depth
+        real(kind=wp), intent(in), dimension(nl) :: zF !< [m] Depth of fluxes
         real(kind=WP), intent(in), dimension(:, :) :: geo_coord_nod2D
 
-        real(kind=8), intent(inout) :: kappa
-        real(kind=8), intent(inout), dimension(nl - 1) :: CO2_watercolumn !< [mol/m3]
-        real(kind=8), intent(inout), dimension(nl - 1) :: pH_watercolumn !< on total scale
-        real(kind=8), intent(inout), dimension(nl - 1) :: pCO2_watercolumn !< [uatm]
-        real(kind=8), intent(inout), dimension(nl - 1) :: HCO3_watercolumn !< [mol/m3]
-        real(kind=8), intent(inout), dimension(nl - 1) :: CO3_watercolumn !< [mol/m3]
-        real(kind=8), intent(inout), dimension(nl - 1) :: OmegaC_watercolumn !< calcite saturation state
-        real(kind=8), intent(inout), dimension(nl - 1) :: kspc_watercolumn !< stoichiometric solubility product [mol^2/kg^2]
-        real(kind=8), intent(inout), dimension(nl - 1) :: rhoSW_watercolumn !< in-situ density of seawater [kg/m3]
-        real(kind=8), intent(inout), dimension(nl - 1) :: PAR
-        real(kind=8), intent(inout), dimension(nl - 1, bgc_num) :: state !< ChlA conc in phytoplankton [mg/m3]
-        real(kind=8), intent(inout), dimension(nl - 1, bgc_num) :: sms !< Source-Minus-Sinks term
+        real(kind=wp), intent(inout) :: kappa
+        real(kind=wp), intent(inout), dimension(nl - 1) :: CO2_watercolumn !< [mol/m3]
+        real(kind=wp), intent(inout), dimension(nl - 1) :: pH_watercolumn !< on total scale
+        real(kind=wp), intent(inout), dimension(nl - 1) :: pCO2_watercolumn !< [uatm]
+        real(kind=wp), intent(inout), dimension(nl - 1) :: HCO3_watercolumn !< [mol/m3]
+        real(kind=wp), intent(inout), dimension(nl - 1) :: CO3_watercolumn !< [mol/m3]
 
-        real(kind=8) :: dt_d !< Size of time steps [day]
-        real(kind=8) :: dt_b !< Size of time steps [day]
-        real(kind=8) :: dt_sink !< Size of local time step
+        !< calcite saturation state
+        real(kind=wp), intent(inout), dimension(nl - 1) :: OmegaC_watercolumn
 
-        real(kind=8) :: recip_hetN_plus !< MB's addition to heterotrophic respiration
-        real(kind=8) :: recip_res_het !< [day] Reciprocal of respiration by heterotrophs and mortality (loss to detritus)
-        real(kind=8) :: Sink_Vel
-        real(kind=8) :: aux
-        integer :: k, step, ii, idiags
+        !< stoichiometric solubility product [mol^2/kg^2]
+        real(kind=wp), intent(inout), dimension(nl - 1) :: kspc_watercolumn
 
-        real(kind=8) :: Patm_depth(1)
-        real(kind=8) :: REcoM_T_depth(1) ! MOCSY temperature for the whole water column for mocsy minimum defined as -2
-        real(kind=8) :: REcoM_S_depth(1)
-        real(kind=8) :: REcoM_DIC_depth(1)
-        real(kind=8) :: REcoM_Alk_depth(1)
-        real(kind=8) :: REcoM_Si_depth(1)
-        real(kind=8) :: REcoM_Phos_depth(1)
-        real(kind=8) :: mocsy_step_per_day
-        real(kind=8), dimension(nl - 1) :: Sink
+        !< in-situ density of seawater [kg/m3]
+        real(kind=wp), intent(inout), dimension(nl - 1) :: rhoSW_watercolumn
+        real(kind=wp), intent(inout), dimension(nl - 1) :: PAR
+
+        !< ChlA conc in phytoplankton [mg/m3]
+        real(kind=wp), intent(inout), dimension(nl - 1, bgc_num) :: state
+        real(kind=wp), intent(inout), dimension(nl - 1, bgc_num) :: sms !< Source-Minus-Sinks term
+
+        real(kind=wp) :: dt_d !< Size of time steps [day]
+        real(kind=wp) :: dt_b !< Size of time steps [day]
+
+        real(kind=wp) :: recip_hetN_plus !< MB's addition to heterotrophic respiration
+
+        !< [day] Reciprocal of respiration by heterotrophs and mortality (loss to detritus)
+        real(kind=wp) :: recip_res_het
+        real(kind=wp) :: Sink_Vel
+        real(kind=wp) :: aux
+        integer :: k, step
+
+        real(kind=wp) :: Patm_depth(1)
+
+        ! MOCSY temperature for the whole water column for mocsy minimum defined as -2
+        real(kind=wp) :: REcoM_T_depth(1)
+        real(kind=wp) :: REcoM_S_depth(1)
+        real(kind=wp) :: REcoM_DIC_depth(1)
+        real(kind=wp) :: REcoM_Alk_depth(1)
+        real(kind=wp) :: REcoM_Si_depth(1)
+        real(kind=wp) :: REcoM_Phos_depth(1)
+        real(kind=wp) :: mocsy_step_per_day
 
         ! --- Biogeochemical state variables ---
-        real(kind=8) :: &
+        real(kind=wp) :: &
                 DIN, & ! [mmol/m3] Dissolved inorganic nitrogen
                 DIC, & ! [mmol/m3] Dissolved inorganic carbon
                 Alk, & ! [mmol/m3] Total alkalinity
@@ -91,7 +203,7 @@ contains
                 O2 ! [mmol/m3] Dissolved oxygen
 
         ! Coccolithophore variables (conditionally used based on namelist)
-        real(kind=8) :: &
+        real(kind=wp) :: &
                 CoccoN, & ! [mmol/m3] Coccolithophore nitrogen
                 CoccoC, & ! [mmol/m3] Coccolithophore carbon
                 CoccoChl, & ! [mg/m3] Coccolithophore chlorophyll
@@ -100,7 +212,7 @@ contains
                 PhaeoChl ! [mg/m3] Phaeocystis chlorophyll
 
         ! Extended zooplankton variables (conditionally used based on namelist)
-        real(kind=8) :: &
+        real(kind=wp) :: &
                 Zoo2N, & ! [mmol/m3] Zooplankton type 2 nitrogen
                 Zoo2C, & ! [mmol/m3] Zooplankton type 2 carbon
                 DetZ2N, & ! [mmol/m3] Zooplankton detritus nitrogen
@@ -2423,7 +2535,8 @@ contains
                 ! Key Parameters:
                 !   Chl2N_max       : Maximum Chl:N ratio [mg Chl mmolN-1]
                 !   Chl2C           : Chlorophyll to carbon ratio [mg Chl mmolC-1]
-                !   alfa            : Initial slope of P-I curve [mmolC (mg Chl)-1 m2 µmol-1 day-1]
+                !   alfa            : Initial slope of P-I curve [mmolC (mg Chl)-1 m2 µmol-1
+                ! day-1]
                 !   Cphot           : Carbon-specific photosynthesis rate [day-1]
                 !   PARave          : Depth-averaged photosynthetically available radiation [µmol
                 ! m-2 s-1]
@@ -2534,7 +2647,8 @@ contains
                 !   DetN, DetZ2N    : Slow and fast sinking detritus nitrogen [mmolN m-3]
                 !   MicZooN         : Microzooplankton nitrogen [mmolN m-3]
                 !   varpz*          : Variable preferences (calculated from availability) [-]
-                !   f*N             : Available food pools (preference × concentration) [mmolN m-3]
+                !   f*N             : Available food pools (preference × concentration) [mmolN
+                ! m-3]
                 !   aux             : Total weighted food availability [mmolN m-3]
                 !
                 ! Logic:
@@ -2812,7 +2926,8 @@ contains
                     !   MicZooN          : Microzooplankton nitrogen [mmolN m-3]
                     !   DetN, DetZ2N     : Slow and fast sinking detritus nitrogen [mmolN m-3]
                     !   varpz*2, varpzHet: Variable preferences (calculated from availability) [-]
-                    !   f*N2, fHetN      : Available food pools (preference × concentration) [mmolN
+                    !   f*N2, fHetN      : Available food pools (preference × concentration)
+                    ! [mmolN
                     ! m-3]
                     !   aux              : Total weighted food availability [mmolN m-3]
                     !
@@ -4049,8 +4164,10 @@ contains
                 ! Increases alkalinity by 2 equivalents per mole CaCO3
                         + 2.d0 * calc_diss * DetCalc & ! Slow-sinking calcite
                         + 2.d0 * calc_loss_gra * calc_diss_guts & ! Mesozooplankton gut
-                        + 2.d0 * calc_loss_gra2 * calc_diss_guts * is_3zoo2det & ! Macrozooplankton gut
-                        + 2.d0 * calc_loss_gra3 * calc_diss_guts * is_3zoo2det & ! Microzooplankton gut
+                ! Macrozooplankton gut
+                        + 2.d0 * calc_loss_gra2 * calc_diss_guts * is_3zoo2det &
+                ! Microzooplankton gut
+                        + 2.d0 * calc_loss_gra3 * calc_diss_guts * is_3zoo2det &
                         + 2.d0 * calc_diss2 * DetZ2Calc * is_3zoo2det & ! Fast-sinking calcite
 
                 !---------------------------------------------------------------------------
@@ -4181,10 +4298,15 @@ contains
                         ! SOURCES: Sloppy Feeding by Microzooplankton
                         !-----------------------------------------------------------------------
                         ! Net flux = Total grazing - Assimilated portion
-                                +grazingFlux_phy3 - grazingFlux_phy3 * grazEff3 & ! Small phytoplankton
+                        ! Small phytoplankton
+                                +grazingFlux_phy3 - grazingFlux_phy3 * grazEff3 &
                                 + grazingFlux_dia3 - grazingFlux_dia3 * grazEff3 & ! Diatoms
-                                + (grazingFlux_Cocco3 - grazingFlux_Cocco3 * grazEff3) * is_coccos & ! Coccolithophores
-                                + (grazingFlux_Phaeo3 - grazingFlux_Phaeo3 * grazEff3) * is_coccos & ! Phaeocystis
+
+                        ! Coccolithophores
+                                + (grazingFlux_Cocco3 - grazingFlux_Cocco3 * grazEff3) * is_coccos &
+
+                        ! Phaeocystis
+                                + (grazingFlux_Phaeo3 - grazingFlux_Phaeo3 * grazEff3) * is_coccos &
                         !-----------------------------------------------------------------------
                         ! SOURCES: Phytoplankton Aggregation
                         !-----------------------------------------------------------------------
@@ -4216,8 +4338,10 @@ contains
                         !-----------------------------------------------------------------------
                                 +grazingFlux_phy - grazingFlux_phy * grazEff & ! Small phytoplankton
                                 + grazingFlux_dia - grazingFlux_dia * grazEff & ! Diatoms
-                                + (grazingFlux_Cocco - grazingFlux_Cocco * grazEff) * is_coccos & ! Coccolithophores
-                                + (grazingFlux_Phaeo - grazingFlux_Phaeo * grazEff) * is_coccos & ! Phaeocystis
+                        ! Coccolithophores
+                                + (grazingFlux_Cocco - grazingFlux_Cocco * grazEff) * is_coccos &
+                        ! Phaeocystis
+                                + (grazingFlux_Phaeo - grazingFlux_Phaeo * grazEff) * is_coccos &
                         !-----------------------------------------------------------------------
                         ! SOURCES: Phytoplankton Aggregation
                         !-----------------------------------------------------------------------
@@ -4540,10 +4664,14 @@ contains
                     !-----------------------------------------------------------------------
                             +grazingFlux_phy * recipQuota * grazEff & ! Small phytoplankton
                             + grazingFlux_Dia * recipQuota_Dia * grazEff & ! Diatoms
-                            + grazingFlux_Cocco * recipQuota_Cocco * grazEff * is_coccos & ! Coccolithophores
-                            + grazingFlux_Phaeo * recipQuota_Phaeo * grazEff * is_coccos & ! Phaeocystis
-                            + grazingFlux_miczoo * recipQZoo3 * grazEff * is_3zoo2det & ! Microzooplankton
-                            + grazingFlux_DetZ2 * recipDet2 * grazEff * is_3zoo2det & ! Fast-sinking detritus
+                    ! Coccolithophores
+                            + grazingFlux_Cocco * recipQuota_Cocco * grazEff * is_coccos &
+                    ! Phaeocystis
+                            + grazingFlux_Phaeo * recipQuota_Phaeo * grazEff * is_coccos &
+                    ! Microzooplankton
+                            + grazingFlux_miczoo * recipQZoo3 * grazEff * is_3zoo2det &
+                    ! Fast-sinking detritus
+                            + grazingFlux_DetZ2 * recipDet2 * grazEff * is_3zoo2det &
                             + grazingFlux_Det * recipDet * grazEff & ! Slow-sinking detritus
                     !-----------------------------------------------------------------------
                     ! SINKS: Predation, Mortality, Respiration, Excretion
@@ -4631,12 +4759,16 @@ contains
                         !-------------------------------------------------------------------
                                 +grazingFlux_phy2 * recipQuota * grazEff2 & ! Small phytoplankton
                                 + grazingFlux_Dia2 * recipQuota_Dia * grazEff2 & ! Diatoms
-                                + grazingFlux_Cocco2 * recipQuota_Cocco * grazEff2 * is_coccos & ! Coccolithophores
-                                + grazingFlux_Phaeo2 * recipQuota_Phaeo * grazEff2 * is_coccos & ! Phaeocystis
-                                + grazingFlux_het2 * recipQZoo * grazEff2 & ! Mesozooplankton (predation)
+                        ! Coccolithophores
+                                + grazingFlux_Cocco2 * recipQuota_Cocco * grazEff2 * is_coccos &
+                        ! Phaeocystis
+                                + grazingFlux_Phaeo2 * recipQuota_Phaeo * grazEff2 * is_coccos &
+                        ! Mesozooplankton (predation)
+                                + grazingFlux_het2 * recipQZoo * grazEff2 &
                                 + grazingFlux_miczoo2 * recipQZoo3 * grazEff2 & ! Microzooplankton
                                 + grazingFlux_Det2 * recipDet * grazEff2 & ! Slow-sinking detritus
-                                + grazingFlux_DetZ22 * recipDet2 * grazEff2 & ! Fast-sinking detritus
+                        ! Fast-sinking detritus
+                                + grazingFlux_DetZ22 * recipDet2 * grazEff2 &
                         !-------------------------------------------------------------------
                         ! SINKS: Mortality, Respiration, Excretion, Fecal Pellets
                         !-------------------------------------------------------------------
@@ -4718,8 +4850,10 @@ contains
                     !-----------------------------------------------------------------------
                             +grazingFlux_phy3 * recipQuota * grazEff3 & ! Small phytoplankton
                             + grazingFlux_Dia3 * recipQuota_Dia * grazEff3 & ! Diatoms
-                            + grazingFlux_Cocco3 * recipQuota_Cocco * grazEff3 * is_coccos & ! Coccolithophores
-                            + grazingFlux_Phaeo3 * recipQuota_Phaeo * grazEff3 * is_coccos & ! Phaeocystis
+                    ! Coccolithophores
+                            + grazingFlux_Cocco3 * recipQuota_Cocco * grazEff3 * is_coccos &
+                    ! Phaeocystis
+                            + grazingFlux_Phaeo3 * recipQuota_Phaeo * grazEff3 * is_coccos &
                     !-----------------------------------------------------------------------
                     ! SINKS: Predation, Mortality, Respiration, Excretion
                     !-----------------------------------------------------------------------
@@ -4744,7 +4878,8 @@ contains
                 !   grazingFlux_dia, grazingFlux_dia2   : Grazing on diatoms [mmolN m-3 day-1]
                 !   grazingFlux_het2                    : Predation on mesozooplankton [mmolN m-3
                 ! day-1]
-                !   grazingFlux_miczoo, grazingFlux_miczoo2 : Grazing on microzooplankton [mmolN m-3
+                !   grazingFlux_miczoo, grazingFlux_miczoo2 : Grazing on microzooplankton [mmolN
+                ! m-3
                 ! day-1]
                 !   grazingFlux_DetZ2, grazingFlux_DetZ22   : Grazing on fast detritus [mmolN m-3
                 ! day-1]
@@ -4765,11 +4900,16 @@ contains
                         !-----------------------------------------------------------------------
                                 +grazingFlux_phy2 * (1.d0 - grazEff2) & ! Small phytoplankton
                                 + grazingFlux_dia2 * (1.d0 - grazEff2) & ! Diatoms
-                                + grazingFlux_Cocco * (1.d0 - grazEff) * is_coccos & ! Coccoliths (meso)
-                                + grazingFlux_Cocco2 * (1.d0 - grazEff2) * is_coccos & ! Coccoliths (macro)
-                                + grazingFlux_Phaeo * (1.d0 - grazEff) * is_coccos & ! Phaeocystis (meso)
-                                + grazingFlux_Phaeo2 * (1.d0 - grazEff2) * is_coccos & ! Phaeocystis (macro)
-                                + grazingFlux_het2 * (1.d0 - grazEff2) & ! Mesozooplankton (predation)
+                        ! Coccoliths (meso)
+                                + grazingFlux_Cocco * (1.d0 - grazEff) * is_coccos &
+                        ! Coccoliths (macro)
+                                + grazingFlux_Cocco2 * (1.d0 - grazEff2) * is_coccos &
+                        ! Phaeocystis (meso)
+                                + grazingFlux_Phaeo * (1.d0 - grazEff) * is_coccos &
+                        ! Phaeocystis (macro)
+                                + grazingFlux_Phaeo2 * (1.d0 - grazEff2) * is_coccos &
+                        ! Mesozooplankton (predation)
+                                + grazingFlux_het2 * (1.d0 - grazEff2) &
                                 + grazingFlux_miczoo2 * (1.d0 - grazEff2) & ! Microzooplankton
                         !-----------------------------------------------------------------------
                         ! SOURCES: Sloppy Feeding by Mesozooplankton
@@ -4868,14 +5008,17 @@ contains
                                 is_coccos & ! Phaeocystis (meso)
                                 + grazingFlux_Phaeo2 * recipQuota_Phaeo * (1.d0 - grazEff2) * &
                                 is_coccos & ! Phaeocystis (macro)
-                                + grazingFlux_het2 * recipQZoo * (1.d0 - grazEff2) & ! Mesozooplankton
-                                + grazingFlux_miczoo2 * recipQZoo3 * (1.d0 - grazEff2) & ! Microzooplankton
+                        ! Mesozooplankton
+                                + grazingFlux_het2 * recipQZoo * (1.d0 - grazEff2) &
+                        ! Microzooplankton
+                                + grazingFlux_miczoo2 * recipQZoo3 * (1.d0 - grazEff2) &
                         !-----------------------------------------------------------------------
                         ! SOURCES: Sloppy Feeding by Mesozooplankton (C-basis)
                         !-----------------------------------------------------------------------
                                 + grazingFlux_phy * recipQuota * (1.d0 - grazEff) & ! Small phyto
                                 + grazingFlux_Dia * recipQuota_Dia * (1.d0 - grazEff) & ! Diatoms
-                                + grazingFlux_miczoo * recipQZoo3 * (1.d0 - grazEff) & ! Microzooplankton
+                        ! Microzooplankton
+                                + grazingFlux_miczoo * recipQZoo3 * (1.d0 - grazEff) &
                         !-----------------------------------------------------------------------
                         ! SOURCES: Zooplankton Mortality (C-basis)
                         !-----------------------------------------------------------------------
@@ -5277,8 +5420,10 @@ contains
                     ! SINKS: Grazing (C-basis)
                     !-----------------------------------------------------------------------
                             - grazingFlux_cocco * recipQuota_cocco & ! Mesozooplankton (N->C)
-                            - grazingFlux_Cocco2 * recipQuota_cocco * is_3zoo2det & ! Macrozooplankton
-                            - grazingFlux_Cocco3 * recipQuota_cocco * is_3zoo2det & ! Microzooplankton
+                    ! Macrozooplankton
+                            - grazingFlux_Cocco2 * recipQuota_cocco * is_3zoo2det &
+                    ! Microzooplankton
+                            - grazingFlux_Cocco3 * recipQuota_cocco * is_3zoo2det &
                             ) * dt_b + sms(k, icocc)
 
                     !---------------------------------------------------------------------------
@@ -5408,8 +5553,10 @@ contains
                     ! SINKS: Grazing (C-basis)
                     !-----------------------------------------------------------------------
                             - grazingFlux_phaeo * recipQuota_phaeo & ! Mesozooplankton (N->C)
-                            - grazingFlux_phaeo2 * recipQuota_phaeo * is_3zoo2det & ! Macrozooplankton
-                            - grazingFlux_phaeo3 * recipQuota_phaeo * is_3zoo2det & ! Microzooplankton
+                    ! Macrozooplankton
+                            - grazingFlux_phaeo2 * recipQuota_phaeo * is_3zoo2det &
+                    ! Microzooplankton
+                            - grazingFlux_phaeo3 * recipQuota_phaeo * is_3zoo2det &
                             ) * dt_b + sms(k, iphac)
 
                     !===============================================================================
@@ -5473,7 +5620,8 @@ contains
                 ! SOURCES: Grazing on Diatoms (Si-basis)
                 !---------------------------------------------------------------------------
                         + grazingFlux_dia3 * qSiN * is_3zoo2det & ! Microzooplankton
-                        + grazingFlux_dia * qSiN * (1.0 - is_3zoo2det) & ! Mesozooplankton (when 3zoo disabled)
+                ! Mesozooplankton (when 3zoo disabled)
+                        + grazingFlux_dia * qSiN * (1.0 - is_3zoo2det) &
                 !---------------------------------------------------------------------------
                 ! SINKS: Dissolution
                 !---------------------------------------------------------------------------
@@ -5894,9 +6042,11 @@ contains
                     ! SOURCES: Unassimilated grazing (sloppy feeding)
                     !-----------------------------------------------------------------------
                             +grazingFlux_phy * recipQuota_13 & ! Total small phyto grazing
-                            - grazingFlux_phy * recipQuota_13 * grazEff & ! Minus assimilated portion
+                    ! Minus assimilated portion
+                            - grazingFlux_phy * recipQuota_13 * grazEff &
                             + grazingFlux_Dia * recipQuota_dia_13 & ! Total diatom grazing
-                            - grazingFlux_Dia * recipQuota_dia_13 * grazEff & ! Minus assimilated portion
+                    ! Minus assimilated portion
+                            - grazingFlux_Dia * recipQuota_dia_13 * grazEff &
                     !
                     !-----------------------------------------------------------------------
                     ! SOURCES: Aggregation and mortality
@@ -6508,7 +6658,8 @@ contains
                     !--------------------------------------------------------------------------------------------------------------------------------------
 
                     ! GRAZING FLUXES
-                    ! Only for the case with detritus grazing, not without detritus grazing, because
+                    ! Only for the case with detritus grazing, not without detritus grazing,
+                    ! because
                     ! this output is probably anyway not needed as a default.
                     ! diagnostics, combined from Onur and Cara, modified by Miriam
 
@@ -6561,8 +6712,10 @@ contains
 
                         if (enable_coccos) then
                             vertgrazmeso_tot(k) = vertgrazmeso_tot(k) + ( &
-                                    +grazingFlux_Cocco * recipQuota_Cocco * grazEff & ! Coccolithophores
-                                    + grazingFlux_Phaeo * recipQuota_Phaeo * grazEff & ! Phaeocystis
+                            ! Coccolithophores
+                                    +grazingFlux_Cocco * recipQuota_Cocco * grazEff &
+                            ! Phaeocystis
+                                    + grazingFlux_Phaeo * recipQuota_Phaeo * grazEff &
                                     ) * recipbiostep
                         end if
 
@@ -6623,7 +6776,8 @@ contains
                         !
                         ! Variables:
                         !   vertgrazmacro_tot(k)  : Total assimilated grazing [mmolC m-3 day-1]
-                        !   vertgrazmacro_n(k)    : Grazing on small phytoplankton [mmolC m-3 day-1]
+                        !   vertgrazmacro_n(k)    : Grazing on small phytoplankton [mmolC m-3
+                        ! day-1]
                         !   vertgrazmacro_d(k)    : Grazing on diatoms [mmolC m-3 day-1]
                         !   vertgrazmacro_c(k)    : Grazing on coccolithophores [mmolC m-3 day-1]
                         !   vertgrazmacro_p(k)    : Grazing on Phaeocystis [mmolC m-3 day-1]
@@ -6660,18 +6814,22 @@ contains
 
                             ! Total assimilated grazing (with efficiency applied)
                             vertgrazmacro_tot(k) = vertgrazmacro_tot(k) + ( &
-                                    +grazingFlux_phy2 * recipQuota * grazEff2 & ! Small phytoplankton
+                            ! Small phytoplankton
+                                    +grazingFlux_phy2 * recipQuota * grazEff2 &
                                     + grazingFlux_Dia2 * recipQuota_Dia * grazEff2 & ! Diatoms
                                     + grazingFlux_het2 * recipQZoo * grazEff2 & ! Mesozooplankton
-                                    + grazingFlux_miczoo2 * recipQZoo3 * grazEff2 & ! Microzooplankton
+                            ! Microzooplankton
+                                    + grazingFlux_miczoo2 * recipQZoo3 * grazEff2 &
                                     + grazingFlux_Det2 * recipDet * grazEff2 & ! Detritus 1
                                     + grazingFlux_DetZ22 * recipDet2 * grazEff2 & ! Detritus 2
                                     ) * recipbiostep
 
                             if (enable_coccos) then
                                 vertgrazmacro_tot(k) = vertgrazmacro_tot(k) + ( &
-                                        +grazingFlux_Cocco2 * recipQuota_Cocco * grazEff2 & ! Coccolithophores
-                                        + grazingFlux_Phaeo2 * recipQuota_Phaeo * grazEff2 & ! Phaeocystis
+                                ! Coccolithophores
+                                        +grazingFlux_Cocco2 * recipQuota_Cocco * grazEff2 &
+                                ! Phaeocystis
+                                        + grazingFlux_Phaeo2 * recipQuota_Phaeo * grazEff2 &
                                         ) * recipbiostep
                             end if
 
@@ -6760,14 +6918,17 @@ contains
 
                             ! Total assimilated grazing (with efficiency applied)
                             vertgrazmicro_tot(k) = vertgrazmicro_tot(k) + ( &
-                                    +grazingFlux_phy3 * recipQuota * grazEff3 & ! Small phytoplankton
+                            ! Small phytoplankton
+                                    +grazingFlux_phy3 * recipQuota * grazEff3 &
                                     + grazingFlux_Dia3 * recipQuota_Dia * grazEff3 & ! Diatoms
                                     ) * recipbiostep
 
                             if (enable_coccos) then
                                 vertgrazmicro_tot(k) = vertgrazmicro_tot(k) + ( &
-                                        +grazingFlux_Cocco3 * recipQuota_Cocco * grazEff3 & ! Coccolithophores
-                                        + grazingFlux_Phaeo3 * recipQuota_Phaeo * grazEff3 & ! Phaeocystis
+                                ! Coccolithophores
+                                        +grazingFlux_Cocco3 * recipQuota_Cocco * grazEff3 &
+                                ! Phaeocystis
+                                        + grazingFlux_Phaeo3 * recipQuota_Phaeo * grazEff3 &
                                         ) * recipbiostep
                             end if
 
@@ -7383,7 +7544,8 @@ contains
                             !   LocBenthos(7)   : Benthic 14C pool [mmol14C m-2]
                             !
                             ! Note: 14C also subject to radioactive decay (half-life ~5730 years)
-                            !       This is typically handled separately in full carbon cycle models
+                            !       This is typically handled separately in full carbon cycle
+                            ! models
                             !---------------------------------------------------------------
 
                             ! Calculate 14C remineralization flux
@@ -7432,98 +7594,108 @@ contains
 
     end subroutine REcoM_sms
 
+    !-------------------------------------------------------------------------------
+    ! Function for calculating limiter
+    !-------------------------------------------------------------------------------
+
+    function recom_limiter(slope, qa, qb)
+        use recom_declarations, only: wp
+        use recom_config, only: REcoM_Geider_limiter
+
+        implicit none
+
+        real(kind=wp), intent(in) :: slope, qa, qb
+
+        real(kind=wp) :: recom_limiter
+        real(kind=wp) :: dq
+
+        dq = qa - qb
+        if (REcoM_Geider_limiter) then
+            recom_limiter = max(min(-slope * dq, 1.d0), 0.d0)
+        else
+            recom_limiter = 1.d0 - exp(-slope * (abs(dq) - dq) ** 2)
+        end if
+        return
+    end function recom_limiter
+
+    !-------------------------------------------------------------------------------
+    ! Function for iron chemistry
+    !-------------------------------------------------------------------------------
+    function iron_chemistry_2ligands(fet, l1t, l2t, k1, k2)
+        use recom_declarations, only: wp
+
+        implicit none
+
+        real(kind=wp), intent(in) :: l1t, l2t, fet, k1, k2
+
+        real(kind=wp) :: iron_chemistry_2ligands
+        real(kind=wp) :: a3, a2, a1, a0, a, b, c, p, q, discr, rho, phi, amp, pi
+        real(kind=wp) :: one3rd, one27th
+        real(kind=wp) :: fe1, fe2, fe3
+
+        ! coefficients of the 4th-order polynomial
+        a3 = k1 * k2
+        a2 = (k1 * k2 * (l1t + l2t - fet) + k1 + k2)
+        a1 = (1 - (k1 + k2) * fet + k1 * l1t + k2 * l2t)
+        a0 = -fet
+
+        ! coefficients of the normalized polynomial
+        a = a2 / a3
+        b = a1 / a3
+        c = a0 / a3
+
+        ! some numbers that are used several times
+        one3rd = 1.0 / 3.0
+        one27th = 1.0 / 27.0
+
+        ! now solve the polynomial stepwise
+        p = b - a * a * one3rd
+        q = c - a * b * one3rd + 2.0 * a * a * a * one27th
+        discr = q * q / 4.0 + p * p * p * one27th
+
+        rho = sqrt(-(p * p * p * one27th))
+        phi = acos(-q / (2.0 * rho))
+        amp = 2.0 * rho ** one3rd
+        pi = 3.1415926535897931
+
+        ! the equation has three real roots
+        fe1 = amp * cos(phi * one3rd) - a * one3rd
+        fe2 = amp * cos((phi + 2.0 * pi) * one3rd) - a * one3rd
+        fe3 = amp * cos((phi + 4.0 * pi) * one3rd) - a * one3rd
+
+        iron_chemistry_2ligands = max(fe1, fe2, fe3)
+
+    end function iron_chemistry_2ligands
+
+    !-------------------------------------------------------------------------------
+    function iron_chemistry(Fe, totalLigand, ligandStabConst)
+        use recom_declarations, only: wp
+
+        implicit none
+
+        real(kind=wp), intent(in) :: Fe, totalLigand, ligandStabConst ! Input
+
+        real(kind=wp) :: iron_chemistry
+        real(kind=wp) :: FreeFe ! Output
+        real(kind=wp) :: ligand, FeL, a, b, c, discrim
+
+        ! Abbrevations
+        a = ligandstabConst
+        b = ligandstabConst * (Fe - totalLigand) + 1.d0
+        c = -totalLigand
+        discrim = b * b - 4.d0 * a * c
+
+        if (a /= 0.d0 .and. discrim >= 0.d0) then
+            ligand = (-b + sqrt(discrim)) / (2.d0 * a)
+            FeL = totalLigand - ligand
+            freeFe = Fe - FeL
+        else ! No free iron
+            freeFe = 0.d0
+        end if
+
+        iron_chemistry = freeFe
+
+        return
+    end function iron_chemistry
+
 end module recom_sms_module
-
-!-------------------------------------------------------------------------------
-! Function for calculating limiter
-!-------------------------------------------------------------------------------
-
-function recom_limiter(slope, qa, qb)
-    use recom_config
-    implicit none
-    real(kind=8) :: recom_limiter
-    real(kind=8) :: slope, qa, qb
-    real(kind=8) :: dq
-
-    dq = qa - qb
-    if (REcoM_Geider_limiter) then
-        recom_limiter = max(min(-slope * dq, 1.d0), 0.d0)
-    else
-        recom_limiter = 1.d0 - exp(-slope * (abs(dq) - dq) ** 2)
-    end if
-    return
-end function recom_limiter
-
-!-------------------------------------------------------------------------------
-! Function for iron chemistry
-!-------------------------------------------------------------------------------
-function iron_chemistry_2ligands(fet, l1t, l2t, k1, k2)
-    implicit none
-
-    real(kind=8) :: iron_chemistry_2ligands
-    real(kind=8) :: l1t, l2t, fet, k1, k2
-    real(kind=8) :: a3, a2, a1, a0, a, b, c, p, q, discr, rho, phi, amp, pi
-    real(kind=8) :: one3rd, one27th
-    real(kind=8) :: fe1, fe2, fe3
-
-    ! coefficients of the 4th-order polynomial
-    a3 = k1 * k2
-    a2 = (k1 * k2 * (l1t + l2t - fet) + k1 + k2)
-    a1 = (1 - (k1 + k2) * fet + k1 * l1t + k2 * l2t)
-    a0 = -fet
-
-    ! coefficients of the normalized polynomial
-    a = a2 / a3
-    b = a1 / a3
-    c = a0 / a3
-
-    ! some numbers that are used several times
-    one3rd = 1.0 / 3.0
-    one27th = 1.0 / 27.0
-
-    ! now solve the polynomial stepwise
-    p = b - a * a * one3rd
-    q = c - a * b * one3rd + 2.0 * a * a * a * one27th
-    discr = q * q / 4.0 + p * p * p * one27th
-
-    rho = sqrt(-(p * p * p * one27th))
-    phi = acos(-q / (2.0 * rho))
-    amp = 2.0 * rho ** one3rd
-    pi = 3.1415926535897931
-
-    ! the equation has three real roots
-    fe1 = amp * cos(phi * one3rd) - a * one3rd
-    fe2 = amp * cos((phi + 2.0 * pi) * one3rd) - a * one3rd
-    fe3 = amp * cos((phi + 4.0 * pi) * one3rd) - a * one3rd
-
-    iron_chemistry_2ligands = max(fe1, fe2, fe3)
-
-end function iron_chemistry_2ligands
-
-!-------------------------------------------------------------------------------
-function iron_chemistry(Fe, totalLigand, ligandStabConst)
-    implicit none
-
-    real(kind=8) :: iron_chemistry
-    real(kind=8) :: Fe, totalLigand, ligandStabConst ! Input
-    real(kind=8) :: FreeFe ! Output
-    real(kind=8) :: ligand, FeL, a, b, c, discrim
-
-    ! Abbrevations
-    a = ligandstabConst
-    b = ligandstabConst * (Fe - totalLigand) + 1.d0
-    c = -totalLigand
-    discrim = b * b - 4.d0 * a * c
-
-    if (a /= 0.d0 .and. discrim >= 0.d0) then
-        ligand = (-b + sqrt(discrim)) / (2.d0 * a)
-        FeL = totalLigand - ligand
-        freeFe = Fe - FeL
-    else ! No free iron
-        freeFe = 0.d0
-    end if
-
-    iron_chemistry = freeFe
-
-    return
-end function iron_chemistry
