@@ -1,4 +1,14 @@
 module recom_sinking
+implicit none
+private
+
+public :: diff_ver_recom_expl
+public :: ver_sinking_recom
+public :: ver_sinking_recom_benthos
+public :: ballast
+public :: get_particle_density
+public :: get_seawater_viscosity
+
 contains
 
     !===============================================================================
@@ -16,11 +26,14 @@ contains
 
         use recom_g_comm_auto, only: recom_exchange_nod
 
-        use recom_declarations
-        use recom_locvar
-        use recom_glovar
-        use recom_config
-        use recom_ciso
+        use recom_declarations, only: wp
+        use recom_glovar, only: Benthos, Benthos_tr, SinkFlx_tr
+
+        use recom_config, only: allow_var_sinking, benthos_num, bottflx_num, ciso, Vdet, VPhy, &
+            VDia, VDet_zoo2, enable_3zoo2det, use_MEDUSA, sedflx_num, recom_det_tracer_id, &
+            recom_phy_tracer_id, recom_dia_tracer_id, SecondsPerDay, vdet_a
+
+        use recom_ciso, only: ciso_organic_14
 
         implicit none
 
@@ -41,9 +54,9 @@ contains
         integer, intent(in), dimension(:), pointer :: s_mpitype_nod2D, r_mpitype_nod2D
         integer, intent(in), dimension(:, :, :), pointer :: s_mpitype_nod3D, r_mpitype_nod3D
 
-        integer :: elem, k
-        integer :: nl1, ul1, nz, n, nzmin, nzmax, net
-        real(kind=WP) :: Vben(nl), aux(nl - 1), flux(nl), add_benthos_2d(myDim_nod2D)
+        integer :: k
+        integer :: nl1, ul1, nz, n
+        real(kind=WP) :: Vben(nl), aux(nl - 1), add_benthos_2d(myDim_nod2D)
         integer :: nlevels_nod2D_minimum
         real(kind=WP) :: tv
 
@@ -76,7 +89,8 @@ contains
                 end if
             end if
 
-            Vben = Vben / SecondsPerDay ! conversion [m/d] --> [m/s] (vertical velocity, note that it is positive here)
+            ! conversion [m/d] --> [m/s] (vertical velocity, note that it is positive here)
+            Vben = Vben / SecondsPerDay
 
             k = nod_in_elem2D_num(n)
 
@@ -91,7 +105,8 @@ contains
             do nz = ul1, nl1
                 str_bf(nz, n) = str_bf(nz, n) &
                         + (aux(nz)) * dt / area(nz, n) / (zbar_3d_n(nz, n) - zbar_3d_n(nz + 1, n))
-                add_benthos_2d(n) = add_benthos_2d(n) - (aux(nz)) * dt !!!!!!!!CHECK Maybe /area(nz,n) -> [mmol/m2]
+                !!!!!!!!CHECK Maybe /area(nz,n) -> [mmol/m2]
+                add_benthos_2d(n) = add_benthos_2d(n) - (aux(nz)) * dt
             end do
 
             !! * Particulate Organic Nitrogen *
@@ -285,18 +300,15 @@ contains
     !
     !===============================================================================
     subroutine diff_ver_recom_expl(nl, ulevels_nod2D, nlevels_nod2D, nod_in_elem2D_num, &
-            nod_in_elem2D, &
-            nlevels, area, areasvol, hnode_new, tracer_id, myDim_nod2d, &
+            nod_in_elem2D, nlevels, area, areasvol, hnode_new, tracer_id, myDim_nod2d, &
             eDim_nod2D, mype, MPI_COMM_FESOM, dtr_bf, dt)
 
         ! Remineralization from benthos
         ! bottom_flux
 
-        use recom_declarations
-        use recom_locvar
-        use recom_glovar
-        use recom_config
-        use recom_ciso
+        use recom_declarations, only: wp
+        use recom_glovar, only: GloSed, glodecayBenthos
+        use recom_config, only: ciso, use_MEDUSA, sedflx_num, redO2C, Fe2N_benthos
 
         implicit none
 
@@ -361,9 +373,11 @@ contains
             case (1001)
                 bottom_flux = GlodecayBenthos(:, 1) !*** DIN [mmolN/m^2/s] ***
             case (1002)
-                bottom_flux = GlodecayBenthos(:, 2) + GlodecayBenthos(:, 4) !*** DIC + calcification ***
+                !*** DIC + calcification ***
+                bottom_flux = GlodecayBenthos(:, 2) + GlodecayBenthos(:, 4)
             case (1003)
-                bottom_flux = GlodecayBenthos(:, 4) * 2.0_WP - 1.0625_WP * GlodecayBenthos(:, 1) !*** Alk ***
+                !*** Alk ***
+                bottom_flux = GlodecayBenthos(:, 4) * 2.0_WP - 1.0625_WP * GlodecayBenthos(:, 1)
             case (1018)
                 bottom_flux = GlodecayBenthos(:, 3) !*** Si ***
             case (1019)
@@ -372,11 +386,13 @@ contains
                 bottom_flux = -GlodecayBenthos(:, 2) * redO2C !*** O2 ***
             case (1302)
                 if (ciso) then
-                    bottom_flux = GlodecayBenthos(:, 5) + GlodecayBenthos(:, 6) !*** DIC_13 and Calc: DIC_13 ***
+                    !*** DIC_13 and Calc: DIC_13 ***
+                    bottom_flux = GlodecayBenthos(:, 5) + GlodecayBenthos(:, 6)
                 end if
             case (1402)
                 if (ciso) then
-                    bottom_flux = GlodecayBenthos(:, 7) + GlodecayBenthos(:, 8) !*** DIC_14 and Calc: DIC_14 ***
+                    !*** DIC_14 and Calc: DIC_14 ***
+                    bottom_flux = GlodecayBenthos(:, 7) + GlodecayBenthos(:, 8)
                 end if
             case default
                 if (mype == 0) then
@@ -404,7 +420,7 @@ contains
             !_______________________________________________________________________
             ! Bottom flux
             do nz = nlevels_nod2D_minimum, nl1
-                vd_flux(nz) = (area(nz, n) - area(nz + 1, n)) * bottom_flux(n) / (area(1, n)) !!!!!!!!
+                vd_flux(nz) = (area(nz, n) - area(nz + 1, n)) * bottom_flux(n) / (area(1, n))
             end do
             nz = nl1
             vd_flux(nz + 1) = (area(nz + 1, n)) * bottom_flux(n) / (area(1, n))
@@ -421,16 +437,18 @@ contains
     end subroutine diff_ver_recom_expl
 
     subroutine ver_sinking_recom(tr_num, nl, ulevels_nod2D, nlevels_nod2D, zbar_3d_n, z_3d_n, &
-            nod_in_elem2D_num, nod_in_elem2D, nlevels, area, areasvol, &
-            hnode, hnode_new, tracer_id, tracer_data_values, myDim_nod2d, &
-            vert_sink, dt)
+            nod_in_elem2D_num, nod_in_elem2D, nlevels, area, areasvol, hnode, hnode_new, &
+            tracer_id, tracer_data_values, myDim_nod2d, vert_sink, dt)
         ! Sinking in water column
 
-        use REcoM_declarations
-        use REcoM_LocVar
-        use REcoM_GloVar
-        use recom_config
-        use REcoM_ciso
+        use REcoM_declarations, only: wp
+
+        use REcoM_GloVar, only: sinkvel1_tr, sinkvel2_tr, scaling_visc_3D, scaling_density1_3D, &
+            scaling_density2_3D
+
+        use recom_config, only: allow_var_sinking, depth_scaling1, depth_scaling2, &
+            max_sinking_velocity, use_ballasting, enable_3zoo2det, VDet_zoo2, enable_coccos, &
+            secondsPerDay, vcocco, vdet, vdet_a, vdia, vphaeo, vphy, w_ref1, w_ref2
 
         implicit none
 
@@ -445,16 +463,16 @@ contains
         real(kind=WP), intent(in), dimension(:, :) :: tracer_data_values
         real(kind=WP), intent(inout), dimension(:, :) :: vert_sink
 
-        integer :: node, nz, id, nzmin, nzmax, n, k, nlevels_nod2D_minimum
-        real(kind=8) :: wLoc, wM, wPs, aux
-        real(kind=8) :: Rjp, Rj, Rjm
+        integer :: nz, nzmin, nzmax, n, k, nlevels_nod2D_minimum
+        real(kind=wp) :: wM, wPs
+        real(kind=wp) :: Rjp, Rj, Rjm
 
-        real(kind=8) :: cfl, d0, d1, thetaP, thetaM, psiP, psiM
-        real(kind=8) :: onesixth = 1.d0 / 6.d0
-        real(kind=8) :: dt_sink, c1, c2
-        real(kind=8) :: Vsink, tv
+        real(kind=wp) :: cfl, d0, d1, thetaP, thetaM, psiP, psiM
+        real(kind=wp) :: dt_sink
+        real(kind=wp) :: Vsink, tv
+        real(kind=wp), save :: onesixth = 1.d0 / 6.d0
 
-        real(kind=8), dimension(nl) :: Wvel_flux, vd_flux, dz_trr
+        real(kind=wp), dimension(nl) :: Wvel_flux, vd_flux, dz_trr
 
         ! calculate scaling factors
         ! scaling_density1_3D, scaling_density2_3D
@@ -565,7 +583,8 @@ contains
                                         max_sinking_velocity
 
                                 ! sinking velocity [m d-1] surface --> bottom (negative)
-                                Wvel_flux(nz) = -1.0d0 * Wvel_flux(nz) / SecondsPerDay ! now in [m s-1]
+                                ! now in [m s-1]
+                                Wvel_flux(nz) = -1.0d0 * Wvel_flux(nz) / SecondsPerDay
                             end if
                         end if
                     end if
@@ -595,9 +614,10 @@ contains
 
                     end if
 
-                    if (tracer_id == 1021) Sinkvel1_tr(nz, n, tr_num) = Wvel_flux(nz) !-1.0d0/SecondsPerDay  !idetcal
+                    !-1.0d0/SecondsPerDay  !idetcal
+                    if (tracer_id == 1021) Sinkvel1_tr(nz, n, tr_num) = Wvel_flux(nz)
                     if (enable_3zoo2det .and. &
-                            tracer_id == 1028) Sinkvel2_tr(nz, n, tr_num) = Wvel_flux(nz) !idetz2calc
+                        tracer_id == 1028) Sinkvel2_tr(nz, n, tr_num) = Wvel_flux(nz) !idetz2calc
 
                 end do
 
@@ -606,7 +626,8 @@ contains
 
                 !FIXME: Having IF True and IF False is bad practice. Either throw away the old code,
                 !or make a namelist switch...
-                if (.true.) then ! 3rd Order DST Sceheme with flux limiting. This code comes from old recom
+                ! 3rd Order DST Sceheme with flux limiting. This code comes from old recom
+                if (.true.) then
 
                     k = nod_in_elem2D_num(n)
                     ! Screening minimum depth in neigbouring nodes around node n
@@ -621,7 +642,9 @@ contains
                         Rjm = tracer_data_values(max(nzmin, nz - 2), n) &
                                 - tracer_data_values(max(nzmin, nz - 1), n)
 
-                        cfl = abs(Wvel_flux(nz) * dt_sink / dz_trr(nz)) !(Z_n(nz-1)-Z_n(nz)))       ! [m/day] * [day] * [1/m]  ! NEW BALL changed dt to dt_sink
+                        !(Z_n(nz-1)-Z_n(nz)))
+                        ! [m/day] * [day] * [1/m]  ! NEW BALL changed dt to dt_sink
+                        cfl = abs(Wvel_flux(nz) * dt_sink / dz_trr(nz))
 
                         wPs = Wvel_flux(nz) + abs(Wvel_flux(nz)) ! --> Positive vertical velocity
                         wM = Wvel_flux(nz) - abs(Wvel_flux(nz)) ! --> Negative vertical velocity
@@ -685,11 +708,14 @@ contains
     !-------------------------------------------------------------------------------
     ! Subroutine calculate ballasting
     !-------------------------------------------------------------------------------
-    subroutine ballast(myDim_nod2D, ulevels_nod2D, nlevels_nod2D, &
-            geo_coord_nod2D, Z_3d_n, tracer_data_values_1, tracer_data_values_2, rad)
+    subroutine ballast(myDim_nod2D, ulevels_nod2D, nlevels_nod2D, geo_coord_nod2D, Z_3d_n, &
+            tracer_data_values_1, tracer_data_values_2, rad)
 
-        use recom_config
-        use recom_glovar
+        use recom_config, only: enable_3zoo2det, use_density_scaling, use_viscosity_scaling, &
+            rho_ref_part, rho_ref_water, visc_ref_water, tiny
+
+        use recom_glovar, only: scaling_density1_3D, scaling_density2_3D, rho_particle1, &
+            rho_particle2, seawater_visc_3D, scaling_visc_3D
 
         use recom_declarations, only: wp
         use mdepth2press, only: depth2press
@@ -704,13 +730,13 @@ contains
         real(kind=WP), intent(in), dimension(:, :) :: tracer_data_values_1, tracer_data_values_2
 
         integer :: row, k, nzmin, nzmax
-        real(kind=8) :: depth_pos(1)
-        real(kind=8) :: pres(1)
-        real(kind=8) :: sa(1)
-        real(kind=8) :: ct(1)
-        real(kind=8) :: rho_seawater(1)
-        real(kind=8) :: Lon_degree(1)
-        real(kind=8) :: Lat_degree(1)
+        real(kind=wp) :: depth_pos(1)
+        real(kind=wp) :: pres(1)
+        real(kind=wp) :: sa(1)
+        real(kind=wp) :: ct(1)
+        real(kind=wp) :: rho_seawater(1)
+        real(kind=wp) :: Lon_degree(1)
+        real(kind=wp) :: Lat_degree(1)
 
         ! For ballasting, calculate scaling factors here and pass them to FESOM, where sinking
         ! velocities are calculated
@@ -740,9 +766,11 @@ contains
             do k = nzmin, nzmax
 
                 !! level depth
-                depth_pos(1) = abs(Z_3d_n(k, row)) ! take depth of tracers instead of levels abs(zbar_3d_n(k,row))
+                ! take depth of tracers instead of levels abs(zbar_3d_n(k,row))
+                depth_pos(1) = abs(Z_3d_n(k, row))
 
-                call depth2press(depth_pos(1), Lat_degree(1), pres, 1) ! pres is output of function,1=number of records
+                ! pres is output of function,1=number of records
+                call depth2press(depth_pos(1), Lat_degree(1), pres, 1)
                 sa = gsw_sa_from_sp(tracer_data_values_2(k, row), pres, Lon_degree(1), Lat_degree(1&
                         ))
                 ct = gsw_ct_from_pt(sa, tracer_data_values_1(k, row))
@@ -788,10 +816,12 @@ contains
         ! in the unlikely (if possible at all...) case that rho_particle(k)-rho_seawater(1)<0,
         ! prevent the scaling factor from being negative
 
-        if (any(scaling_density1_3D(:, :) <= tiny)) scaling_density1_3D(:, :) = 1.0_WP ! tiny = 2.23D-16
+        ! tiny = 2.23D-16
+        if (any(scaling_density1_3D(:, :) <= tiny)) scaling_density1_3D(:, :) = 1.0_WP
 
         if (enable_3zoo2det) then
-            if (any(scaling_density2_3D(:, :) <= tiny)) scaling_density2_3D(:, :) = 1.0_WP ! tiny = 2.23D-16
+            ! tiny = 2.23D-16
+            if (any(scaling_density2_3D(:, :) <= tiny)) scaling_density2_3D(:, :) = 1.0_WP
         end if
 
     end subroutine ballast
@@ -803,8 +833,9 @@ contains
     subroutine get_particle_density(num_tracers, myDim_nod2d, eDim_nod2D, nl, ulevels_nod2D, &
             nlevels_nod2D, tracers_info)
 
-        use recom_config
-        use recom_glovar
+        use recom_config, only: enable_3zoo2det, rho_CaCO3, rho_opal, rho_POC, rho_PON, tiny
+        use recom_glovar, only: tracers_info_type, rho_particle1, rho_particle2
+        use recom_declarations, only: wp
 
         implicit none
 
@@ -812,17 +843,25 @@ contains
         integer, intent(in), dimension(:) :: ulevels_nod2D, nlevels_nod2D
         type(tracers_info_type), intent(in) :: tracers_info
 
-        integer :: row, k, nzmin, nzmax, tr_num
+        integer :: row, nzmin, nzmax, tr_num
 
-        real(kind=8) :: a1(nl - 1, myDim_nod2D + eDim_nod2D) ! [n.d.] fraction of carbon in detritus class
-        real(kind=8) :: a2(nl - 1, myDim_nod2D + eDim_nod2D) ! [n.d.] fraction of nitrogen in detritus class
-        real(kind=8) :: a3(nl - 1, myDim_nod2D + eDim_nod2D) ! [n.d.] fraction of Opal in detritus class
-        real(kind=8) :: a4(nl - 1, myDim_nod2D + eDim_nod2D) ! [n.d.] fraction of CaCO3 in detritus class
-        real(kind=8) :: b1(nl - 1, myDim_nod2D + eDim_nod2D)
-        real(kind=8) :: b2(nl - 1, myDim_nod2D + eDim_nod2D)
-        real(kind=8) :: b3(nl - 1, myDim_nod2D + eDim_nod2D)
-        real(kind=8) :: b4(nl - 1, myDim_nod2D + eDim_nod2D)
-        real(kind=8) :: aux(nl - 1, myDim_nod2D + eDim_nod2D)
+        ! [n.d.] fraction of carbon in detritus class
+        real(kind=wp) :: a1(nl - 1, myDim_nod2D + eDim_nod2D)
+
+        ! [n.d.] fraction of nitrogen in detritus class
+        real(kind=wp) :: a2(nl - 1, myDim_nod2D + eDim_nod2D)
+
+        ! [n.d.] fraction of Opal in detritus class
+        real(kind=wp) :: a3(nl - 1, myDim_nod2D + eDim_nod2D)
+
+        ! [n.d.] fraction of CaCO3 in detritus class
+        real(kind=wp) :: a4(nl - 1, myDim_nod2D + eDim_nod2D)
+
+        real(kind=wp) :: b1(nl - 1, myDim_nod2D + eDim_nod2D)
+        real(kind=wp) :: b2(nl - 1, myDim_nod2D + eDim_nod2D)
+        real(kind=wp) :: b3(nl - 1, myDim_nod2D + eDim_nod2D)
+        real(kind=wp) :: b4(nl - 1, myDim_nod2D + eDim_nod2D)
+        real(kind=wp) :: aux(nl - 1, myDim_nod2D + eDim_nod2D)
 
         rho_particle1 = 0.0
         b1 = 0.0
@@ -904,8 +943,8 @@ contains
     subroutine get_seawater_viscosity(tr_num, myDim_nod2d, ulevels_nod2D, nlevels_nod2D, &
             tracer_data_values_1, tracer_data_values_2)
 
-        use recom_config
-        use recom_glovar
+        use recom_glovar, only: seawater_visc_3D
+        use recom_declarations, only: wp
 
         implicit none
 
@@ -915,11 +954,11 @@ contains
 
         integer, intent(in) :: myDim_nod2d
         integer, intent(in), target :: tr_num
-        real(kind=8), intent(in), dimension(:, :) :: tracer_data_values_1, tracer_data_values_2
+        real(kind=wp), intent(in), dimension(:, :) :: tracer_data_values_1, tracer_data_values_2
         integer, intent(in), dimension(:) :: ulevels_nod2D, nlevels_nod2D
 
         integer :: row, k, nzmin, nzmax
-        real(kind=8), dimension(1) :: A, B, mu_w
+        real(kind=wp), dimension(1) :: A, B, mu_w
 
         seawater_visc_3D(:, :) = 0.0
         do row = 1, myDim_nod2d
