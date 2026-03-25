@@ -4,6 +4,11 @@
 ! Main REcoM
 
 module bio_fluxes_interface
+implicit none
+private
+
+public :: bio_fluxes
+
 contains
 
     ! ======================================================================================
@@ -11,10 +16,9 @@ contains
     ! ======================================================================================
     subroutine bio_fluxes(alkalinity, MPI_COMM_FESOM, myDim_nod2D, eDim_nod2D, ocean_area, &
             ulevels_nod2D, areasvol)
-        use recom_declarations
-        use recom_locvar
-        use recom_glovar
-        use recom_config
+        use recom_declarations, only: wp
+        use recom_glovar, only: relax_alk, alk_surf
+        use recom_config, only: surf_relax_Alk
         use recom_extra, only: integrate_nod_2d_recom
 
         implicit none
@@ -69,8 +73,8 @@ contains
         !  end if
 
         ! 3. restoring to Alkalinity climatology
-        call integrate_nod_2D_recom(relax_alk, net, MPI_COMM_FESOM, myDim_nod2D, eDim_nod2D, &
-                ulevels_nod2D, areasvol)
+        call integrate_nod_2D_recom(relax_alk, net, MPI_COMM_FESOM, myDim_nod2D, &
+                eDim_nod2D, ulevels_nod2D, areasvol)
 
         relax_alk = relax_alk - net / ocean_area ! at ocean surface layer
 
@@ -78,6 +82,11 @@ contains
 end module bio_fluxes_interface
 
 module recom_interface
+implicit none
+private
+
+public :: recom
+
 contains
 
     subroutine recom(ice_data_values, nl, ulevels_nod2D, nlevels_nod2D, hnode, &
@@ -89,15 +98,40 @@ contains
 
         use recom_g_comm_auto, only: recom_exchange_nod
 
-        use recom_declarations
-        use bio_fluxes_interface
-        use recom_locvar
-        use recom_glovar
-        use recom_config
-        use recom_ciso
-        use recom_diags_management
-        use recom_forcing_module
-        use recom_atbox_module
+        use recom_declarations, only: wp, decaybenthos
+        use bio_fluxes_interface, only: bio_fluxes
+
+        use recom_config, only: benthos_num, bgc_num, ciso, diags, dust_sol, enable_3zoo2det, &
+            enable_coccos, ialk, parfrac, recom_debug, restore_alkalinity, secondsperday, &
+            use_atbox, tiny
+
+        use recom_locvar, only: LocBenthos, locatmco2, fedust, hplus, loc_ice_conc, ndust, uloc, &
+            ph, kw660, k0, pco2surf, dpco2surf, dflux, co2flux_seaicemask, o2flux_seaicemask, oflux
+
+        use recom_ciso, only: locatmco2_13, locatmco2_14, r_atm_13, r_atm_14, ciso_14, &
+            gloco2flux_13, gloco2flux_14, glopco2surf_13, glopco2surf_14, lat_val, &
+            production_rate_to_flux_14, x_co2atm_13, x_co2atm_14, x_co2atm_13, x_co2atm_14, &
+            atmco2_13, gloco2flux_seaicemask_13, co2flux_seaicemask_13, gloco2flux_seaicemask_14, &
+            co2flux_seaicemask_14, gloco2flux_seaicemask_13, gloco2flux_seaicemask_14, cosmic_14, &
+            lat_zone, atmco2_14
+
+        use recom_glovar, only: tracers_info_type, benthos, co23d, ph3d, pco23d, hco33d, co33d, &
+            omegac3d, kspc3d, rhosw3d, glodecaybenthos, par3d, chldegc, chldegd, chldegn, chldegp, &
+            gppc, gppd, gppn, gppp, grazmacro_c, grazmacro_d, grazmacro_det, grazmacro_det2, &
+            grazmacro_mes, grazmacro_mic, grazmacro_n, grazmacro_p, grazmacro_tot, grazmeso_c, &
+            grazmeso_d, grazmeso_det, grazmeso_det2, grazmeso_mic, grazmeso_n, grazmeso_p, &
+            grazmeso_tot, grazmicro_c, grazmicro_d, grazmicro_n, grazmicro_p, grazmicro_tot, &
+            nnac, nnad, nnan, nnap, nppc, nppd, nppn, nppp, x_co2atm, glohplus, atmco2, x_co2atm, &
+            glofedust, glondust, atmfeinput, atmninput, glohplus, pistonvelocity, alphaco2, &
+            glopco2surf, glodpco2surf, gloco2flux, gloco2flux_seaicemask, gloo2flux_seaicemask, &
+            gloo2flux, glopco2surf, glodpco2surf, gloco2flux, gloco2flux_seaicemask, &
+            gloo2flux_seaicemask, glohplus, atmfeinput, atmninput
+
+        use recom_diags_management, only: allocate_and_init_diags, update_2d_diags, &
+            update_3d_diags, deallocate_diags
+
+        use recom_forcing_module, only: recom_forcing
+        use recom_atbox_module, only: recom_atbox
 
         implicit none
 
@@ -138,28 +172,27 @@ contains
         !! u_wind and v_wind are always at nodes
         ! ======================================================================================
 
-        real(kind=8) :: SW, Loc_slp
+        real(kind=wp) :: SW, Loc_slp
         integer :: tr_num
-        integer :: nz, n, nzmin, nzmax
-        integer :: idiags
+        integer :: n, nzmax
 
-        real(kind=8) :: Sali
-        logical :: do_update = .false.
+        real(kind=wp) :: Sali
+        logical :: do_update
 
-        real(kind=8), allocatable :: Temp(:), Sali_depth(:), zr(:), PAR(:)
-        real(kind=8), allocatable :: C(:, :)
+        real(kind=wp), allocatable :: Temp(:), Sali_depth(:), zr(:), PAR(:)
+        real(kind=wp), allocatable :: C(:, :)
 
         !! * Mocsy *
-        real(kind=8), allocatable :: CO2_watercolumn(:)
-        real(kind=8), allocatable :: pH_watercolumn(:)
-        real(kind=8), allocatable :: pCO2_watercolumn(:)
-        real(kind=8), allocatable :: HCO3_watercolumn(:)
+        real(kind=wp), allocatable :: CO2_watercolumn(:)
+        real(kind=wp), allocatable :: pH_watercolumn(:)
+        real(kind=wp), allocatable :: pCO2_watercolumn(:)
+        real(kind=wp), allocatable :: HCO3_watercolumn(:)
 
         !! * Diss *
-        real(kind=8), allocatable :: CO3_watercolumn(:)
-        real(kind=8), allocatable :: OmegaC_watercolumn(:)
-        real(kind=8), allocatable :: kspc_watercolumn(:)
-        real(kind=8), allocatable :: rhoSW_watercolumn(:)
+        real(kind=wp), allocatable :: CO3_watercolumn(:)
+        real(kind=wp), allocatable :: OmegaC_watercolumn(:)
+        real(kind=wp), allocatable :: kspc_watercolumn(:)
+        real(kind=wp), allocatable :: rhoSW_watercolumn(:)
         real(kind=WP) :: ttf_rhs_bak(nl - 1, num_tracers) ! local variable
 
         allocate(Temp(nl - 1), Sali_depth(nl - 1), zr(nl - 1), PAR(nl - 1))
@@ -168,6 +201,8 @@ contains
                 HCO3_watercolumn(nl - 1))
         allocate(CO3_watercolumn(nl - 1), OmegaC_watercolumn(nl - 1), kspc_watercolumn(nl - 1), &
                 rhoSW_watercolumn(nl - 1))
+
+        do_update = .false.
 
         ! ice concentration [0 to 1]
 
@@ -441,7 +476,8 @@ contains
                     HCO3_watercolumn, & ! NEW MOCSY HCO3 for the whole watercolumn
                     CO3_watercolumn, & ! NEW DISS CO3 for the whole watercolumn
                     OmegaC_watercolumn, & ! NEW DISS OmegaC for the whole watercolumn
-                    kspc_watercolumn, & ! NEW DISS stoichiometric solubility product for calcite [mol^2/kg^2]
+                    ! NEW DISS stoichiometric solubility product for calcite [mol^2/kg^2]
+                    kspc_watercolumn, &
                     rhoSW_watercolumn, & ! NEW DISS in-situ density of seawater [mol/m^3]
                     PAR, MPI_COMM_FESOM, mype, myDim_nod2D, &
                     eDim_nod2D, nl, hnode, zbar_3d_n, &
@@ -465,7 +501,9 @@ contains
             !!---- Local variables that have been changed during the time-step are stored so they
             !!can be saved
             Benthos(n, 1:benthos_num) = LocBenthos(1:benthos_num)
-            GlodecayBenthos(n, 1:benthos_num) = decayBenthos(1:benthos_num) / SecondsPerDay ! convert from [mmol/m2/d] to [mmol/m2/s]
+
+            ! convert from [mmol/m2/d] to [mmol/m2/s]
+            GlodecayBenthos(n, 1:benthos_num) = decayBenthos(1:benthos_num) / SecondsPerDay
 
             if (recom_debug .and. mype == 0) print *, achar(27) // '[36m' // '     --> ciso' // &
                     ' after REcoM_Forcing' // achar(27) // '[0m'
