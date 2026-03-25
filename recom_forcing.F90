@@ -149,8 +149,7 @@ contains
         end if
 
         call Cobeta(daynew, ndpyr, myDim_nod2D, geo_coord_nod2D)
-        call Depth_calculations(n, Nn, SinkVel, zF, thick, recipthick, myDim_nod2D, eDim_nod2D, nl,&
-                & hnode, zbar_3d_n)
+        call Depth_calculations(n, Nn, SinkVel, zF, thick, recipthick, nl, hnode, zbar_3d_n)
 
         !! *** Mocsy ***
 

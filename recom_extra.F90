@@ -12,8 +12,7 @@ contains
     !===============================================================================
     ! Subroutine for calculating flux-depth and thickness of control volumes
     !===============================================================================
-    subroutine Depth_calculations(n, nn, wf, zf, thick, recipthick, myDim_nod2D, eDim_nod2D, nl, &
-            hnode, zbar_3d_n)
+    subroutine Depth_calculations(n, nn, wf, zf, thick, recipthick, nl, hnode, zbar_3d_n)
 
         use recom_config, only: ivcoc, ivdia, ivdet, ivdetsc, ivpha, ivphy, VCalc, VDet, &
                 VDet_zoo2, VCocco, VPhaeo, VDia, VPhy
@@ -25,7 +24,7 @@ contains
         ! Input parameters
         integer, intent(in) :: n ! Current node
         integer, intent(in) :: nn ! Total number of vertical nodes
-        integer, intent(in) :: myDim_nod2D, eDim_nod2D, nl
+        integer, intent(in) :: nl
         real(kind=WP), intent(in), dimension(:, :) :: hnode, zbar_3d_n
 
         ! Output arrays
