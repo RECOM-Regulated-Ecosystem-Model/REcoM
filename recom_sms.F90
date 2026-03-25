@@ -1624,8 +1624,8 @@ contains
 
                 ! Calculate update frequencies based on model time step
                 mocsy_step_per_day = 1.0 / dt_b
-                logfile_outfreq_7 = mocsy_step_per_day * 7.0 ! Steps in 7 days
-                logfile_outfreq_30 = mocsy_step_per_day * 30.0 ! Steps in 30 days
+                logfile_outfreq_7 = int(mocsy_step_per_day * 7.0) ! Steps in 7 days
+                logfile_outfreq_30 = int(mocsy_step_per_day * 30.0) ! Steps in 30 days
 
                 !===============================================================================
                 ! EUPHOTIC ZONE UPDATES (WEEKLY)
