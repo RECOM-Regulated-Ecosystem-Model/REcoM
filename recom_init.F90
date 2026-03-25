@@ -4,6 +4,11 @@
 !===============================================================================
 ! allocate & initialise arrays for REcoM
 module recom_init_interface
+    implicit none
+    private
+
+    public :: recom_init
+
 contains
     !
     !
@@ -12,11 +17,10 @@ contains
             myDim_nod2d, eDim_nod2D, mype, MPI_COMM_FESOM, myDim_elem2D, &
             eDim_elem2D, tracers_info, num_tracers, rad)
 
-        use REcoM_declarations
-        use REcoM_GloVar
-        use REcoM_locVar
-        use recom_config
-        use REcoM_ciso
+        use REcoM_declarations, only: wp
+        use REcoM_GloVar, only: tracers_info_type
+        use recom_config, only: validate_recom_tracers, initialize_tracer_indices, &
+                validate_tracer_id_sequence
 
         implicit none
 
@@ -26,10 +30,6 @@ contains
         integer, intent(in), dimension(:) :: ulevels_nod2d, nlevels_nod2d
         real(kind=wp), intent(in), dimension(:, :) :: geo_coord_nod2d, z_3d_n
         type(tracers_info_type), intent(in) :: tracers_info
-
-        !___________________________________________________________________________
-        ! pointer on necessary derived types
-        integer :: n, k, row, nzmin, nzmax, i, id, node_size
 
         call initialize_memory(myDim_nod2D + eDim_nod2D, nl, num_tracers)
 
@@ -50,10 +50,142 @@ contains
     end subroutine recom_init
 
     subroutine initialize_memory(node_size, nl, num_tracers)
-        use recom_declarations
-        use recom_glovar
-        use recom_locvar
-        use recom_config
+        use recom_declarations, only: decayBenthos
+        use recom_glovar, only: GloFeDust, &
+                AtmFeInput, &
+                GloNDust, &
+                AtmNInput, &
+                RiverDIN2D, &
+                RiverDON2D, &
+                RiverDOC2D, &
+                RiverDSi2D, &
+                RiverDIC2D, &
+                RiverAlk2D, &
+                RiverFe, &
+                ErosionTON2D, &
+                ErosionTOC2D, &
+                ErosionTSi2D, &
+                relax_alk, &
+                virtual_alk, &
+                cosAI, &
+                GloPCO2surf, &
+                GloCO2flux, &
+                GloO2flux, &
+                GloCO2flux_seaicemask, &
+                GloO2flux_seaicemask, &
+                GlodPCO2surf, &
+                DenitBen, &
+                PistonVelocity, &
+                alphaCO2, &
+                GlodecayBenthos, &
+                Benthos, &
+                Benthos_tr, &
+                GloHplus, &
+                PAR3D, &
+                NPPn, &
+                NPPd, &
+                NPPc, &
+                NPPp, &
+                GPPn, &
+                GPPd, &
+                GPPc, &
+                GPPp, &
+                NNAn, &
+                NNAd, &
+                NNAc, &
+                NNAp, &
+                Chldegn, &
+                Chldegd, &
+                Chldegc, &
+                Chldegp, &
+                grazmeso_tot, &
+                grazmeso_n, &
+                grazmeso_d, &
+                grazmeso_c, &
+                grazmeso_p, &
+                grazmeso_det, &
+                grazmeso_mic, &
+                grazmeso_det2, &
+                grazmacro_tot, &
+                grazmacro_n, &
+                grazmacro_d, &
+                grazmacro_c, &
+                grazmacro_p, &
+                grazmacro_mes, &
+                grazmacro_det, &
+                grazmacro_mic, &
+                grazmacro_det2, &
+                grazmicro_tot, &
+                grazmicro_n, &
+                grazmicro_d, &
+                grazmicro_c, &
+                grazmicro_p, &
+                respmeso, &
+                respmacro, &
+                respmicro, &
+                calcdiss, &
+                calcif, &
+                aggn, &
+                aggd, &
+                aggc, &
+                aggp, &
+                docexn, &
+                docexd, &
+                docexc, &
+                docexp, &
+                respn, &
+                respd, &
+                respc, &
+                respp, &
+                NPPn3D, &
+                NPPd3D, &
+                NPPc3D, &
+                NPPp3D, &
+                TTemp_diatoms, &
+                TTemp_phyto, &
+                TTemp_cocco, &
+                TTemp_phaeo, &
+                TPhyCO2, &
+                TDiaCO2, &
+                TCoccoCO2, &
+                TPhaeoCO2, &
+                TqlimitFac_phyto, &
+                TqlimitFac_diatoms, &
+                TqlimitFac_cocco, &
+                TqlimitFac_phaeo, &
+                TCphotLigLim_diatoms, &
+                TCphotLigLim_phyto, &
+                TCphotLigLim_cocco, &
+                TCphotLigLim_phaeo, &
+                TCphot_diatoms, &
+                TCphot_phyto, &
+                TCphot_cocco, &
+                TCphot_phaeo, &
+                TSi_assimDia, &
+                CO23D, &
+                pH3D, &
+                pCO23D, &
+                HCO33D, &
+                CO33D, &
+                OmegaC3D, &
+                kspc3D, &
+                rhoSW3D, &
+                rho_particle1, &
+                rho_particle2, &
+                scaling_density1_3D, &
+                scaling_density2_3D, &
+                scaling_visc_3D, &
+                seawater_visc_3D, &
+                Sinkingvel1, &
+                Sinkingvel2, &
+                Sinkvel1_tr, &
+                Sinkvel2_tr, &
+                GloSed, &
+                SinkFlx, &
+                SinkFlx_tr, &
+                lb_flux
+        use recom_locvar, only: LocBenthos
+        use recom_config, only: Diags, benthos_num, use_MEDUSA, bottflx_num, sedflx_num
 
         implicit none
 
@@ -97,11 +229,15 @@ contains
         allocate(alphaCO2(node_size), source=0.d0)
         allocate(GlodecayBenthos(node_size, benthos_num), source=0.d0)
         allocate(Benthos(node_size, benthos_num), source=0.d0)
-        allocate(Benthos_tr(node_size, benthos_num, num_tracers), source=0.d0) ! kh 25.03.22 buffer per tracer index
+
+        ! kh 25.03.22 buffer per tracer index
+        allocate(Benthos_tr(node_size, benthos_num, num_tracers), source=0.d0)
         allocate(GloHplus(node_size), source=exp(-8.d0 * log(10.d0)))
 
         allocate(LocBenthos(benthos_num), source=0.d0)
-        allocate(decayBenthos(benthos_num), source=0.d0) ! [1/day] Decay rate of detritus in the benthic layer
+
+        ! [1/day] Decay rate of detritus in the benthic layer
+        allocate(decayBenthos(benthos_num), source=0.d0)
         allocate(PAR3D(nl - 1, node_size), source=0.d0)
 
         if (Diags) then
@@ -227,14 +363,17 @@ contains
         if (use_MEDUSA) then
             allocate(GloSed(node_size, sedflx_num), source=0.d0)
             allocate(SinkFlx(node_size, bottflx_num), source=0.d0)
-            allocate(SinkFlx_tr(node_size, bottflx_num, num_tracers), source=0.d0) ! kh 25.03.22 buffer sums per tracer index
+            ! kh 25.03.22 buffer sums per tracer index
+            allocate(SinkFlx_tr(node_size, bottflx_num, num_tracers), source=0.d0)
             allocate(lb_flux(node_size, 9), source=0.d0)
         end if
     end subroutine initialize_memory
 
     subroutine initialize_tracer_data(num_tracers, tracers_info)
-        use REcoM_glovar
-        use REcoM_config
+        use REcoM_glovar, only: tracers_info_type
+        use REcoM_config, only: tiny, tiny_chl, chl2N_max, NCmax, chl2N_max_d, NCmax_d, SiCmax, &
+                Redfield, &
+                enable_3zoo2det, enable_coccos, bgc_num
 
         implicit none
 
@@ -453,6 +592,9 @@ contains
                     tracers_info%data_pointers(i)%tracer_data(:, :) = tiny * Redfield
                 end if
 
+            case default
+                write(*, *) "REcoM Warning: Unrecognized tracer ID during initialization: ", id
+
             end select
         end do
     end subroutine initialize_tracer_data
@@ -460,9 +602,9 @@ contains
     subroutine mask_hydrothermal_vents(tracers_info, myDim_nod2D, eDim_nod2D, ulevels_nod2D, &
             nlevels_nod2D, geo_coord_nod2D, Z_3d_n, rad)
 
-        use REcoM_glovar
-        use REcoM_config
-        use recom_declarations
+        use REcoM_glovar, only: tracers_info_type
+        use REcoM_config, only: tiny
+        use recom_declarations, only: wp
 
         implicit none
 
@@ -492,17 +634,18 @@ contains
         end do
 
         ! Mask negative values
-        tracers_info%data_pointers(21)%tracer_data(:, :) = max(tiny, tracers_info%data_pointers(21)&
+        tracers_info%data_pointers(21)%tracer_data(:, :) = max(tiny, tracers_info%data_pointers(21&
+                )&
                 %tracer_data(:, :))
     end subroutine mask_hydrothermal_vents
 
     subroutine initialization_diagnostics(tracers_info, myDim_nod2D, ulevels_nod2D, nlevels_nod2D, &
             MPI_COMM_FESOM, mype)
-        use REcoM_glovar
-        use recom_declarations
-        use recom_config
+        use REcoM_glovar, only: tracers_info_type
+        use recom_config, only: enable_3zoo2det, enable_coccos
+        use recom_declarations, only: WP, is_3zoo2det, is_coccos
 
-        use mpi
+        use mpi, only: MPI_allreduce, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_MIN
 
         implicit none
 
@@ -559,26 +702,36 @@ contains
         end do
 
         if (mype == 0) write(*, *) "Sanity check for REcoM variables after recom_init call"
-        call MPI_AllREDUCE(locDINmax, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
+        call MPI_AllREDUCE(locDINmax, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, &
+                MPIerr)
         if (mype == 0) write(*, *) '  |-> gobal max init. DIN. =', glo
-        call MPI_AllREDUCE(locDINmin, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, MPIerr)
+        call MPI_AllREDUCE(locDINmin, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, &
+                MPIerr)
         if (mype == 0) write(*, *) '  |-> gobal min init. DIN. =', glo
 
-        call MPI_AllREDUCE(locDICmax, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
+        call MPI_AllREDUCE(locDICmax, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, &
+                MPIerr)
         if (mype == 0) write(*, *) '  |-> gobal max init. DIC. =', glo
-        call MPI_AllREDUCE(locDICmin, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, MPIerr)
+        call MPI_AllREDUCE(locDICmin, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, &
+                MPIerr)
         if (mype == 0) write(*, *) '  |-> gobal min init. DIC. =', glo
-        call MPI_AllREDUCE(locAlkmax, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
+        call MPI_AllREDUCE(locAlkmax, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, &
+                MPIerr)
         if (mype == 0) write(*, *) '  |-> gobal max init. Alk. =', glo
-        call MPI_AllREDUCE(locAlkmin, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, MPIerr)
+        call MPI_AllREDUCE(locAlkmin, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, &
+                MPIerr)
         if (mype == 0) write(*, *) '  |-> gobal min init. Alk. =', glo
-        call MPI_AllREDUCE(locDSimax, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
+        call MPI_AllREDUCE(locDSimax, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, &
+                MPIerr)
         if (mype == 0) write(*, *) '  |-> gobal max init. DSi. =', glo
-        call MPI_AllREDUCE(locDSimin, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, MPIerr)
+        call MPI_AllREDUCE(locDSimin, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, &
+                MPIerr)
         if (mype == 0) write(*, *) '  |-> gobal min init. DSi. =', glo
-        call MPI_AllREDUCE(locDFemax, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
+        call MPI_AllREDUCE(locDFemax, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, &
+                MPIerr)
         if (mype == 0) write(*, *) '  |-> gobal max init. DFe. =', glo
-        call MPI_AllREDUCE(locDFemin, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, MPIerr)
+        call MPI_AllREDUCE(locDFemin, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, &
+                MPIerr)
         if (mype == 0) write(*, *) '  `-> gobal min init. DFe. =', glo
         call MPI_AllREDUCE(locO2max, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
         if (mype == 0) write(*, *) '  |-> gobal max init. O2. =', glo
