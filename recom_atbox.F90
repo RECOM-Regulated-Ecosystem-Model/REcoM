@@ -4,7 +4,7 @@ module recom_atbox_module
 
     public :: recom_atbox
 contains
-    subroutine recom_atbox(MPI_COMM_FESOM, myDim_nod2D, eDim_nod2D, ulevels_nod2D, areasvol, dt)
+    subroutine recom_atbox(MPI_COMM_FESOM, myDim_nod2D, ulevels_nod2D, areasvol, dt)
         ! Simple 0-d box model to calculate the temporal evolution of atmospheric CO2.
         ! Initially the box model was part of module recom_ciso. Now it can be run also
         ! without carbon isotopes (ciso==.false.)
@@ -19,7 +19,7 @@ contains
 
         implicit none
 
-        integer, intent(in) :: MPI_COMM_FESOM, myDim_nod2D, eDim_nod2D
+        integer, intent(in) :: MPI_COMM_FESOM, myDim_nod2D
         real(kind=WP), intent(in) :: dt
         integer, intent(in), dimension(:) :: ulevels_nod2D
         real(kind=WP), intent(in), dimension(:, :) :: areasvol

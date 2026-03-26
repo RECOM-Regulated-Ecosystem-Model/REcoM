@@ -218,9 +218,7 @@ contains
 
         if (use_atbox) then ! MERGE
             ! Prognostic atmospheric isoCO2
-            call recom_atbox(MPI_COMM_FESOM, myDim_nod2D, &
-                    eDim_nod2D, ulevels_nod2D, &
-                    areasvol, dt)
+            call recom_atbox(MPI_COMM_FESOM, myDim_nod2D, ulevels_nod2D, areasvol, dt)
             ! optional I/O of isoCO2 and inferred cosmogenic 14C production; this may cost some
             ! CPU time
             if (ciso .and. ciso_14) then
