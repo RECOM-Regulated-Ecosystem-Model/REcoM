@@ -13,9 +13,9 @@ contains
     !
     !
     !_______________________________________________________________________________
-    subroutine recom_init(nl, ulevels_nod2D, nlevels_nod2D, geo_coord_nod2D, Z_3d_n, &
-            myDim_nod2d, eDim_nod2D, mype, MPI_COMM_FESOM, myDim_elem2D, &
-            eDim_elem2D, tracers_info, num_tracers, rad)
+    subroutine recom_init(nl, ulevels_nod2D, nlevels_nod2D, geo_coord_nod2D, Z_3d_n, myDim_nod2d, &
+            eDim_nod2D, mype, MPI_COMM_FESOM, myDim_elem2D, eDim_elem2D, tracers_info, &
+            num_tracers, rad)
 
         use REcoM_declarations, only: wp
         use REcoM_GloVar, only: tracers_info_type
@@ -51,139 +51,30 @@ contains
 
     subroutine initialize_memory(node_size, nl, num_tracers)
         use recom_declarations, only: decayBenthos
-        use recom_glovar, only: GloFeDust, &
-                AtmFeInput, &
-                GloNDust, &
-                AtmNInput, &
-                RiverDIN2D, &
-                RiverDON2D, &
-                RiverDOC2D, &
-                RiverDSi2D, &
-                RiverDIC2D, &
-                RiverAlk2D, &
-                RiverFe, &
-                ErosionTON2D, &
-                ErosionTOC2D, &
-                ErosionTSi2D, &
-                relax_alk, &
-                virtual_alk, &
-                cosAI, &
-                GloPCO2surf, &
-                GloCO2flux, &
-                GloO2flux, &
-                GloCO2flux_seaicemask, &
-                GloO2flux_seaicemask, &
-                GlodPCO2surf, &
-                DenitBen, &
-                PistonVelocity, &
-                alphaCO2, &
-                GlodecayBenthos, &
-                Benthos, &
-                Benthos_tr, &
-                GloHplus, &
-                PAR3D, &
-                NPPn, &
-                NPPd, &
-                NPPc, &
-                NPPp, &
-                GPPn, &
-                GPPd, &
-                GPPc, &
-                GPPp, &
-                NNAn, &
-                NNAd, &
-                NNAc, &
-                NNAp, &
-                Chldegn, &
-                Chldegd, &
-                Chldegc, &
-                Chldegp, &
-                grazmeso_tot, &
-                grazmeso_n, &
-                grazmeso_d, &
-                grazmeso_c, &
-                grazmeso_p, &
-                grazmeso_det, &
-                grazmeso_mic, &
-                grazmeso_det2, &
-                grazmacro_tot, &
-                grazmacro_n, &
-                grazmacro_d, &
-                grazmacro_c, &
-                grazmacro_p, &
-                grazmacro_mes, &
-                grazmacro_det, &
-                grazmacro_mic, &
-                grazmacro_det2, &
-                grazmicro_tot, &
-                grazmicro_n, &
-                grazmicro_d, &
-                grazmicro_c, &
-                grazmicro_p, &
-                respmeso, &
-                respmacro, &
-                respmicro, &
-                calcdiss, &
-                calcif, &
-                aggn, &
-                aggd, &
-                aggc, &
-                aggp, &
-                docexn, &
-                docexd, &
-                docexc, &
-                docexp, &
-                respn, &
-                respd, &
-                respc, &
-                respp, &
-                NPPn3D, &
-                NPPd3D, &
-                NPPc3D, &
-                NPPp3D, &
-                TTemp_diatoms, &
-                TTemp_phyto, &
-                TTemp_cocco, &
-                TTemp_phaeo, &
-                TPhyCO2, &
-                TDiaCO2, &
-                TCoccoCO2, &
-                TPhaeoCO2, &
-                TqlimitFac_phyto, &
-                TqlimitFac_diatoms, &
-                TqlimitFac_cocco, &
-                TqlimitFac_phaeo, &
-                TCphotLigLim_diatoms, &
-                TCphotLigLim_phyto, &
-                TCphotLigLim_cocco, &
-                TCphotLigLim_phaeo, &
-                TCphot_diatoms, &
-                TCphot_phyto, &
-                TCphot_cocco, &
-                TCphot_phaeo, &
-                TSi_assimDia, &
-                CO23D, &
-                pH3D, &
-                pCO23D, &
-                HCO33D, &
-                CO33D, &
-                OmegaC3D, &
-                kspc3D, &
-                rhoSW3D, &
-                rho_particle1, &
-                rho_particle2, &
-                scaling_density1_3D, &
-                scaling_density2_3D, &
-                scaling_visc_3D, &
-                seawater_visc_3D, &
-                Sinkingvel1, &
-                Sinkingvel2, &
-                Sinkvel1_tr, &
-                Sinkvel2_tr, &
-                GloSed, &
-                SinkFlx, &
-                SinkFlx_tr, &
-                lb_flux
+
+        use recom_glovar, only: GloFeDust, AtmFeInput, GloNDust, AtmNInput, RiverDIN2D, &
+                RiverDON2D, RiverDOC2D, RiverDSi2D, RiverDIC2D, RiverAlk2D, RiverFe, &
+                ErosionTON2D, ErosionTOC2D, ErosionTSi2D, relax_alk, virtual_alk, cosAI, &
+                GloPCO2surf, GloCO2flux, GloO2flux, GloCO2flux_seaicemask, GloO2flux_seaicemask, &
+                GlodPCO2surf, DenitBen, PistonVelocity, alphaCO2, GlodecayBenthos, Benthos, &
+                Benthos_tr, GloHplus, PAR3D, NPPn, NPPd, NPPc, NPPp, GPPn, GPPd, GPPc, GPPp, &
+                NNAn, NNAd, NNAc, NNAp, Chldegn, Chldegd, Chldegc, Chldegp, grazmeso_tot, &
+                grazmeso_n, grazmeso_d, grazmeso_c, grazmeso_p, grazmeso_det, grazmeso_mic, &
+                grazmeso_det2, grazmacro_tot, grazmacro_n, grazmacro_d, grazmacro_c, &
+                grazmacro_p, grazmacro_mes, grazmacro_det, grazmacro_mic, grazmacro_det2, &
+                grazmicro_tot, grazmicro_n, grazmicro_d, grazmicro_c, grazmicro_p, respmeso, &
+                respmacro, respmicro, calcdiss, calcif, aggn, aggd, aggc, aggp, docexn, &
+                docexd, docexc, docexp, respn, respd, respc, respp, NPPn3D, NPPd3D, NPPc3D, &
+                NPPp3D, TTemp_diatoms, TTemp_phyto, TTemp_cocco, TTemp_phaeo, TPhyCO2, &
+                TDiaCO2, TCoccoCO2, TPhaeoCO2, TqlimitFac_phyto, TqlimitFac_diatoms, &
+                TqlimitFac_cocco, TqlimitFac_phaeo, TCphotLigLim_diatoms, TCphotLigLim_phyto, &
+                TCphotLigLim_cocco, TCphotLigLim_phaeo, TCphot_diatoms, TCphot_phyto, &
+                TCphot_cocco, TCphot_phaeo, TSi_assimDia, CO23D, pH3D, pCO23D, HCO33D, &
+                CO33D, OmegaC3D, kspc3D, rhoSW3D, rho_particle1, rho_particle2, &
+                scaling_density1_3D, scaling_density2_3D, scaling_visc_3D, seawater_visc_3D, &
+                Sinkingvel1, Sinkingvel2, Sinkvel1_tr, Sinkvel2_tr, GloSed, SinkFlx, &
+                SinkFlx_tr, lb_flux
+
         use recom_locvar, only: LocBenthos
         use recom_config, only: Diags, benthos_num, use_MEDUSA, bottflx_num, sedflx_num
 
@@ -372,8 +263,7 @@ contains
     subroutine initialize_tracer_data(num_tracers, tracers_info)
         use REcoM_glovar, only: tracers_info_type
         use REcoM_config, only: tiny, tiny_chl, chl2N_max, NCmax, chl2N_max_d, NCmax_d, SiCmax, &
-                Redfield, &
-                enable_3zoo2det, enable_coccos, bgc_num
+                Redfield, enable_3zoo2det, enable_coccos, bgc_num
 
         implicit none
 
@@ -634,9 +524,8 @@ contains
         end do
 
         ! Mask negative values
-        tracers_info%data_pointers(21)%tracer_data(:, :) = max(tiny, tracers_info%data_pointers(21&
-                )&
-                %tracer_data(:, :))
+        tracers_info%data_pointers(21)%tracer_data(:, :) = &
+                max(tiny, tracers_info%data_pointers(21)%tracer_data(:, :))
     end subroutine mask_hydrothermal_vents
 
     subroutine initialization_diagnostics(tracers_info, myDim_nod2D, ulevels_nod2D, nlevels_nod2D, &

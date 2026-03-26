@@ -18,11 +18,9 @@ contains
     ! define recom_det2_tracer_id to make it consistent???
     !===============================================================================
     subroutine ver_sinking_recom_benthos(tr_num, nl, ulevels_nod2D, nlevels_nod2D, zbar_3d_n, &
-            nod_in_elem2D_num, nod_in_elem2D, nlevels, area, tracer_id, &
-            tracer_data_values, myDim_nod2d, str_bf, mype, &
-            MPI_COMM_FESOM, npes, sn, rn, s_mpitype_nod2D, &
-            r_mpitype_nod2D, s_mpitype_nod3D, &
-            r_mpitype_nod3D, sPE, rPE, requests, nreq, dt)
+            nod_in_elem2D_num, nod_in_elem2D, nlevels, area, tracer_id, tracer_data_values, &
+            myDim_nod2d, str_bf, mype, MPI_COMM_FESOM, npes, sn, rn, s_mpitype_nod2D, &
+            r_mpitype_nod2D, s_mpitype_nod3D, r_mpitype_nod3D, sPE, rPE, requests, nreq, dt)
 
         use recom_g_comm_auto, only: recom_exchange_nod
 
@@ -277,8 +275,7 @@ contains
                 ! kh 25.03.22 buffer sums per tracer index to avoid non bit identical results
                 ! regarding global sums when running the tracer loop in parallel
                 call recom_exchange_nod(SinkFlx_tr(:, n, tr_num), npes, sn, rn, MPI_COMM_FESOM, &
-                        mype, &
-                        s_mpitype_nod2D, r_mpitype_nod2D, sPE, rPE, requests, nreq)
+                        mype, s_mpitype_nod2D, r_mpitype_nod2D, sPE, rPE, requests, nreq)
             end do
         end if ! use_MEDUSA
 
@@ -286,12 +283,10 @@ contains
             ! kh 25.03.22 buffer sums per tracer index to avoid non bit identical results regarding
             ! global sums when running the tracer loop in parallel
             call recom_exchange_nod(Benthos_tr(:, n, tr_num), npes, sn, rn, MPI_COMM_FESOM, &
-                    mype, s_mpitype_nod2D, r_mpitype_nod2D, sPE, rPE, requests, &
-                    nreq)
+                    mype, s_mpitype_nod2D, r_mpitype_nod2D, sPE, rPE, requests, nreq)
 
             call recom_exchange_nod(Benthos(:, n), npes, sn, rn, MPI_COMM_FESOM, mype, &
-                    s_mpitype_nod2D, &
-                    r_mpitype_nod2D, sPE, rPE, requests, nreq)
+                    s_mpitype_nod2D, r_mpitype_nod2D, sPE, rPE, requests, nreq)
         end do
 
     end subroutine ver_sinking_recom_benthos

@@ -4,10 +4,10 @@
 ! Main REcoM
 
 module bio_fluxes_interface
-implicit none
-private
+    implicit none
+    private
 
-public :: bio_fluxes
+    public :: bio_fluxes
 
 contains
 
@@ -82,10 +82,10 @@ contains
 end module bio_fluxes_interface
 
 module recom_interface
-implicit none
-private
+    implicit none
+    private
 
-public :: recom
+    public :: recom
 
 contains
 
@@ -102,33 +102,34 @@ contains
         use bio_fluxes_interface, only: bio_fluxes
 
         use recom_config, only: benthos_num, bgc_num, ciso, diags, dust_sol, enable_3zoo2det, &
-            enable_coccos, ialk, parfrac, recom_debug, restore_alkalinity, secondsperday, &
-            use_atbox, tiny
+                enable_coccos, ialk, parfrac, recom_debug, restore_alkalinity, secondsperday, &
+                use_atbox, tiny
 
         use recom_locvar, only: LocBenthos, locatmco2, fedust, hplus, loc_ice_conc, ndust, uloc, &
-            ph, kw660, k0, pco2surf, dpco2surf, dflux, co2flux_seaicemask, o2flux_seaicemask, oflux
+                ph, kw660, k0, pco2surf, dpco2surf, dflux, co2flux_seaicemask, o2flux_seaicemask, &
+                oflux
 
         use recom_ciso, only: locatmco2_13, locatmco2_14, r_atm_13, r_atm_14, ciso_14, &
-            gloco2flux_13, gloco2flux_14, glopco2surf_13, glopco2surf_14, lat_val, &
-            production_rate_to_flux_14, x_co2atm_13, x_co2atm_14, x_co2atm_13, x_co2atm_14, &
-            atmco2_13, gloco2flux_seaicemask_13, co2flux_seaicemask_13, gloco2flux_seaicemask_14, &
-            co2flux_seaicemask_14, gloco2flux_seaicemask_13, gloco2flux_seaicemask_14, cosmic_14, &
-            lat_zone, atmco2_14
+                gloco2flux_13, gloco2flux_14, glopco2surf_13, glopco2surf_14, lat_val, &
+                production_rate_to_flux_14, x_co2atm_13, x_co2atm_14, x_co2atm_13, x_co2atm_14, &
+                atmco2_13, gloco2flux_seaicemask_13, co2flux_seaicemask_13, cosmic_14, &
+                co2flux_seaicemask_14, gloco2flux_seaicemask_13, gloco2flux_seaicemask_14, &
+                gloco2flux_seaicemask_14, lat_zone, atmco2_14
 
         use recom_glovar, only: tracers_info_type, benthos, co23d, ph3d, pco23d, hco33d, co33d, &
-            omegac3d, kspc3d, rhosw3d, glodecaybenthos, par3d, chldegc, chldegd, chldegn, chldegp, &
-            gppc, gppd, gppn, gppp, grazmacro_c, grazmacro_d, grazmacro_det, grazmacro_det2, &
-            grazmacro_mes, grazmacro_mic, grazmacro_n, grazmacro_p, grazmacro_tot, grazmeso_c, &
-            grazmeso_d, grazmeso_det, grazmeso_det2, grazmeso_mic, grazmeso_n, grazmeso_p, &
-            grazmeso_tot, grazmicro_c, grazmicro_d, grazmicro_n, grazmicro_p, grazmicro_tot, &
-            nnac, nnad, nnan, nnap, nppc, nppd, nppn, nppp, x_co2atm, glohplus, atmco2, x_co2atm, &
-            glofedust, glondust, atmfeinput, atmninput, glohplus, pistonvelocity, alphaco2, &
-            glopco2surf, glodpco2surf, gloco2flux, gloco2flux_seaicemask, gloo2flux_seaicemask, &
-            gloo2flux, glopco2surf, glodpco2surf, gloco2flux, gloco2flux_seaicemask, &
-            gloo2flux_seaicemask, glohplus, atmfeinput, atmninput
+                omegac3d, kspc3d, rhosw3d, glodecaybenthos, par3d, chldegc, chldegd, chldegn, &
+                gppc, gppd, gppn, gppp, grazmacro_c, grazmacro_d, grazmacro_det, grazmacro_det2, &
+                grazmacro_mes, grazmacro_mic, grazmacro_n, grazmacro_p, grazmacro_tot, grazmeso_c, &
+                grazmeso_d, grazmeso_det, grazmeso_det2, grazmeso_mic, grazmeso_n, grazmeso_p, &
+                grazmeso_tot, grazmicro_c, grazmicro_d, grazmicro_n, grazmicro_p, grazmicro_tot, &
+                nnac, nnad, nnan, nnap, nppc, nppd, nppn, nppp, x_co2atm, glohplus, atmco2, &
+                glofedust, glondust, atmfeinput, atmninput, glohplus, pistonvelocity, alphaco2, &
+                glopco2surf, glodpco2surf, gloco2flux, gloco2flux_seaicemask, &
+                gloo2flux, glopco2surf, glodpco2surf, gloco2flux, gloco2flux_seaicemask, &
+                gloo2flux_seaicemask, glohplus, atmfeinput, atmninput, chldegp, x_co2atm
 
         use recom_diags_management, only: allocate_and_init_diags, update_2d_diags, &
-            update_3d_diags, deallocate_diags
+                update_3d_diags, deallocate_diags
 
         use recom_forcing_module, only: recom_forcing
         use recom_atbox_module, only: recom_atbox
@@ -209,12 +210,14 @@ contains
         ! alkalinity restoring to climatology
         ! virtual flux is possible
 
-        if (restore_alkalinity) call bio_fluxes(tracers_info%data_pointers(2 + ialk)%tracer_data(:&
-                &, :), MPI_COMM_FESOM, &
-                myDim_nod2D, eDim_nod2D, ocean_area, &
-                ulevels_nod2D, areasvol)
-        if (recom_debug .and. mype == 0) print *, achar(27) // '[36m' // '     --> bio_fluxes' // &
-                achar(27) // '[0m'
+        if (restore_alkalinity) then
+            call bio_fluxes(tracers_info%data_pointers(2 + ialk)%tracer_data(:, :), &
+                    MPI_COMM_FESOM, myDim_nod2D, eDim_nod2D, ocean_area, ulevels_nod2D, areasvol)
+        end if
+
+        if (recom_debug .and. mype == 0) then
+            print *, achar(27) // '[36m' // '     --> bio_fluxes' // achar(27) // '[0m'
+        end if
 
         if (use_atbox) then ! MERGE
             ! Prognostic atmospheric isoCO2
@@ -333,8 +336,8 @@ contains
 
             do tr_num = 1, num_tracers
                 if (tracers_info%ltra_diag(tr_num)) then
-                    ttf_rhs_bak(1:nzmax, tr_num) = tracers_info%data_pointers(tr_num)%tracer_data(1&
-                            :nzmax, n)
+                    ttf_rhs_bak(1:nzmax, tr_num) = &
+                            tracers_info%data_pointers(tr_num)%tracer_data(1:nzmax, n)
                 end if
             end do
 
@@ -462,8 +465,10 @@ contains
             !            vertChldegp = 0.d0
             !endif
 
-            if (recom_debug .and. mype == 0) print *, achar(27) // '[36m' // '     -->' // &
-                    ' REcoM_Forcing' // achar(27) // '[0m'
+            if (recom_debug .and. mype == 0) then
+                print *, achar(27) // '[36m' // '     -->' // &
+                        ' REcoM_Forcing' // achar(27) // '[0m'
+            end if
 
             ! ======================================================================================
             !******************************** RECOM FORCING ****************************************
@@ -474,7 +479,7 @@ contains
                     HCO3_watercolumn, & ! NEW MOCSY HCO3 for the whole watercolumn
                     CO3_watercolumn, & ! NEW DISS CO3 for the whole watercolumn
                     OmegaC_watercolumn, & ! NEW DISS OmegaC for the whole watercolumn
-                    ! NEW DISS stoichiometric solubility product for calcite [mol^2/kg^2]
+            ! NEW DISS stoichiometric solubility product for calcite [mol^2/kg^2]
                     kspc_watercolumn, &
                     rhoSW_watercolumn, & ! NEW DISS in-situ density of seawater [mol/m^3]
                     PAR, MPI_COMM_FESOM, mype, myDim_nod2D, &
@@ -489,8 +494,9 @@ contains
 
             do tr_num = 1, num_tracers
                 if (tracers_info%ltra_diag(tr_num)) then
-                    tra_recom_sms(1:nzmax, n, tr_num) = tracers_info%data_pointers(tr_num)%&
-                            tracer_data(1:nzmax, n) - ttf_rhs_bak(1:nzmax, tr_num)
+                    tra_recom_sms(1:nzmax, n, tr_num) = &
+                            tracers_info%data_pointers(tr_num)%tracer_data(1:nzmax, n) &
+                            - ttf_rhs_bak(1:nzmax, tr_num)
                     !if (mype==0)  print *,  tra_recom_sms(:,:,tr_num)
                 end if
 

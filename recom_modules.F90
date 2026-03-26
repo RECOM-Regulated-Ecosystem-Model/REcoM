@@ -399,13 +399,10 @@ module recom_config
 
     ! OG
     ! Todo:  Make recom_sinking_tracer_id case sensitive
-    integer, dimension(32) :: recom_sinking_tracer_id = [1007, 1008, 1017, 1021, 1004, 1005, 1020,&
-            & 1006, &
-            1013, 1014, 1016, 1015, 1025, 1026, 1027, 1028, &
-            1029, 1030, 1031, &
-            1032, 1033, 1034, &
-            1308, 1321, 1305, 1320, &
-            1314, 1408, 1421, 1405, 1420, 1414]
+    integer, dimension(32) :: recom_sinking_tracer_id = [1007, 1008, 1017, 1021, 1004, 1005, 1020, &
+            1006, 1013, 1014, 1016, 1015, 1025, 1026, 1027, 1028, 1029, 1030, 1031, 1032, 1033, &
+            1034, 1308, 1321, 1305, 1320, 1314, 1408, 1421, 1405, 1420, 1414]
+
     integer, dimension(8) :: recom_det_tracer_id = [1007, 1008, 1017, 1021, 1308, 1321, 1408, 1421]
     integer, dimension(8) :: recom_phy_tracer_id = [1004, 1005, 1020, 1305, 1320, 1405, 1420, 1006]
     integer, dimension(6) :: recom_dia_tracer_id = [1013, 1014, 1314, 1414, 1016, 1015]
@@ -720,9 +717,7 @@ module recom_config
     namelist /pasecondzooplankton/ graz_max2, epsilon2, res_zoo2, &
             loss_zoo2, fecal_rate_n, fecal_rate_c, fecal_rate_n_mes, fecal_rate_c_mes, & ! NEW 3Zoo
             pzDia2, sDiaNsq2, pzPhy2, sPhyNsq2, pzCocco2, sCoccoNsq2, pzPhaeo2, sPhaeoNsq2, pzHet, &
-            sHetNsq, &
-            pzMicZoo2, sMicZooNsq2, &
-            t1_zoo2, t2_zoo2, t3_zoo2, t4_zoo2
+            sHetNsq, pzMicZoo2, sMicZooNsq2, t1_zoo2, t2_zoo2, t3_zoo2, t4_zoo2
     !-------------------------------------------------------------------------------
     !! *** Third Zooplankton (Microzooplankton) ***
     ! NEW 3Zoo [mmol N/(m3 * day)] Maximum grazing loss parameter

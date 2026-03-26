@@ -29,8 +29,7 @@ contains
     ! ========================================================================
     ! General version of the communication routine for 2D nodal fields
     subroutine recom_exchange_nod2D(nod_array2D, npes, sn, rn, MPI_COMM_FESOM, mype, &
-            s_mpitype_nod2D, r_mpitype_nod2D, sPE, rPE, requests, nreq, &
-            luse_g2g)
+            s_mpitype_nod2D, r_mpitype_nod2D, sPE, rPE, requests, nreq, luse_g2g)
 
         implicit none
 
@@ -54,8 +53,7 @@ contains
     ! ========================================================================
     ! General version of the communication routine for 2D nodal fields
     subroutine recom_exchange_nod2D_begin(nod_array2D, npes, sn, rn, MPI_COMM_FESOM, mype, &
-            s_mpitype_nod2D, r_mpitype_nod2D, sPE, rPE, requests, nreq, &
-            luse_g2g)
+            s_mpitype_nod2D, r_mpitype_nod2D, sPE, rPE, requests, nreq, luse_g2g)
         implicit none
 
         logical, intent(in), optional :: luse_g2g
@@ -98,8 +96,7 @@ contains
     ! General version of the communication routine for 3D nodal fields
     ! stored in (vertical, horizontal) format
     subroutine recom_exchange_nod3D(nod_array3D, npes, sn, rn, MPI_COMM_FESOM, mype, &
-            s_mpitype_nod3D, r_mpitype_nod3D, sPE, rPE, requests, nreq, &
-            luse_g2g)
+            s_mpitype_nod3D, r_mpitype_nod3D, sPE, rPE, requests, nreq, luse_g2g)
         implicit none
 
         logical, intent(in), optional :: luse_g2g
@@ -112,8 +109,7 @@ contains
 
         if (npes > 1) then
             call recom_exchange_nod3D_begin(nod_array3D, npes, sn, rn, MPI_COMM_FESOM, mype, &
-                    s_mpitype_nod3D, r_mpitype_nod3D, sPE, rPE, requests, &
-                    nreq, luse_g2g)
+                    s_mpitype_nod3D, r_mpitype_nod3D, sPE, rPE, requests, nreq, luse_g2g)
             call recom_exchange_nod_end(npes, nreq, requests)
         end if
 
@@ -123,8 +119,7 @@ contains
     ! General version of the communication routine for 3D nodal fields
     ! stored in (vertical, horizontal) format
     subroutine recom_exchange_nod3D_begin(nod_array3D, npes, sn, rn, MPI_COMM_FESOM, mype, &
-            s_mpitype_nod3D, r_mpitype_nod3D, sPE, rPE, requests, nreq, &
-            luse_g2g)
+            s_mpitype_nod3D, r_mpitype_nod3D, sPE, rPE, requests, nreq, luse_g2g)
         implicit none
 
         logical, intent(in), optional :: luse_g2g

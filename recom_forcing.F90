@@ -18,42 +18,34 @@ contains
 
         use recom_declarations, only: wp, tiny_si, tiny_n, tiny_c, tiny_n_d, tiny_n_c, tiny_n_p, &
                 tiny_c_p, tiny_c_d, tiny_c_c, vertNPPn, vertGPPn, locGPPn, locNPPn, vertNNAn, &
-                locNNAn, &
                 vertChldegn, vertNPPd, locNPPd, locchldegn, vertGPPd, locGPPd, vertNNAd, locNNAd, &
                 vertChldegd, locChldegd, vertNPPc, vertGPPc, locNPPc, locGPPc, vertNNAc, &
-                vertChldegc, &
                 locNNAc, locChldegc, vertNPPp, locNPPp, vertGPPp, vertNNAp, vertchldegp, locNNAp, &
                 locGPPp, locChldegp, vertgrazmeso_tot, vertgrazmeso_n, vertgrazmeso_d, &
-                vertgrazmeso_c, &
                 vertgrazmeso_p, vertgrazmeso_det, vertgrazmeso_mic, vertgrazmeso_det2, &
                 vertgrazmacro_tot, vertgrazmacro_n, vertgrazmacro_d, vertgrazmacro_c, &
-                vertgrazmacro_p, &
                 vertgrazmacro_mes, vertgrazmacro_det, vertgrazmacro_mic, vertgrazmacro_det2, &
                 vertgrazmicro_tot, vertgrazmicro_n, vertgrazmicro_d, vertgrazmicro_c, &
-                locgrazmacro_c, locgrazmacro_c, locgrazmacro_d, locgrazmacro_det, locgrazmacro_det2&
-                , &
+                locgrazmacro_c, locgrazmacro_c, locgrazmacro_d, locgrazmacro_det, &
                 locgrazmacro_mes, locgrazmacro_mic, locgrazmacro_n, locgrazmacro_p, &
-                locgrazmacro_tot, &
                 locgrazmeso_c, locgrazmeso_d, locgrazmeso_det, locgrazmeso_det2, locgrazmeso_mic, &
                 locgrazmeso_n, locgrazmeso_p, locgrazmeso_tot, locgrazmicro_c, locgrazmicro_d, &
-                locgrazmicro_n, locgrazmicro_p, locgrazmicro_tot, vertgrazmicro_p
+                locgrazmicro_n, locgrazmicro_p, locgrazmicro_tot, vertgrazmicro_p, &
+                locNNAn, vertChldegc, vertgrazmeso_c, locgrazmacro_tot, locgrazmacro_det2, &
+                vertgrazmacro_p
 
         use recom_config, only: bgc_num, chl2n_max, chl2n_max_c, chl2n_max_d, chl2n_max_p, ciso, &
                 diags, enable_3zoo2det, enable_coccos, grazing_detritus, ialk, icchl, icocc, &
-                icocn, &
                 idchl, idiac, idian, idiasi, idic, idin, imiczooc, imiczoon, ioxy, ipchl, iphac, &
                 iphachl, iphan, iphyc, iphyn, isi, ncmax, ncmax_c, ncmax_d, ncmax_p, nmocsy, one, &
-                pa2atm, recom_debug, secondsperday, sicmax, tiny, tiny_chl
+                pa2atm, recom_debug, secondsperday, sicmax, tiny, tiny_chl, icocn
 
         use recom_ciso, only: alpha_aq_13, alpha_aq_14, alpha_dic_13, alpha_dic_14, alpha_k_13, &
                 alpha_k_14, alpha_p_13, alpha_p_14, alpha_p_dia_13, alpha_p_dia_14, ciso_14, &
                 ciso_organic_14, co2flux_13, co2flux_14, co2flux_seaicemask_13, &
-                recom_ciso_airsea, recom_ciso_photo, &
-                co2flux_seaicemask_14, &
                 co2sat, idiac_13, idiac_14, idic_13, idic_14, iphyc_13, iphyc_14, kwco2, r_atm_13, &
-                r_atm_14, r_co2s_13, r_co2s_14, r_diac_13, r_diac_14, r_dic_13, r_dic_14, r_phyc_13&
-                , &
-                r_phyc_14
+                r_atm_14, r_co2s_13, r_co2s_14, r_diac_13, r_diac_14, r_dic_13, r_dic_14, &
+                r_phyc_13, r_phyc_14, co2flux_seaicemask_14, recom_ciso_airsea, recom_ciso_photo
 
         use recom_locvar, only: betad, co2, co2ex, dpco2surf, fco2, hco3, k0, kw660, loc_ice_conc, &
                 locatmco2, o2ex, o2flux_seaicemask, oflux, omegaa, omegac, p, pco2surf, ph, rhosw, &
@@ -219,10 +211,9 @@ contains
             stop
         end if
 
-        call flxco2(co2flux, co2ex, dpco2surf, &
-                ph, pco2surf, fco2, co2, hco3, co3, OmegaA, OmegaC, BetaD, rhoSW, p, tempis, K0, &
-                REcoM_T, REcoM_S, REcoM_Alk, REcoM_DIC, REcoM_Si, REcoM_Phos, kw660, LocAtmCO2, &
-                Patm, thick(One), Nmocsy, Lond, Latd, &
+        call flxco2(co2flux, co2ex, dpco2surf, ph, pco2surf, fco2, co2, hco3, co3, OmegaA, OmegaC, &
+                BetaD, rhoSW, p, tempis, K0, REcoM_T, REcoM_S, REcoM_Alk, REcoM_DIC, REcoM_Si, &
+                REcoM_Phos, kw660, LocAtmCO2, Patm, thick(One), Nmocsy, Lond, Latd, &
                 optCON='mol/m3', optT='Tpot   ', optP='m ', optB='u74', optK1K2='l  ', optKf='dg', &
                 optGAS='Pinsitu', optS='Sprc')
 
@@ -286,8 +277,7 @@ contains
                 OmegaC_watercolumn, & ! DISS calcite saturation state
                 kspc_watercolumn, & ! DISS stoichiometric solubility product [mol^2/kg^2]
                 rhoSW_watercolumn, & ! DISS in-situ density of seawater [kg/m3]
-                Loc_slp, &
-                zF, PAR, Latd, daynew, dt, kappa, mstep, MPI_COMM_FESOM, mype, &
+                Loc_slp, zF, PAR, Latd, daynew, dt, kappa, mstep, MPI_COMM_FESOM, mype, &
                 myDim_nod2D, eDim_nod2D, nl, geo_coord_nod2D)
 
         state(1:nn, :) = max(tiny, state(1:nn, :) + sms(1:nn, :))

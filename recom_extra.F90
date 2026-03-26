@@ -101,6 +101,7 @@ contains
     ! Subroutine for calculating cos(AngleOfIncidence)
     !===============================================================================
     subroutine Cobeta(daynew, ndpyr, myDim_nod2D, geo_coord_nod2D)
+
         use REcoM_GloVar, only: cosAI
         use recom_declarations, only: wp, pi
 
@@ -194,6 +195,7 @@ contains
 
     subroutine integrate_nod_2D_recom(data, int2D, MPI_COMM_FESOM, myDim_nod2D, ulevels_nod2D, &
             areasvol)
+
         use recom_declarations, only: wp
         use mpi, only: MPI_DOUBLE_PRECISION, MPI_SUM, MPI_Allreduce
 
