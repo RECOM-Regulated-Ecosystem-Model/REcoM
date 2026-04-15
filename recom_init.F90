@@ -33,6 +33,8 @@ contains
 
         call initialize_memory(myDim_nod2D + eDim_nod2D, nl, num_tracers)
 
+        call initialize_tracer_ids
+
         ! After reading parecomsetup namelist
         call initialize_tracer_indices
 
@@ -259,6 +261,61 @@ contains
             allocate(lb_flux(node_size, 9), source=0.d0)
         end if
     end subroutine initialize_memory
+
+    subroutine initialize_tracer_ids
+        use recom_declarations, only: tracer_ids
+        use REcoM_config, only: enable_3zoo2det, enable_coccos
+
+        integer :: current_tracer_id, total_tracers
+
+        tracer_ids%phytoplankton_nitrogen     = 1004
+        tracer_ids%phytoplankton_carbon       = 1005
+        tracer_ids%phytoplankton_chlorophyll  = 1006
+        tracer_ids%detrital_nitrogen          = 1007
+        tracer_ids%detrital_carbon            = 1008
+        tracer_ids%heterotroph_nitrogen       = 1009
+        tracer_ids%heterotroph_carbon         = 1010
+        tracer_ids%dissolved_organic_nitrogen = 1011
+        tracer_ids%dissolved_organic_carbon   = 1012
+        tracer_ids%diatom_nitrogen            = 1013
+        tracer_ids%diatom_carbon              = 1014
+        tracer_ids%diatom_chlorophyll         = 1015
+        tracer_ids%diatom_silica              = 1016
+        tracer_ids%detrital_silica            = 1017
+        tracer_ids%iron                       = 1019
+        tracer_ids%phytoplankton_calcite      = 1020
+        tracer_ids%detrital_calcite           = 1021
+
+        current_tracer_id = 1023
+
+        if (enable_3zoo2det) then
+            tracer_ids%macrozooplankton_nitrogen = current_tracer_id
+            tracer_ids%macrozooplankton_carbon = current_tracer_id            + 1
+            tracer_ids%macrozooplankton_detrital_nitrogen = current_tracer_id + 2
+            tracer_ids%macrozooplankton_detrital_carbon = current_tracer_id   + 3
+            tracer_ids%macrozooplankton_detrital_silica = current_tracer_id   + 4
+            tracer_ids%macrozooplankton_detrital_calcite = current_tracer_id  + 5
+
+            current_tracer_id = current_tracer_id + 6
+        end if
+
+        if (enable_coccos) then
+            tracer_ids%coccolithophore_nitrogen = current_tracer_id
+            tracer_ids%coccolithophore_carbon = current_tracer_id      + 1
+            tracer_ids%coccolithophore_chlorophyll = current_tracer_id + 2
+            tracer_ids%phaeocystis_nitrogen = current_tracer_id        + 3
+            tracer_ids%phaeocystis_carbon = current_tracer_id          + 4
+            tracer_ids%phaeocystis_chlorophyll = current_tracer_id     + 5
+
+            current_tracer_id = current_tracer_id + 6
+        end if
+
+        if (enable_3zoo2det) then
+            tracer_ids%microzooplankton_nitrogen = current_tracer_id
+            tracer_ids%microzooplankton_carbon = current_tracer_id + 1
+        end if
+
+    end subroutine initialize_tracer_ids
 
     subroutine initialize_tracer_data(num_tracers, tracers_info)
         use REcoM_glovar, only: tracers_info_type
