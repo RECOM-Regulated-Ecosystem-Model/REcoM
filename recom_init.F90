@@ -11,16 +11,37 @@ module recom_init_interface
 
 contains
     !
+    !===============================================================================
+    ! Model Configuration Summary
+    !===============================================================================
+    ! Configuration 1: Base model (enable_3zoo2det=F, enable_coccos=F)
+    !   - 2 Phytoplankton: General Phy, Diatoms
+    !   - 1 Zooplankton: Heterotrophs
+    !   - 1 Detritus pool
     !
-    !_______________________________________________________________________________
+    ! Configuration 2: 3Zoo2Det (enable_3zoo2det=T, enable_coccos=F)
+    !   - 2 Phytoplankton: General Phy, Diatoms
+    !   - 3 Zooplankton: Het, Zoo2, Zoo3
+    !   - 2 Detritus pools
+    !
+    ! Configuration 3: Coccos (enable_3zoo2det=F, enable_coccos=T)
+    !   - 4 Phytoplankton: General Phy, Diatoms, Coccos, Phaeo
+    !   - 1 Zooplankton: Heterotrophs
+    !   - 1 Detritus pool
+    !
+    ! Configuration 4: Full model (enable_3zoo2det=T, enable_coccos=T)
+    !   - 4 Phytoplankton: General Phy, Diatoms, Coccos, Phaeo
+    !   - 3 Zooplankton: Het, Zoo2, Zoo3
+    !   - 2 Detritus pools
+    !===============================================================================
     subroutine recom_init(nl, ulevels_nod2D, nlevels_nod2D, geo_coord_nod2D, Z_3d_n, myDim_nod2d, &
             eDim_nod2D, mype, MPI_COMM_FESOM, myDim_elem2D, eDim_elem2D, tracers_info, &
             num_tracers, rad)
 
-        use REcoM_declarations, only: wp
+        use REcoM_declarations, only: wp, tracer_ids
         use REcoM_GloVar, only: tracers_info_type
         use recom_config, only: validate_recom_tracers, initialize_tracer_indices, &
-                validate_tracer_id_sequence
+                validate_tracer_id_sequence, bgc_num
 
         implicit none
 
@@ -30,6 +51,8 @@ contains
         integer, intent(in), dimension(:) :: ulevels_nod2d, nlevels_nod2d
         real(kind=wp), intent(in), dimension(:, :) :: geo_coord_nod2d, z_3d_n
         type(tracers_info_type), intent(in) :: tracers_info
+
+        integer :: i, tracer_id
 
         call initialize_memory(myDim_nod2D + eDim_nod2D, nl, num_tracers)
 
@@ -44,7 +67,21 @@ contains
         ! After reading tracer namelist - validate actual IDs
         call validate_tracer_id_sequence(tracers_info%ids(1:num_tracers), num_tracers, mype)
 
-        call initialize_tracer_data(num_tracers, tracers_info)
+        ! Initializes tracer data
+        do i = num_tracers - bgc_num + 1, num_tracers
+            tracer_id = tracers_info%ids(i)
+
+            !Iron (unit conversion: mol/L => umol/m3)
+            if (tracer_id == tracer_ids%iron) then
+
+                tracers_info%data_pointers(i)%tracer_data(:, :) = &
+                    tracers_info%data_pointers(i)%tracer_data(:, :) * 1.e9
+
+            ! Avoids tracers 1001, 1002, 1018 and 1022
+            else if (tracer_id > 1003 .and. tracer_id /= 1018 .and. tracer_id /= 1022) then
+                tracers_info%data_pointers(i)%tracer_data(:, :) = get_tracer_init_value(tracer_id)
+            end if
+        end do
 
         call mask_hydrothermal_vents(tracers_info, myDim_nod2D, eDim_nod2D, ulevels_nod2D, &
                 nlevels_nod2D, geo_coord_nod2D, Z_3d_n, rad)
@@ -376,54 +413,6 @@ contains
 
         end if
     end function get_tracer_init_value
-
-    subroutine initialize_tracer_data(num_tracers, tracers_info)
-        use recom_declarations, only: tracer_ids
-        use REcoM_glovar, only: tracers_info_type
-        use REcoM_config, only: tiny, tiny_chl, chl2N_max, NCmax, chl2N_max_d, NCmax_d, SiCmax, &
-                Redfield, enable_3zoo2det, enable_coccos, bgc_num
-
-        implicit none
-
-        integer, intent(in) :: num_tracers
-        type(tracers_info_type), intent(in) :: tracers_info
-
-        integer :: i, id
-        !===============================================================================
-        ! Model Configuration Summary
-        !===============================================================================
-        ! Configuration 1: Base model (enable_3zoo2det=F, enable_coccos=F)
-        !   - 2 Phytoplankton: General Phy, Diatoms
-        !   - 1 Zooplankton: Heterotrophs
-        !   - 1 Detritus pool
-        !
-        ! Configuration 2: 3Zoo2Det (enable_3zoo2det=T, enable_coccos=F)
-        !   - 2 Phytoplankton: General Phy, Diatoms
-        !   - 3 Zooplankton: Het, Zoo2, Zoo3
-        !   - 2 Detritus pools
-        !
-        ! Configuration 3: Coccos (enable_3zoo2det=F, enable_coccos=T)
-        !   - 4 Phytoplankton: General Phy, Diatoms, Coccos, Phaeo
-        !   - 1 Zooplankton: Heterotrophs
-        !   - 1 Detritus pool
-        !
-        ! Configuration 4: Full model (enable_3zoo2det=T, enable_coccos=T)
-        !   - 4 Phytoplankton: General Phy, Diatoms, Coccos, Phaeo
-        !   - 3 Zooplankton: Het, Zoo2, Zoo3
-        !   - 2 Detritus pools
-        !===============================================================================
-
-        do i = num_tracers - bgc_num + 1, num_tracers
-            id = tracers_info%ids(i)
-
-            if (id == tracer_ids%iron) then
-                tracers_info%data_pointers(i)%tracer_data(:, :) = tracers_info%data_pointers(i)%&
-                        tracer_data(:, :) * 1.e9
-            else if (id > 1003 .and. id /= 1018 .and. id /= 1022) then
-                tracers_info%data_pointers(i)%tracer_data(:, :) = get_tracer_init_value(id)
-            end if
-        end do
-    end subroutine initialize_tracer_data
 
     subroutine mask_hydrothermal_vents(tracers_info, myDim_nod2D, eDim_nod2D, ulevels_nod2D, &
             nlevels_nod2D, geo_coord_nod2D, Z_3d_n, rad)
