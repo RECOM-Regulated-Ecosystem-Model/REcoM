@@ -317,6 +317,65 @@ contains
 
     end subroutine initialize_tracer_ids
 
+    function get_tracer_init_value(tracer_id) result(init_value)
+        use recom_declarations, only: tracer_ids, wp
+        use REcoM_config, only: tiny, tiny_chl, chl2N_max, NCmax, chl2N_max_d, NCmax_d, SiCmax, &
+                Redfield
+
+        integer, intent(in) :: tracer_id
+        real(kind=wp) :: init_value
+
+        if (tracer_id == tracer_ids%phytoplankton_nitrogen .or. &
+            tracer_id == tracer_ids%diatom_nitrogen .or. &
+            tracer_id == tracer_ids%coccolithophore_nitrogen .or. &
+            tracer_id == tracer_ids%phaeocystis_nitrogen) then
+
+            init_value = tiny_chl / chl2N_max
+
+        else if (tracer_id == tracer_ids%phytoplankton_carbon .or. &
+                 tracer_id == tracer_ids%diatom_carbon .or. &
+                 tracer_id == tracer_ids%coccolithophore_carbon .or. &
+                 tracer_id == tracer_ids%phaeocystis_carbon) then
+
+            init_value = tiny_chl / chl2N_max / NCmax
+
+        else if (tracer_id == tracer_ids%phytoplankton_chlorophyll .or. &
+                 tracer_id == tracer_ids%diatom_chlorophyll .or. &
+                 tracer_id == tracer_ids%coccolithophore_chlorophyll .or. &
+                 tracer_id == tracer_ids%phaeocystis_chlorophyll) then
+
+            init_value = tiny_chl
+
+        else if (tracer_id == tracer_ids%detrital_nitrogen .or. &
+                 tracer_id == tracer_ids%detrital_carbon .or. &
+                 tracer_id == tracer_ids%heterotroph_nitrogen .or. &
+                 tracer_id == tracer_ids%dissolved_organic_nitrogen .or. &
+                 tracer_id == tracer_ids%dissolved_organic_carbon .or. &
+                 tracer_id == tracer_ids%detrital_silica .or. &
+                 tracer_id == tracer_ids%detrital_calcite .or. &
+                 tracer_id == tracer_ids%macrozooplankton_nitrogen .or. &
+                 tracer_id == tracer_ids%macrozooplankton_detrital_nitrogen .or. &
+                 tracer_id == tracer_ids%macrozooplankton_detrital_carbon .or. &
+                 tracer_id == tracer_ids%macrozooplankton_detrital_silica .or. &
+                 tracer_id == tracer_ids%macrozooplankton_detrital_calcite .or. &
+                 tracer_id == tracer_ids%microzooplankton_nitrogen) then
+
+            init_value = tiny
+
+        else if (tracer_id == tracer_ids%heterotroph_carbon .or. &
+                 tracer_id == tracer_ids%phytoplankton_calcite .or. &
+                 tracer_id == tracer_ids%macrozooplankton_carbon .or. &
+                 tracer_id == tracer_ids%microzooplankton_carbon) then
+
+            init_value = tiny * Redfield
+
+        else if (tracer_id == tracer_ids%diatom_silica) then
+
+            init_value = tiny_chl / chl2N_max_d / NCmax_d / SiCmax
+
+        end if
+    end function get_tracer_init_value
+
     subroutine initialize_tracer_data(num_tracers, tracers_info)
         use REcoM_glovar, only: tracers_info_type
         use REcoM_config, only: tiny, tiny_chl, chl2N_max, NCmax, chl2N_max_d, NCmax_d, SiCmax, &
