@@ -24,7 +24,7 @@ contains
 
         use recom_g_comm_auto, only: recom_exchange_nod
 
-        use recom_declarations, only: wp
+        use recom_declarations, only: wp, tracer_ids
         use recom_glovar, only: Benthos, Benthos_tr, SinkFlx_tr
 
         use recom_config, only: allow_var_sinking, benthos_num, bottflx_num, ciso, Vdet, VPhy, &
@@ -79,10 +79,10 @@ contains
             ! *******************************************************
 
             if (enable_3zoo2det) then
-                if (tracer_id == 1025 .or. & !idetz2n
-                        tracer_id == 1026 .or. & !idetz2c
-                        tracer_id == 1027 .or. & !idetz2si
-                        tracer_id == 1028) then !idetz2calc
+                if (tracer_id == tracer_ids%macrozooplankton_detrital_nitrogen .or. & !idetz2n
+                    tracer_id == tracer_ids%macrozooplankton_detrital_carbon .or. & !idetz2c
+                    tracer_id == tracer_ids%macrozooplankton_detrital_silica .or. & !idetz2si
+                    tracer_id == tracer_ids%macrozooplankton_detrital_calcite) then !idetz2calc
                     Vben = VDet_zoo2
                 end if
             end if
@@ -108,10 +108,10 @@ contains
             end do
 
             !! * Particulate Organic Nitrogen *
-            if (tracer_id == 1004 .or. & !iphyn
-                    tracer_id == 1007 .or. & !idetn
-                    tracer_id == 1013 .or. & !idian
-                    tracer_id == 1025) then !idetz2n
+            if (tracer_id == tracer_ids%phytoplankton_nitrogen .or. & !iphyn
+                tracer_id == tracer_ids%detrital_nitrogen .or. & !idetn
+                tracer_id == tracer_ids%diatom_nitrogen .or. & !idian
+                tracer_id == tracer_ids%macrozooplankton_detrital_nitrogen) then !idetz2n
                 Benthos(n, 1) = Benthos(n, 1) + add_benthos_2d(n) ![mmol]
 
                 if (use_MEDUSA) then
@@ -131,10 +131,10 @@ contains
             end if
 
             !! * Particulate Organic Carbon *
-            if (tracer_id == 1005 .or. & !iphyc
-                    tracer_id == 1008 .or. & !idetc
-                    tracer_id == 1014 .or. & !idiac
-                    tracer_id == 1026) then !idetz2c
+            if (tracer_id == tracer_ids%phytoplankton_carbon .or. & !iphyc
+                tracer_id == tracer_ids%detrital_carbon .or. & !idetc
+                tracer_id == tracer_ids%diatom_carbon .or. & !idiac
+                tracer_id == tracer_ids%macrozooplankton_detrital_carbon) then !idetz2c
                 Benthos(n, 2) = Benthos(n, 2) + add_benthos_2d(n)
 
                 if (use_MEDUSA) then
@@ -152,9 +152,9 @@ contains
             end if
 
             !! *Particulate Organic Silicon *
-            if (tracer_id == 1016 .or. & !idiasi
-                    tracer_id == 1017 .or. & !idetsi
-                    tracer_id == 1027) then !idetz2si
+            if (tracer_id == tracer_ids%diatom_silica .or. & !idiasi
+                    tracer_id == tracer_ids%detrital_silica .or. & !idetsi
+                    tracer_id == tracer_ids%macrozooplankton_detrital_silica) then !idetz2si
                 Benthos(n, 3) = Benthos(n, 3) + add_benthos_2d(n)
 
                 if (use_MEDUSA) then
@@ -172,9 +172,9 @@ contains
             end if
 
             !! * Cal *
-            if (tracer_id == 1020 .or. & !iphycal
-                    tracer_id == 1021 .or. & !idetcal
-                    tracer_id == 1028) then !idetz2cal
+            if (tracer_id == tracer_ids%phytoplankton_calcite .or. & !iphycal
+                    tracer_id == tracer_ids%detrital_calcite .or. & !idetcal
+                    tracer_id == tracer_ids%macrozooplankton_detrital_calcite) then !idetz2cal
                 Benthos(n, 4) = Benthos(n, 4) + add_benthos_2d(n)
 
                 if (use_MEDUSA) then
@@ -301,7 +301,7 @@ contains
         ! Remineralization from benthos
         ! bottom_flux
 
-        use recom_declarations, only: wp
+        use recom_declarations, only: wp, tracer_ids
         use recom_glovar, only: GloSed, glodecayBenthos
         use recom_config, only: ciso, use_MEDUSA, sedflx_num, redO2C, Fe2N_benthos
 
@@ -434,7 +434,7 @@ contains
             tracer_id, tracer_data_values, myDim_nod2d, vert_sink, dt)
         ! Sinking in water column
 
-        use REcoM_declarations, only: wp
+        use REcoM_declarations, only: wp, tracer_ids
 
         use REcoM_GloVar, only: sinkvel1_tr, sinkvel2_tr, scaling_visc_3D, scaling_density1_3D, &
             scaling_density2_3D
@@ -482,41 +482,41 @@ contains
         ! Groups tracers by functional type and assigns corresponding velocity
 
         ! Detritus tracers (nitrogen, carbon, silicate, calcite)
-        if (tracer_id == 1007 .or. & ! idetn
-                tracer_id == 1008 .or. & ! idetc
-                tracer_id == 1017 .or. & ! idetsi
-                tracer_id == 1021) then ! idetcal
+        if (tracer_id == tracer_ids%detrital_nitrogen .or. & ! idetn
+                tracer_id == tracer_ids%detrital_carbon .or. & ! idetc
+                tracer_id == tracer_ids%detrital_silica .or. & ! idetsi
+                tracer_id == tracer_ids%detrital_calcite) then ! idetcal
             Vsink = VDet
 
             ! Phytoplankton tracers (nitrogen, carbon, chlorophyll)
-        elseif (tracer_id == 1004 .or. & ! iphyn
-                    tracer_id == 1005 .or. & ! iphyc
-                    tracer_id == 1006) then ! ipchl
+        elseif (tracer_id == tracer_ids%phytoplankton_nitrogen .or. & ! iphyn
+                    tracer_id == tracer_ids%phytoplankton_carbon .or. & ! iphyc
+                    tracer_id == tracer_ids%phytoplankton_chlorophyll) then ! ipchl
             Vsink = VPhy
 
             ! Diatom tracers (nitrogen, carbon, silicate, chlorophyll)
-        elseif (tracer_id == 1013 .or. & ! idian
-                    tracer_id == 1014 .or. & ! idiac
-                    tracer_id == 1016 .or. & ! idiasi
-                    tracer_id == 1015) then ! idchl
+        elseif (tracer_id == tracer_ids%diatom_nitrogen .or. & ! idian
+                    tracer_id == tracer_ids%diatom_carbon .or. & ! idiac
+                    tracer_id == tracer_ids%diatom_silica .or. & ! idiasi
+                    tracer_id == tracer_ids%diatom_chlorophyll) then ! idchl
             Vsink = VDia
 
             ! Coccolithophore tracers (nitrogen, carbon, chlorophyll)
         elseif (enable_coccos .and. &
-                    (tracer_id == 1029 .or. & ! icocn
-                    tracer_id == 1030 .or. & ! icocc
-                    tracer_id == 1031)) then ! icchl
+                    (tracer_id == tracer_ids%coccolithophore_nitrogen .or. & ! icocn
+                    tracer_id == tracer_ids%coccolithophore_carbon .or. & ! icocc
+                    tracer_id == tracer_ids%coccolithophore_chlorophyll)) then ! icchl
             Vsink = VCocco
 
             ! Phaeocystis tracers (nitrogen, carbon, chlorophyll)
         elseif (enable_coccos .and. &
-                    (tracer_id == 1032 .or. & ! iphan
-                    tracer_id == 1033 .or. & ! iphac
-                    tracer_id == 1034)) then ! iphachl
+                    (tracer_id == tracer_ids%phaeocystis_nitrogen .or. & ! iphan
+                    tracer_id == tracer_ids%phaeocystis_carbon .or. & ! iphac
+                    tracer_id == tracer_ids%phaeocystis_chlorophyll)) then ! iphachl
             Vsink = VPhaeo
 
             ! Phytoplankton calcite tracer (special case)
-        elseif (tracer_id == 1020) then ! iphycal
+        elseif (tracer_id == tracer_ids%phytoplankton_calcite) then ! iphycal
             if (enable_coccos) then
                 Vsink = VCocco
             else
@@ -525,10 +525,10 @@ contains
 
             ! Zooplankton-2 detritus tracers (nitrogen, carbon, silicate, calcite)
         elseif (enable_3zoo2det .and. &
-                    (tracer_id == 1025 .or. & ! idetz2n
-                    tracer_id == 1026 .or. & ! idetz2c
-                    tracer_id == 1027 .or. & ! idetz2si
-                    tracer_id == 1028)) then ! idetz2calc
+                (tracer_id == tracer_ids%macrozooplankton_detrital_nitrogen .or. & !idetz2n
+                 tracer_id == tracer_ids%macrozooplankton_detrital_carbon .or. & !idetz2c
+                 tracer_id == tracer_ids%macrozooplankton_detrital_silica .or. & !idetz2si
+                 tracer_id == tracer_ids%macrozooplankton_detrital_calcite)) then !idetz2calc
             Vsink = VDet_zoo2
 
         end if
@@ -562,10 +562,10 @@ contains
                             ! Apply ballasting on slow sinking detritus
                             !if (any(recom_sinking_tracer_id == tracer_id(tr_num))) then
 
-                            if (tracer_id == 1007 .or. & !idetn
-                                    tracer_id == 1008 .or. & !idetc
-                                    tracer_id == 1017 .or. & !idetsi
-                                    tracer_id == 1021) then !idetcal
+                            if (tracer_id == tracer_ids%detrital_nitrogen .or. & !idetn
+                                    tracer_id == tracer_ids%detrital_carbon .or. & !idetc
+                                    tracer_id == tracer_ids%detrital_silica .or. & !idetsi
+                                    tracer_id == tracer_ids%detrital_calcite) then !idetcal
                                 Wvel_flux(nz) = w_ref1 * scaling_density1_3D(nz, n) &
                                         * scaling_visc_3D(nz, n)
 
@@ -584,10 +584,10 @@ contains
 
                     !! ---- We assume constant sinking for second detritus
                     if (enable_3zoo2det .and. &
-                            tracer_id == 1025 .or. & !idetz2n
-                            tracer_id == 1026 .or. & !idetz2c
-                            tracer_id == 1027 .or. & !idetz2si
-                            tracer_id == 1028) then !idetz2calc
+                            tracer_id == tracer_ids%macrozooplankton_detrital_nitrogen .or. & !idetz2n
+                            tracer_id == tracer_ids%macrozooplankton_detrital_carbon .or. & !idetz2c
+                            tracer_id == tracer_ids%macrozooplankton_detrital_silica .or. & !idetz2si
+                            tracer_id == tracer_ids%macrozooplankton_detrital_calcite) then !idetz2calc
                         Wvel_flux(nz) = -VDet_zoo2 / SecondsPerDay
 
                         if (use_ballasting) then
@@ -608,9 +608,11 @@ contains
                     end if
 
                     !-1.0d0/SecondsPerDay  !idetcal
-                    if (tracer_id == 1021) Sinkvel1_tr(nz, n, tr_num) = Wvel_flux(nz)
+                    if (tracer_id == tracer_ids%detrital_calcite) Sinkvel1_tr(nz, n, tr_num) = Wvel_flux(nz)
                     if (enable_3zoo2det .and. &
-                        tracer_id == 1028) Sinkvel2_tr(nz, n, tr_num) = Wvel_flux(nz) !idetz2calc
+                        tracer_id == tracer_ids%macrozooplankton_detrital_calcite) then
+                        Sinkvel2_tr(nz, n, tr_num) = Wvel_flux(nz) !idetz2calc
+                    end if
 
                 end do
 
@@ -828,7 +830,7 @@ contains
 
         use recom_config, only: enable_3zoo2det, rho_CaCO3, rho_opal, rho_POC, rho_PON, tiny
         use recom_glovar, only: tracers_info_type, rho_particle1, rho_particle2
-        use recom_declarations, only: wp
+        use recom_declarations, only: wp, tracer_ids
 
         implicit none
 
@@ -865,14 +867,19 @@ contains
 
         ! Below guarantees non-negative tracer field
         do tr_num = 1, num_tracers
-            if (tracers_info%ids(tr_num) == 1008) b1 = max(tiny, tracers_info%data_pointers(tr_num)&
-                    %tracer_data(:, :)) !idetc      ! [mmol m-3] detritus carbon
-            if (tracers_info%ids(tr_num) == 1007) b2 = max(tiny, tracers_info%data_pointers(tr_num)&
-                    %tracer_data(:, :)) !idetn      ! [mmol m-3] detritus nitrogen
-            if (tracers_info%ids(tr_num) == 1017) b3 = max(tiny, tracers_info%data_pointers(tr_num)&
-                    %tracer_data(:, :)) !idetsi     ! [mmol m-3] detritus Si
-            if (tracers_info%ids(tr_num) == 1021) b4 = max(tiny, tracers_info%data_pointers(tr_num)&
-                    %tracer_data(:, :)) !idetcal    ! [mmol m-3] detritus CaCO3
+            if (tracers_info%ids(tr_num) == tracer_ids%detrital_carbon) then
+                !idetc      ! [mmol m-3] detritus carbon
+                b1 = max(tiny, tracers_info%data_pointers(tr_num)%tracer_data(:, :))
+            else if (tracers_info%ids(tr_num) == tracer_ids%detrital_nitrogen) then
+                !idetn      ! [mmol m-3] detritus nitrogen
+                b2 = max(tiny, tracers_info%data_pointers(tr_num)%tracer_data(:, :))
+            else if (tracers_info%ids(tr_num) == tracer_ids%detrital_silica) then
+                !idetsi     ! [mmol m-3] detritus Si
+                b3 = max(tiny, tracers_info%data_pointers(tr_num)%tracer_data(:, :))
+            else if (tracers_info%ids(tr_num) == tracer_ids%detrital_calcite) then
+                !idetcal    ! [mmol m-3] detritus CaCO3
+                b4 = max(tiny, tracers_info%data_pointers(tr_num)%tracer_data(:, :))
+            end if
         end do
 
         do row = 1, myDim_nod2d
@@ -897,14 +904,19 @@ contains
             b4 = 0.0
             aux = 0.0
             do tr_num = 1, num_tracers
-                if (tracers_info%ids(tr_num) == 1026) b1 = max(tiny, tracers_info%data_pointers(&
-                        tr_num)%tracer_data(:, :)) !idetz2c
-                if (tracers_info%ids(tr_num) == 1025) b2 = max(tiny, tracers_info%data_pointers(&
-                        tr_num)%tracer_data(:, :)) !idetz2n
-                if (tracers_info%ids(tr_num) == 1027) b3 = max(tiny, tracers_info%data_pointers(&
-                        tr_num)%tracer_data(:, :)) !idetz2si
-                if (tracers_info%ids(tr_num) == 1028) b4 = max(tiny, tracers_info%data_pointers(&
-                        tr_num)%tracer_data(:, :)) !idetz2calc
+                if (tracers_info%ids(tr_num) == tracer_ids%macrozooplankton_detrital_carbon) then
+                    !idetz2c
+                    b1 = max(tiny, tracers_info%data_pointers(tr_num)%tracer_data(:, :))
+                else if (tracers_info%ids(tr_num) == tracer_ids%macrozooplankton_detrital_nitrogen) then
+                    !idetz2n
+                    b2 = max(tiny, tracers_info%data_pointers(tr_num)%tracer_data(:, :))
+                else if (tracers_info%ids(tr_num) == tracer_ids%macrozooplankton_detrital_silica) then
+                    !idetz2si
+                    b3 = max(tiny, tracers_info%data_pointers(tr_num)%tracer_data(:, :))
+                else if (tracers_info%ids(tr_num) == tracer_ids%macrozooplankton_detrital_calcite) then
+                    !idetz2calc
+                    b4 = max(tiny, tracers_info%data_pointers(tr_num)%tracer_data(:, :))
+                end if
             end do
 
             do row = 1, myDim_nod2d + eDim_nod2D ! myDim is sufficient
