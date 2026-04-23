@@ -341,6 +341,63 @@ module REcoM_declarations
     real(kind=wp) :: is_3zoo2det
     real(kind=wp) :: is_coccos
 
+    type :: recom_tracer_ids
+
+        ! --- Small Phytoplankton
+        integer :: phytoplankton_nitrogen
+        integer :: phytoplankton_carbon
+        integer :: phytoplankton_chlorophyll
+
+        ! --- Detritus (Non-living organic matter) ---
+        integer :: detrital_nitrogen
+        integer :: detrital_carbon
+
+        ! --- Mesozooplankton (Heterotrophs) ---
+        integer :: heterotroph_nitrogen
+        integer :: heterotroph_carbon
+
+        ! --- Dissolved Organic Matter ---
+        integer :: dissolved_organic_nitrogen
+        integer :: dissolved_organic_carbon
+
+        ! --- Diatoms ---
+        integer :: diatom_nitrogen
+        integer :: diatom_carbon
+        integer :: diatom_chlorophyll
+        integer :: diatom_silica
+
+        ! --- Detrital Silica ---
+        integer :: detrital_silica
+
+        ! --- --- Iron (micronutrient) ---
+        integer :: iron
+
+        ! --- Calcium Carbonate (Calcite) ---
+        integer :: phytoplankton_calcite
+        integer :: detrital_calcite
+
+        ! --- 3zoo2det extra tracers ---
+        integer :: macrozooplankton_nitrogen
+        integer :: macrozooplankton_carbon
+        integer :: macrozooplankton_detrital_nitrogen
+        integer :: macrozooplankton_detrital_carbon
+        integer :: macrozooplankton_detrital_silica
+        integer :: macrozooplankton_detrital_calcite
+        integer :: microzooplankton_nitrogen
+        integer :: microzooplankton_carbon
+
+        ! --- coccos extra tracers ---
+        integer :: coccolithophore_nitrogen
+        integer :: coccolithophore_carbon
+        integer :: coccolithophore_chlorophyll
+        integer :: phaeocystis_nitrogen
+        integer :: phaeocystis_carbon
+        integer :: phaeocystis_chlorophyll
+
+    end type recom_tracer_ids
+
+    type(recom_tracer_ids) :: tracer_ids
+
 end module REcoM_declarations
 
 !
