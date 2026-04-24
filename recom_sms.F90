@@ -2151,97 +2151,28 @@ contains
                 !-------------------------------------------------------------------------------
 
                 !-------------------------------------------------------------------------------
-                ! Small Phytoplankton Photosynthesis
+                ! Small Phytoplankton and Diatom Photosynthesis
                 !-------------------------------------------------------------------------------
-
-                if (pMax < tiny .or. ieee_is_nan(PARave) .or. ieee_is_nan(CHL2C)) then
-                    ! No photosynthesis in darkness or under invalid conditions
-                    Cphot = zero
-                else
-                    ! Calculate photosynthesis using exponential P-I curve
-                    ! Model saturates at high light (no photoinhibition)
-                    Cphot = pMax * (1.0d0 - exp(-alfa * Chl2C * PARave / pMax))
-
-                    ! Store light limitation factor for diagnostics
-                    ! Ratio of actual to maximum rate indicates light limitation severity
-                    VTCphotLigLim_phyto(k) = Cphot / pMax
-
-                    ! Apply CO2 limitation if ocean acidification sensitivity is enabled
-                    if (CO2lim) Cphot = Cphot * PhyCO2
-                end if
-
-                ! Ensure non-negative values (numerical safety)
-                if (Cphot < tiny) Cphot = zero
-
-                ! Store final photosynthesis rate for diagnostics and output
+                call calculate_photosynthesis_rate(pMax, PARave, Chl2C, PhyCO2, alfa, Cphot, &
+                        VTCphotLigLim_phyto(k))
+                call calculate_photosynthesis_rate(pMax_dia, PARave, Chl2C_dia, DiaCO2, &
+                        alfa_d, Cphot_dia, VTCphotLigLim_diatoms(k))
+                !! Store photosynthesis rate for diagnostics and output
                 VTCphot_phyto(k) = Cphot
-
-                !-------------------------------------------------------------------------------
-                ! Diatom Photosynthesis
-                !-------------------------------------------------------------------------------
-
-                if (pMax_dia < tiny .or. ieee_is_nan(PARave) .or. ieee_is_nan(CHL2C_dia)) then
-                    Cphot_dia = zero
-                else
-                    ! Diatom P-I curve with species-specific parameters
-                    Cphot_dia = pMax_dia * (1.0 - exp(-alfa_d * Chl2C_dia * PARave / pMax_dia))
-
-                    ! Store light limitation diagnostic
-                    VTCphotLigLim_diatoms(k) = Cphot_dia / pMax_dia
-
-                    ! Apply CO2 limitation
-                    if (CO2lim) Cphot_dia = Cphot_dia * DiaCO2
-                end if
-
-                if (Cphot_dia < tiny) Cphot_dia = zero
                 VTCphot_diatoms(k) = Cphot_dia
 
-                !-------------------------------------------------------------------------------
-                ! Coccolithophore Photosynthesis (Optional)
-                !-------------------------------------------------------------------------------
-
                 if (enable_coccos) then
+                    !-------------------------------------------------------------------------------
+                    ! Coccolithophore and Phaeocystis Photosynthesis (Optional)
+                    !-------------------------------------------------------------------------------
+                    call calculate_photosynthesis_rate(pMax_cocco, PARave, Chl2C_cocco, CoccoCO2, &
+                            alfa_c, Cphot_cocco, VTCphotLigLim_cocco(k))
+                    call calculate_photosynthesis_rate(pMax_phaeo, PARave, Chl2C_phaeo, PhaeoCO2, &
+                            alfa_p, Cphot_phaeo, VTCphotLigLim_phaeo(k))
 
-                    if (pMax_cocco < tiny .or. ieee_is_nan(PARave) .or. ieee_is_nan(CHL2C_cocco)) &
-                            then
-                        Cphot_cocco = zero
-                    else
-                        ! Coccolithophore P-I curve
-                        Cphot_cocco = pMax_cocco &
-                                * (1.0 - exp(-alfa_c * Chl2C_cocco * PARave / pMax_cocco))
-
-                        ! Store light limitation diagnostic
-                        VTCphotLigLim_cocco(k) = Cphot_cocco / pMax_cocco
-
-                        ! Apply CO2 limitation
-                        if (CO2lim) Cphot_cocco = Cphot_cocco * CoccoCO2
-                    end if
-
-                    if (Cphot_cocco < tiny) Cphot_cocco = zero
+                    !! Store photosynthesis rate for diagnostics and output
                     VTCphot_cocco(k) = Cphot_cocco
-
-                    !---------------------------------------------------------------------------
-                    ! Phaeocystis Photosynthesis (Optional)
-                    !---------------------------------------------------------------------------
-
-                    if (pMax_phaeo < tiny .or. ieee_is_nan(PARave) .or. ieee_is_nan(CHL2C_phaeo)) &
-                            then
-                        Cphot_phaeo = zero
-                    else
-                        ! Phaeocystis P-I curve
-                        Cphot_phaeo = pMax_phaeo &
-                                * (1.0 - exp(-alfa_p * Chl2C_phaeo * PARave / pMax_phaeo))
-
-                        ! Store light limitation diagnostic
-                        VTCphotLigLim_phaeo(k) = Cphot_phaeo / pMax_phaeo
-
-                        ! Apply CO2 limitation
-                        if (CO2lim) Cphot_phaeo = Cphot_phaeo * PhaeoCO2
-                    end if
-
-                    if (Cphot_phaeo < tiny) Cphot_phaeo = zero
                     VTCphot_phaeo(k) = Cphot_phaeo
-
                 end if
 
                 !===============================================================================
@@ -7595,6 +7526,49 @@ contains
         end do ! Main time loop ends
 
     end subroutine REcoM_sms
+
+    subroutine calculate_photosynthesis_rate(maximum_photosyntesis_rate, &
+            layer_available_radiation, &
+            chlorophyll_carbon_quota, &
+            co2_limitation_factor, &
+            slope, &
+            photosynthesis_rate, &
+            light_limitation_factor)
+
+        use recom_declarations, only: wp
+        use recom_config, only: tiny, zero, co2lim
+        use ieee_arithmetic, only: ieee_is_nan
+
+        implicit none
+
+        real(kind=wp), intent(in) :: maximum_photosyntesis_rate, layer_available_radiation
+        real(kind=wp), intent(in) :: chlorophyll_carbon_quota, co2_limitation_factor, slope
+        real(kind=wp), intent(out) :: photosynthesis_rate, light_limitation_factor
+
+        ! No photosynthesis in darkness or under invalid conditions
+        if (maximum_photosyntesis_rate < tiny .or. &
+                ieee_is_nan(layer_available_radiation) .or. &
+                ieee_is_nan(chlorophyll_carbon_quota)) then
+            photosynthesis_rate = zero
+        else
+            ! Calculate photosynthesis using exponential P-I curve
+            ! Model saturates at high light (no photoinhibition)
+            photosynthesis_rate = maximum_photosyntesis_rate * &
+                    (1.0d0 - exp(-slope * chlorophyll_carbon_quota * &
+                    layer_available_radiation / &
+                    maximum_photosyntesis_rate))
+
+            ! Store light limitation factor for diagnostics
+            ! Ratio of actual to maximum rate indicates light limitation severity
+            light_limitation_factor = photosynthesis_rate / maximum_photosyntesis_rate
+
+            ! Apply CO2 limitation if ocean acidification sensitivity is enabled
+            if (CO2lim) photosynthesis_rate = photosynthesis_rate * co2_limitation_factor
+        end if
+
+        ! Ensure non-negative values (numerical safety)
+        if (photosynthesis_rate < tiny) photosynthesis_rate = zero
+    end subroutine calculate_photosynthesis_rate
 
     !-------------------------------------------------------------------------------
     ! Function for calculating limiter
