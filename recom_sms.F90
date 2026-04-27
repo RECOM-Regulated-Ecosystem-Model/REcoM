@@ -2232,43 +2232,15 @@ contains
                     ! Small Phytoplankton Chlorophyll Loss
                     !---------------------------------------------------------------------------
 
-                    if (pMax < tiny .or. ieee_is_nan(PARave) .or. ieee_is_nan(CHL2C_plast)) then
-                        ! Minimum degradation in darkness (10% of base rate)
-                        KOchl = deg_Chl * 0.1d0
-                    else
-                        ! Saturation model: degradation increases with light
-                        ! Uses same exponential form as P-I curve
-                        KOchl = deg_Chl * (real(one) - exp(-alfa * CHL2C_plast * PARave / pMax))
-
-                        !< Alternative linear model (commented out):
-                        !< Degradation directly proportional to light intensity
-                        !KOchl = deg_Chl * CHL2C_plast * PARave
-
-                        ! Ensure minimum degradation rate (10% of base)
-                        KOchl = max((deg_Chl * 0.1d0), KOchl)
-
-                        !< Safety constraint (commented out):
-                        !< Caps maximum degradation at 0.3 day-1
-                        !KOchl = min(KOchl, 0.3d0)
-                    end if
+                    call calculate_chlorophyll_degradation(pMax, PARave, CHL2C_plast, &
+                            deg_Chl, alfa, KOchl)
 
                     !---------------------------------------------------------------------------
                     ! Diatom Chlorophyll Loss
                     !---------------------------------------------------------------------------
 
-                    if (pMax_dia < tiny .or. ieee_is_nan(PARave) .or. &
-                            ieee_is_nan(CHL2C_plast_dia)) then
-                        KOchl_dia = deg_Chl_d * 0.1d0
-                    else
-                        ! Diatom-specific photodamage model
-                        KOchl_dia = deg_Chl_d &
-                                * (real(one) - exp(-alfa_d * CHL2C_plast_dia * PARave / pMax_dia))
-
-                        !KOchl_dia = deg_Chl_d * CHL2C_plast_dia * PARave
-
-                        KOchl_dia = max((deg_Chl_d * 0.1d0), KOchl_dia)
-                        !KOchl_dia = min(KOchl_dia, 0.3d0)
-                    end if
+                    call calculate_chlorophyll_degradation(pMax_dia, PARave, CHL2C_plast_dia, &
+                            deg_Chl_d, alfa_d, KOchl_dia)
 
                     if (enable_coccos) then
 
@@ -2276,39 +2248,17 @@ contains
                         ! Coccolithophore Chlorophyll Loss
                         !-----------------------------------------------------------------------
 
-                        if (pMax_cocco < tiny .or. ieee_is_nan(PARave) .or. &
-                                ieee_is_nan(CHL2C_plast_cocco)) then
-                            KOchl_cocco = deg_Chl_c * 0.1d0
-                        else
-                            ! Coccolithophore-specific photodamage model
-                            KOchl_cocco = deg_Chl_c &
-                                    * (real(one) &
-                                    - exp(-alfa_c * CHL2C_plast_cocco * PARave / pMax_cocco))
-
-                            !KOchl_cocco = deg_Chl_c * CHL2C_plast_cocco * PARave
-
-                            KOchl_cocco = max((deg_Chl_c * 0.1d0), KOchl_cocco)
-                            !KOchl_cocco = min(KOchl_cocco, 0.3d0)
-                        end if
+                        call calculate_chlorophyll_degradation(pMax_cocco, PARave, &
+                                CHL2C_plast_cocco, deg_Chl_c, &
+                                alfa_c, KOchl_cocco)
 
                         !-----------------------------------------------------------------------
                         ! Phaeocystis Chlorophyll Loss
                         !-----------------------------------------------------------------------
 
-                        if (pMax_phaeo < tiny .or. ieee_is_nan(PARave) .or. &
-                                ieee_is_nan(CHL2C_plast_phaeo)) then
-                            KOchl_phaeo = deg_Chl_p * 0.1d0
-                        else
-                            ! Phaeocystis-specific photodamage model
-                            KOchl_phaeo = deg_Chl_p &
-                                    * (real(one) &
-                                    - exp(-alfa_p * CHL2C_plast_phaeo * PARave / pMax_phaeo))
-
-                            !KOchl_phaeo = deg_Chl_p * CHL2C_plast_phaeo * PARave
-
-                            KOchl_phaeo = max((deg_Chl_p * 0.1d0), KOchl_phaeo)
-                            !KOchl_phaeo = min(KOchl_phaeo, 0.3d0)
-                        end if
+                        call calculate_chlorophyll_degradation(pMax_phaeo, PARave, &
+                                CHL2C_plast_phaeo, deg_Chl_p, &
+                                alfa_p, KOchl_phaeo)
 
                     end if ! enable_coccos
 
@@ -7526,6 +7476,41 @@ contains
         end do ! Main time loop ends
 
     end subroutine REcoM_sms
+
+    subroutine calculate_chlorophyll_degradation(maximum_photosynthesis_rate, &
+            layer_available_radiation, &
+            plastidic_chl_carbon_quota, &
+            base_degradation_rate, &
+            slope, &
+            chlorophyll_loss_rate)
+
+        use recom_declarations, only: wp
+        use recom_config, only: tiny, one
+        use ieee_arithmetic, only: ieee_is_nan
+
+        implicit none
+
+        real(kind=wp), intent(in) :: maximum_photosynthesis_rate
+        real(kind=wp), intent(in) :: layer_available_radiation
+        real(kind=wp), intent(in) :: plastidic_chl_carbon_quota
+        real(kind=wp), intent(in) :: base_degradation_rate
+        real(kind=wp), intent(in) :: slope
+        real(kind=wp), intent(out) :: chlorophyll_loss_rate
+
+        ! Keep a baseline degradation in darkness/invalid conditions.
+        if (maximum_photosynthesis_rate < tiny .or. &
+                ieee_is_nan(layer_available_radiation) .or. &
+                ieee_is_nan(plastidic_chl_carbon_quota)) then
+            chlorophyll_loss_rate = base_degradation_rate * 0.1d0
+        else
+            chlorophyll_loss_rate = base_degradation_rate * &
+                    (real(one) - exp(-slope * plastidic_chl_carbon_quota * &
+                    layer_available_radiation / &
+                    maximum_photosynthesis_rate))
+
+            chlorophyll_loss_rate = max((base_degradation_rate * 0.1d0), chlorophyll_loss_rate)
+        end if
+    end subroutine calculate_chlorophyll_degradation
 
     subroutine calculate_photosynthesis_rate(maximum_photosyntesis_rate, &
             layer_available_radiation, &
