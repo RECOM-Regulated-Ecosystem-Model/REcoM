@@ -1528,6 +1528,11 @@ contains
                 ! MOCSY convention: depth is positive (e.g., 100 m)
                 dpos(1) = -zF(k)
 
+                ! Calculate update frequencies based on model time step
+                mocsy_step_per_day = 1.0 / dt_b
+                logfile_outfreq_7 = int(mocsy_step_per_day * 7.0) ! Steps in 7 days
+                logfile_outfreq_30 = int(mocsy_step_per_day * 30.0) ! Steps in 30 days
+
                 !===============================================================================
                 ! INITIAL CARBONATE SYSTEM CALCULATION
                 !===============================================================================
@@ -1570,31 +1575,6 @@ contains
                 !   optS='Sprc'      : Salinity on practical scale
                 !-------------------------------------------------------------------------------
 
-                if (mstep == 1) then
-
-                    ! Call MOCSY to solve carbonate system
-                    ! Uses DIC and Alkalinity as input pair (most common in ocean models)
-                    call vars_sprac(ph_depth, pco2_depth, fco2_depth, co2_depth, hco3_depth, &
-                            co3_depth, &
-                            OmegaA_depth, OmegaC_depth, kspc_depth, BetaD_depth, &
-                            rhoSW_depth, p_depth, tempis_depth, &
-                            REcoM_T_depth, REcoM_S_depth, REcoM_Alk_depth, REcoM_DIC_depth, &
-                            REcoM_Si_depth, REcoM_Phos_depth, Patm_depth, dpos, Latd, Nmocsy, &
-                            optCON='mol/m3', optT='Tpot   ', optP='m ', optB='u74', &
-                            optK1K2='l  ', optKf='dg', optGAS='Pinsitu', optS='Sprc')
-
-                    ! Store results in water column arrays for use in biogeochemical calculations
-                    CO2_watercolumn(k) = co2_depth(1)
-                    pH_watercolumn(k) = ph_depth(1)
-                    pCO2_watercolumn(k) = pco2_depth(1)
-                    HCO3_watercolumn(k) = hco3_depth(1)
-                    CO3_watercolumn(k) = co3_depth(1)
-                    OmegaC_watercolumn(k) = OmegaC_depth(1)
-                    kspc_watercolumn(k) = kspc_depth(1)
-                    rhoSW_watercolumn(k) = rhoSW_depth(1)
-
-                end if
-
                 !===============================================================================
                 ! ADAPTIVE CARBONATE SYSTEM UPDATE FREQUENCY
                 !===============================================================================
@@ -1623,11 +1603,6 @@ contains
                 !   - Typical speedup: 4× faster than daily updates everywhere
                 !-------------------------------------------------------------------------------
 
-                ! Calculate update frequencies based on model time step
-                mocsy_step_per_day = 1.0 / dt_b
-                logfile_outfreq_7 = int(mocsy_step_per_day * 7.0) ! Steps in 7 days
-                logfile_outfreq_30 = int(mocsy_step_per_day * 30.0) ! Steps in 30 days
-
                 !===============================================================================
                 ! EUPHOTIC ZONE UPDATES (WEEKLY)
                 !===============================================================================
@@ -1646,50 +1621,30 @@ contains
                 !   - Reasonable computational cost
                 !-------------------------------------------------------------------------------
 
-                if (PARave > 0.01 * SurfSR .and. mod(mstep, logfile_outfreq_7) == 0) then
+                !===============================================================================
+                ! DEEP WATER UPDATES (MONTHLY)
+                !===============================================================================
+                ! Less frequent updates in dark deep waters where changes are slower.
+                ! Deep waters defined as PAR < 1% of surface irradiance.
+                !
+                ! Physical/Chemical Drivers:
+                !   - Slow remineralization of sinking organic matter
+                !   - Calcite dissolution (below saturation horizon)
+                !   - Mixing and advection
+                !   - No photosynthesis to drive rapid changes
+                !
+                ! Why 30-day updates?
+                !   - Changes occur on monthly to seasonal timescales
+                !   - Dominated by physical transport and slow remineralization
+                !   - Significant computational savings with minimal accuracy loss
+                !
+                ! Note: Below permanent pycnocline, even longer update intervals
+                !       could be justified (e.g., seasonal)
+                !-------------------------------------------------------------------------------
 
-                    ! Weekly updates in euphotic zone (high biological activity)
-                    call vars_sprac(ph_depth, pco2_depth, fco2_depth, co2_depth, hco3_depth, &
-                            co3_depth, &
-                            OmegaA_depth, OmegaC_depth, kspc_depth, BetaD_depth, &
-                            rhoSW_depth, p_depth, tempis_depth, &
-                            REcoM_T_depth, REcoM_S_depth, REcoM_Alk_depth, REcoM_DIC_depth, &
-                            REcoM_Si_depth, REcoM_Phos_depth, Patm_depth, dpos, Latd, Nmocsy, &
-                            optCON='mol/m3', optT='Tpot   ', optP='m ', optB='u74', &
-                            optK1K2='l  ', optKf='dg', optGAS='Pinsitu', optS='Sprc')
-
-                    ! Update water column arrays with new carbonate chemistry
-                    CO2_watercolumn(k) = co2_depth(1)
-                    pH_watercolumn(k) = ph_depth(1)
-                    pCO2_watercolumn(k) = pco2_depth(1)
-                    HCO3_watercolumn(k) = hco3_depth(1)
-                    CO3_watercolumn(k) = co3_depth(1)
-                    OmegaC_watercolumn(k) = OmegaC_depth(1)
-                    kspc_watercolumn(k) = kspc_depth(1)
-                    rhoSW_watercolumn(k) = rhoSW_depth(1)
-
-                    !===============================================================================
-                    ! DEEP WATER UPDATES (MONTHLY)
-                    !===============================================================================
-                    ! Less frequent updates in dark deep waters where changes are slower.
-                    ! Deep waters defined as PAR < 1% of surface irradiance.
-                    !
-                    ! Physical/Chemical Drivers:
-                    !   - Slow remineralization of sinking organic matter
-                    !   - Calcite dissolution (below saturation horizon)
-                    !   - Mixing and advection
-                    !   - No photosynthesis to drive rapid changes
-                    !
-                    ! Why 30-day updates?
-                    !   - Changes occur on monthly to seasonal timescales
-                    !   - Dominated by physical transport and slow remineralization
-                    !   - Significant computational savings with minimal accuracy loss
-                    !
-                    ! Note: Below permanent pycnocline, even longer update intervals
-                    !       could be justified (e.g., seasonal)
-                    !-------------------------------------------------------------------------------
-
-                elseif (PARave < 0.01 * SurfSR .and. mod(mstep, logfile_outfreq_30) == 0) then
+                if (mstep == 1 .or. &
+                        PARave > 0.01 * SurfSR .and. mod(mstep, logfile_outfreq_7) == 0 .or. &
+                        PARave < 0.01 * SurfSR .and. mod(mstep, logfile_outfreq_30) == 0) then
 
                     ! Monthly updates in deep waters (low biological activity)
                     call vars_sprac(ph_depth, pco2_depth, fco2_depth, co2_depth, hco3_depth, &
@@ -1710,7 +1665,6 @@ contains
                     OmegaC_watercolumn(k) = OmegaC_depth(1)
                     kspc_watercolumn(k) = kspc_depth(1)
                     rhoSW_watercolumn(k) = rhoSW_depth(1)
-
                 end if
 
                 !===============================================================================
