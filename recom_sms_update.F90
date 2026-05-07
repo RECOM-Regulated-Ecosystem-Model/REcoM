@@ -1,12 +1,12 @@
-module recom_update_sms
+module recom_sms_update
     implicit none
     private
 
-    public :: update_sms
+    public :: sms_update
 
 contains
 
-    subroutine update_sms(k, dt_b, dt, MPI_COMM_FESOM, sms, state, &
+    subroutine sms_update(k, dt_b, dt, MPI_COMM_FESOM, sms, state, &
             PhyN, PhyC, PhyChl, PhyCalc, &
             DiaN, DiaC, DiaChl, DiaSi, &
             CoccoN, CoccoC, CoccoChl, &
@@ -2537,6 +2537,5 @@ contains
 
         end if ! ciso
 
-    end subroutine update_sms
-
-end module recom_update_sms
+    end subroutine sms_update
+end module recom_sms_update

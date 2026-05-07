@@ -1,11 +1,11 @@
-module recom_init_sms
+module recom_sms_init
     implicit none
     private
-    public :: initialize_sms_variables
+    public :: sms_initialize_variables
 
 contains
 
-    subroutine initialize_sms_variables(n, k, state, sms, thick, Temp, Sali_depth, SurfSR, PAR, &
+    subroutine sms_initialize_variables(n, k, state, sms, thick, Temp, Sali_depth, SurfSR, PAR, &
             kappa, DIN, DIC, Alk, PhyN, PhyC, PhyChl, DetN, DetC, HetN, HetC, DON, EOC, DiaN, &
             DiaC, DiaChl, DiaSi, DetSi, Si, Fe, PhyCalc, DetCalc, FreeFe, O2, CoccoN, CoccoC, &
             CoccoChl, PhaeoN, PhaeoC, PhaeoChl, Zoo2N, Zoo2C, DetZ2N, DetZ2C, DetZ2Si, DetZ2Calc, &
@@ -1036,6 +1036,5 @@ contains
             kdzUpper = kdzLower ! Current cumulative depth for next layer
 
         end if
-    end subroutine initialize_sms_variables
-
-end module recom_init_sms
+    end subroutine sms_initialize_variables
+end module recom_sms_init
