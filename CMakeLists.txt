@@ -14,5 +14,5 @@ set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -ffree-line-length-none")
 add_compile_definitions(__recom)
 
 # Create the target library for REcoM and add its dependencies
-add_library(recom ${SOURCES})
+add_library(recom STATIC ${SOURCES})
 target_link_libraries(recom PUBLIC MPI::MPI_Fortran)
