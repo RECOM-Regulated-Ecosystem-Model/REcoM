@@ -584,10 +584,10 @@ contains
 
                     !! ---- We assume constant sinking for second detritus
                     if (enable_3zoo2det .and. &
-                            tracer_id == tracer_ids%macrozooplankton_detrital_nitrogen .or. & !idetz2n
-                            tracer_id == tracer_ids%macrozooplankton_detrital_carbon .or. & !idetz2c
-                            tracer_id == tracer_ids%macrozooplankton_detrital_silica .or. & !idetz2si
-                            tracer_id == tracer_ids%macrozooplankton_detrital_calcite) then !idetz2calc
+                        tracer_id == tracer_ids%macrozooplankton_detrital_nitrogen .or. & !idetz2n
+                        tracer_id == tracer_ids%macrozooplankton_detrital_carbon .or. & !idetz2c
+                        tracer_id == tracer_ids%macrozooplankton_detrital_silica .or. & !idetz2si
+                        tracer_id == tracer_ids%macrozooplankton_detrital_calcite) then !idetz2calc
                         Wvel_flux(nz) = -VDet_zoo2 / SecondsPerDay
 
                         if (use_ballasting) then
@@ -608,7 +608,10 @@ contains
                     end if
 
                     !-1.0d0/SecondsPerDay  !idetcal
-                    if (tracer_id == tracer_ids%detrital_calcite) Sinkvel1_tr(nz, n, tr_num) = Wvel_flux(nz)
+                    if (tracer_id == tracer_ids%detrital_calcite) then
+                        Sinkvel1_tr(nz, n, tr_num) = Wvel_flux(nz)
+                    end if
+
                     if (enable_3zoo2det .and. &
                         tracer_id == tracer_ids%macrozooplankton_detrital_calcite) then
                         Sinkvel2_tr(nz, n, tr_num) = Wvel_flux(nz) !idetz2calc
@@ -907,13 +910,16 @@ contains
                 if (tracers_info%ids(tr_num) == tracer_ids%macrozooplankton_detrital_carbon) then
                     !idetz2c
                     b1 = max(tiny, tracers_info%data_pointers(tr_num)%tracer_data(:, :))
-                else if (tracers_info%ids(tr_num) == tracer_ids%macrozooplankton_detrital_nitrogen) then
+                else if (tracers_info%ids(tr_num) == &
+                         tracer_ids%macrozooplankton_detrital_nitrogen) then
                     !idetz2n
                     b2 = max(tiny, tracers_info%data_pointers(tr_num)%tracer_data(:, :))
-                else if (tracers_info%ids(tr_num) == tracer_ids%macrozooplankton_detrital_silica) then
+                else if (tracers_info%ids(tr_num) == &
+                         tracer_ids%macrozooplankton_detrital_silica) then
                     !idetz2si
                     b3 = max(tiny, tracers_info%data_pointers(tr_num)%tracer_data(:, :))
-                else if (tracers_info%ids(tr_num) == tracer_ids%macrozooplankton_detrital_calcite) then
+                else if (tracers_info%ids(tr_num) == &
+                         tracer_ids%macrozooplankton_detrital_calcite) then
                     !idetz2calc
                     b4 = max(tiny, tracers_info%data_pointers(tr_num)%tracer_data(:, :))
                 end if
