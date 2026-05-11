@@ -1,6 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
 
-set(CMAKE_Fortran_COMPILER gfortran)
 project(REcoM LANGUAGES Fortran)
 find_package(MPI REQUIRED)
 
