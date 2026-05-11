@@ -75,9 +75,9 @@ contains
             if (tracer_id == tracer_ids%iron) then
 
                 tracers_info%data_pointers(i)%tracer_data(:, :) = &
-                    tracers_info%data_pointers(i)%tracer_data(:, :) * 1.e9
+                        tracers_info%data_pointers(i)%tracer_data(:, :) * 1.e9
 
-            ! Avoids tracers 1001, 1002, 1018 and 1022
+                ! Avoids tracers 1001, 1002, 1018 and 1022
             else if (tracer_id > 1003 .and. tracer_id /= 1018 .and. tracer_id /= 1022) then
                 tracers_info%data_pointers(i)%tracer_data(:, :) = get_tracer_init_value(tracer_id)
             end if
@@ -306,44 +306,44 @@ contains
 
         integer :: current_tracer_id, total_tracers
 
-        tracer_ids%phytoplankton_nitrogen     = 1004
-        tracer_ids%phytoplankton_carbon       = 1005
-        tracer_ids%phytoplankton_chlorophyll  = 1006
-        tracer_ids%detrital_nitrogen          = 1007
-        tracer_ids%detrital_carbon            = 1008
-        tracer_ids%heterotroph_nitrogen       = 1009
-        tracer_ids%heterotroph_carbon         = 1010
+        tracer_ids%phytoplankton_nitrogen = 1004
+        tracer_ids%phytoplankton_carbon = 1005
+        tracer_ids%phytoplankton_chlorophyll = 1006
+        tracer_ids%detrital_nitrogen = 1007
+        tracer_ids%detrital_carbon = 1008
+        tracer_ids%heterotroph_nitrogen = 1009
+        tracer_ids%heterotroph_carbon = 1010
         tracer_ids%dissolved_organic_nitrogen = 1011
-        tracer_ids%dissolved_organic_carbon   = 1012
-        tracer_ids%diatom_nitrogen            = 1013
-        tracer_ids%diatom_carbon              = 1014
-        tracer_ids%diatom_chlorophyll         = 1015
-        tracer_ids%diatom_silica              = 1016
-        tracer_ids%detrital_silica            = 1017
-        tracer_ids%iron                       = 1019
-        tracer_ids%phytoplankton_calcite      = 1020
-        tracer_ids%detrital_calcite           = 1021
+        tracer_ids%dissolved_organic_carbon = 1012
+        tracer_ids%diatom_nitrogen = 1013
+        tracer_ids%diatom_carbon = 1014
+        tracer_ids%diatom_chlorophyll = 1015
+        tracer_ids%diatom_silica = 1016
+        tracer_ids%detrital_silica = 1017
+        tracer_ids%iron = 1019
+        tracer_ids%phytoplankton_calcite = 1020
+        tracer_ids%detrital_calcite = 1021
 
         current_tracer_id = 1023
 
         if (enable_3zoo2det) then
             tracer_ids%macrozooplankton_nitrogen = current_tracer_id
-            tracer_ids%macrozooplankton_carbon = current_tracer_id            + 1
+            tracer_ids%macrozooplankton_carbon = current_tracer_id + 1
             tracer_ids%macrozooplankton_detrital_nitrogen = current_tracer_id + 2
-            tracer_ids%macrozooplankton_detrital_carbon = current_tracer_id   + 3
-            tracer_ids%macrozooplankton_detrital_silica = current_tracer_id   + 4
-            tracer_ids%macrozooplankton_detrital_calcite = current_tracer_id  + 5
+            tracer_ids%macrozooplankton_detrital_carbon = current_tracer_id + 3
+            tracer_ids%macrozooplankton_detrital_silica = current_tracer_id + 4
+            tracer_ids%macrozooplankton_detrital_calcite = current_tracer_id + 5
 
             current_tracer_id = current_tracer_id + 6
         end if
 
         if (enable_coccos) then
             tracer_ids%coccolithophore_nitrogen = current_tracer_id
-            tracer_ids%coccolithophore_carbon = current_tracer_id      + 1
+            tracer_ids%coccolithophore_carbon = current_tracer_id + 1
             tracer_ids%coccolithophore_chlorophyll = current_tracer_id + 2
-            tracer_ids%phaeocystis_nitrogen = current_tracer_id        + 3
-            tracer_ids%phaeocystis_carbon = current_tracer_id          + 4
-            tracer_ids%phaeocystis_chlorophyll = current_tracer_id     + 5
+            tracer_ids%phaeocystis_nitrogen = current_tracer_id + 3
+            tracer_ids%phaeocystis_carbon = current_tracer_id + 4
+            tracer_ids%phaeocystis_chlorophyll = current_tracer_id + 5
 
             current_tracer_id = current_tracer_id + 6
         end if
@@ -364,46 +364,46 @@ contains
         real(kind=wp) :: init_value
 
         if (tracer_id == tracer_ids%phytoplankton_nitrogen .or. &
-            tracer_id == tracer_ids%diatom_nitrogen .or. &
-            tracer_id == tracer_ids%coccolithophore_nitrogen .or. &
-            tracer_id == tracer_ids%phaeocystis_nitrogen) then
+                tracer_id == tracer_ids%diatom_nitrogen .or. &
+                tracer_id == tracer_ids%coccolithophore_nitrogen .or. &
+                tracer_id == tracer_ids%phaeocystis_nitrogen) then
 
             init_value = tiny_chl / chl2N_max
 
         else if (tracer_id == tracer_ids%phytoplankton_carbon .or. &
-                 tracer_id == tracer_ids%diatom_carbon .or. &
-                 tracer_id == tracer_ids%coccolithophore_carbon .or. &
-                 tracer_id == tracer_ids%phaeocystis_carbon) then
+                    tracer_id == tracer_ids%diatom_carbon .or. &
+                    tracer_id == tracer_ids%coccolithophore_carbon .or. &
+                    tracer_id == tracer_ids%phaeocystis_carbon) then
 
             init_value = tiny_chl / chl2N_max / NCmax
 
         else if (tracer_id == tracer_ids%phytoplankton_chlorophyll .or. &
-                 tracer_id == tracer_ids%diatom_chlorophyll .or. &
-                 tracer_id == tracer_ids%coccolithophore_chlorophyll .or. &
-                 tracer_id == tracer_ids%phaeocystis_chlorophyll) then
+                    tracer_id == tracer_ids%diatom_chlorophyll .or. &
+                    tracer_id == tracer_ids%coccolithophore_chlorophyll .or. &
+                    tracer_id == tracer_ids%phaeocystis_chlorophyll) then
 
             init_value = tiny_chl
 
         else if (tracer_id == tracer_ids%detrital_nitrogen .or. &
-                 tracer_id == tracer_ids%detrital_carbon .or. &
-                 tracer_id == tracer_ids%heterotroph_nitrogen .or. &
-                 tracer_id == tracer_ids%dissolved_organic_nitrogen .or. &
-                 tracer_id == tracer_ids%dissolved_organic_carbon .or. &
-                 tracer_id == tracer_ids%detrital_silica .or. &
-                 tracer_id == tracer_ids%detrital_calcite .or. &
-                 tracer_id == tracer_ids%macrozooplankton_nitrogen .or. &
-                 tracer_id == tracer_ids%macrozooplankton_detrital_nitrogen .or. &
-                 tracer_id == tracer_ids%macrozooplankton_detrital_carbon .or. &
-                 tracer_id == tracer_ids%macrozooplankton_detrital_silica .or. &
-                 tracer_id == tracer_ids%macrozooplankton_detrital_calcite .or. &
-                 tracer_id == tracer_ids%microzooplankton_nitrogen) then
+                    tracer_id == tracer_ids%detrital_carbon .or. &
+                    tracer_id == tracer_ids%heterotroph_nitrogen .or. &
+                    tracer_id == tracer_ids%dissolved_organic_nitrogen .or. &
+                    tracer_id == tracer_ids%dissolved_organic_carbon .or. &
+                    tracer_id == tracer_ids%detrital_silica .or. &
+                    tracer_id == tracer_ids%detrital_calcite .or. &
+                    tracer_id == tracer_ids%macrozooplankton_nitrogen .or. &
+                    tracer_id == tracer_ids%macrozooplankton_detrital_nitrogen .or. &
+                    tracer_id == tracer_ids%macrozooplankton_detrital_carbon .or. &
+                    tracer_id == tracer_ids%macrozooplankton_detrital_silica .or. &
+                    tracer_id == tracer_ids%macrozooplankton_detrital_calcite .or. &
+                    tracer_id == tracer_ids%microzooplankton_nitrogen) then
 
             init_value = tiny
 
         else if (tracer_id == tracer_ids%heterotroph_carbon .or. &
-                 tracer_id == tracer_ids%phytoplankton_calcite .or. &
-                 tracer_id == tracer_ids%macrozooplankton_carbon .or. &
-                 tracer_id == tracer_ids%microzooplankton_carbon) then
+                    tracer_id == tracer_ids%phytoplankton_calcite .or. &
+                    tracer_id == tracer_ids%macrozooplankton_carbon .or. &
+                    tracer_id == tracer_ids%microzooplankton_carbon) then
 
             init_value = tiny * Redfield
 
