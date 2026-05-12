@@ -14,4 +14,9 @@ add_compile_definitions(__recom)
 
 # Create the target library for REcoM and add its dependencies
 add_library(recom STATIC ${SOURCES})
+
+if(DEFINED ENV{GITHUB_ACTIONS})
+    target_compile_options(recom PRIVATE -O2 -g -fbacktrace -ffloat-store -finit-local-zero  -finline-functions -fimplicit-none  -fdefault-real-8 -fdefault-double-8 -ffree-line-length-none -cpp)
+endif()
+
 target_link_libraries(recom PUBLIC MPI::MPI_Fortran)
