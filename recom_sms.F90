@@ -115,8 +115,7 @@ contains
         use mvars, only: vars_sprac
         use recom_glovar, only: cosAI
         use recom_extra, only: krill_resp
-        use recom_sms_update, only: sms_update
-        use recom_sms_init, only: sms_initialize_variables
+        use recom_sms_update, only: sms_update_state, sms_update_tracer_scalars
         use recom_carbonate_chemistry, only: calculate_carbonate_chemistry
 
         implicit none
@@ -534,120 +533,8 @@ contains
                 !   - Schourup-Kristensen et al. (2013) - REcoM model description
                 !===============================================================================
 
-                !===============================================================================
-                ! CO2 EFFECTS ON PHYTOPLANKTON GROWTH
-                !===============================================================================
-                ! Calculates how ocean acidification (elevated CO2, reduced pH) affects
-                ! phytoplankton photosynthesis rates through a complex response function.
-                !
-                ! Response Function Components:
-                !   1. Michaelis-Menten HCO3- uptake (carbonate benefit)
-                !   2. Exponential CO2 inhibition (high CO2 toxicity)
-                !   3. Linear H+ inhibition (pH stress on cellular processes)
-                !
-                ! Variables (Small Phytoplankton):
-                !   PhyCO2              : CO2 effect modifier for small phyto [0-3]
-                !   a_co2_phy           : HCO3- uptake parameter [-]
-                !   b_co2_phy           : HCO3- half-saturation [mmolC m-3]
-                !   c_co2_phy           : CO2 inhibition coefficient [m3 mmolC-1]
-                !   d_co2_phy           : H+ stress coefficient [L mol-1]
-                !   HCO3_watercolumn(k) : Bicarbonate concentration [mmolC m-3]
-                !   CO2_watercolumn(k)  : Dissolved CO2 concentration [mmolC m-3]
-                !   pH_watercolumn(k)   : Water column pH [-]
-                !   Cunits              : Concentration units conversion factor [-]
-                !   h_depth(1)          : Proton concentration at surface [mol L-1]
-                !   VTPhyCO2(k)         : Diagnostic output for CO2 effect [-]
-                !
-                ! Constraints:
-                !   - Upper limit: 3× enhancement (April 2022 modification)
-                !   - Lower limit: 0 (no negative values, July 2022 modification)
-                !
-                ! Note: Similar calculations for diatoms, coccolithophores, and Phaeocystis
-                !       with species-specific parameters reflecting different sensitivities
-                !-------------------------------------------------------------------------------
-
-                ! Convert pH to proton concentration for calculations
-                ! pH = -log10[H+], therefore [H+] = 10^(-pH)
-                h_depth(1) = 10.d0 ** (-ph_depth(1))
-
-                ! Note: Cunits conversion not needed for [H+] because pH is already in mol/L
-
-                !-------------------------------------------------------------------------------
-                ! Small Phytoplankton CO2 Response
-                !-------------------------------------------------------------------------------
-                ! Moderate sensitivity to ocean acidification
-                ! Represents diverse group with varied carbon acquisition strategies
-
-                PhyCO2 = a_co2_phy * HCO3_watercolumn(k) * Cunits &
-                        / (b_co2_phy + HCO3_watercolumn(k) * Cunits) &
-                        - exp(-c_co2_phy * CO2_watercolumn(k) * Cunits) &
-                        - d_co2_phy * 10.d0 ** (-pH_watercolumn(k))
-
-                ! Apply empirical constraints based on observations
-                PhyCO2 = min(PhyCO2, 3.d0) ! Upper limit: maximum 3x enhancement
-                PhyCO2 = max(0.d0, PhyCO2) ! Lower limit: prevent negative growth response
-
-                ! Store for diagnostics and output
-                VTPhyCO2(k) = PhyCO2
-
-                !-------------------------------------------------------------------------------
-                ! Diatoms CO2 Response
-                !-------------------------------------------------------------------------------
-                ! Generally tolerant to elevated CO2
-                ! Efficient carbon concentrating mechanisms (CCMs)
-
-                DiaCO2 = a_co2_dia * HCO3_watercolumn(k) * Cunits &
-                        / (b_co2_dia + HCO3_watercolumn(k) * Cunits) &
-                        - exp(-c_co2_dia * CO2_watercolumn(k) * Cunits) &
-                        - d_co2_dia * 10.d0 ** (-pH_watercolumn(k))
-
-                ! Apply constraints
-                DiaCO2 = min(DiaCO2, 3.d0) ! Upper limit: 3x enhancement
-                DiaCO2 = max(0.d0, DiaCO2) ! Lower limit: no negative effect
-
-                ! Store for diagnostics
-                VTDiaCO2(k) = DiaCO2
-
-                if (enable_coccos) then
-
-                    !---------------------------------------------------------------------------
-                    ! Coccolithophores CO2 Response
-                    !---------------------------------------------------------------------------
-                    ! Calcifying phytoplankton - highly sensitive to ocean acidification
-                    ! Both photosynthesis and calcification affected by carbonate chemistry
-                    ! May be disadvantaged under future high-CO2 conditions
-
-                    CoccoCO2 = a_co2_cocco * HCO3_watercolumn(k) * Cunits &
-                            / (b_co2_cocco + HCO3_watercolumn(k) * Cunits) &
-                            - exp(-c_co2_cocco * CO2_watercolumn(k) * Cunits) &
-                            - d_co2_cocco * 10.d0 ** (-pH_watercolumn(k))
-
-                    ! Apply constraints
-                    CoccoCO2 = min(CoccoCO2, 3.d0) ! Upper limit: 3x enhancement
-                    CoccoCO2 = max(0.d0, CoccoCO2) ! Lower limit: no negative effect
-
-                    ! Store for diagnostics
-                    VTCoccoCO2(k) = CoccoCO2
-
-                    !---------------------------------------------------------------------------
-                    ! Phaeocystis CO2 Response
-                    !---------------------------------------------------------------------------
-                    ! Colonial phytoplankton with variable CO2 sensitivity
-                    ! Response may depend on bloom stage and environmental conditions
-
-                    PhaeoCO2 = a_co2_phaeo * HCO3_watercolumn(k) * Cunits &
-                            / (b_co2_phaeo + HCO3_watercolumn(k) * Cunits) &
-                            - exp(-c_co2_phaeo * CO2_watercolumn(k) * Cunits) &
-                            - d_co2_phaeo * 10.d0 ** (-pH_watercolumn(k))
-
-                    ! Apply constraints
-                    PhaeoCO2 = min(PhaeoCO2, 3.d0) ! Upper limit: 3× enhancement
-                    PhaeoCO2 = max(0.d0, PhaeoCO2) ! Lower limit: no negative effect
-
-                    ! Store for diagnostics
-                    VTPhaeoCO2(k) = PhaeoCO2
-
-                end if
+                call calculate_phytoplankton_co2_effects(k, HCO3_watercolumn, CO2_watercolumn, &
+                        pH_watercolumn)
 
                 !===============================================================================
                 ! CALCITE DISSOLUTION
@@ -2662,7 +2549,7 @@ contains
 
                 end if ! ciso
 
-                call sms_update(k, dt_b, dt, MPI_COMM_FESOM, sms, state, PhyN, PhyC, PhyChl, &
+                call sms_update_state(k, dt_b, dt, MPI_COMM_FESOM, sms, state, PhyN, PhyC, PhyChl, &
                         PhyCalc, DiaN, DiaC, DiaChl, DiaSi, CoccoN, CoccoC, CoccoChl, PhaeoN, &
                         PhaeoC, PhaeoChl, HetN, HetC, Zoo2N, Zoo2C, MicZooN, MicZooC, DetN, DetC, &
                         DetSi, DetCalc, DetZ2N, DetZ2C, DetZ2Si, DetZ2Calc, DON, EOC, FreeFe)
@@ -3843,6 +3730,139 @@ contains
         end do ! Main time loop ends
 
     end subroutine REcoM_sms
+
+    subroutine calculate_phytoplankton_co2_effects(k, HCO3_watercolumn, CO2_watercolumn, &
+            pH_watercolumn)
+        use recom_declarations, only: wp, phyco2, diaco2, coccoco2, phaeoco2, &
+                vtphyco2, vtdiaco2, vtcoccoco2, vtphaeoco2, h_depth
+        use recom_locvar, only: ph_depth
+        use recom_config, only: a_co2_cocco, a_co2_dia, a_co2_phaeo, a_co2_phy, &
+                b_co2_cocco, b_co2_dia, b_co2_phaeo, b_co2_phy, c_co2_cocco, c_co2_dia, &
+                c_co2_phaeo, c_co2_phy, cunits, d_co2_cocco, d_co2_dia, d_co2_phaeo, &
+                d_co2_phy, enable_coccos
+
+        implicit none
+
+        integer, intent(in) :: k
+        real(kind=wp), intent(in), dimension(:) :: HCO3_watercolumn
+        real(kind=wp), intent(in), dimension(:) :: CO2_watercolumn
+        real(kind=wp), intent(in), dimension(:) :: pH_watercolumn
+
+        !===============================================================================
+        ! CO2 EFFECTS ON PHYTOPLANKTON GROWTH
+        !===============================================================================
+        ! Calculates how ocean acidification (elevated CO2, reduced pH) affects
+        ! phytoplankton photosynthesis rates through a complex response function.
+        !
+        ! Response Function Components:
+        !   1. Michaelis-Menten HCO3- uptake (carbonate benefit)
+        !   2. Exponential CO2 inhibition (high CO2 toxicity)
+        !   3. Linear H+ inhibition (pH stress on cellular processes)
+        !
+        ! Variables (Small Phytoplankton):
+        !   PhyCO2              : CO2 effect modifier for small phyto [0-3]
+        !   a_co2_phy           : HCO3- uptake parameter [-]
+        !   b_co2_phy           : HCO3- half-saturation [mmolC m-3]
+        !   c_co2_phy           : CO2 inhibition coefficient [m3 mmolC-1]
+        !   d_co2_phy           : H+ stress coefficient [L mol-1]
+        !   HCO3_watercolumn(k) : Bicarbonate concentration [mmolC m-3]
+        !   CO2_watercolumn(k)  : Dissolved CO2 concentration [mmolC m-3]
+        !   pH_watercolumn(k)   : Water column pH [-]
+        !   Cunits              : Concentration units conversion factor [-]
+        !   h_depth(1)          : Proton concentration at surface [mol L-1]
+        !   VTPhyCO2(k)         : Diagnostic output for CO2 effect [-]
+        !
+        ! Constraints:
+        !   - Upper limit: 3× enhancement (April 2022 modification)
+        !   - Lower limit: 0 (no negative values, July 2022 modification)
+        !
+        ! Note: Similar calculations for diatoms, coccolithophores, and Phaeocystis
+        !       with species-specific parameters reflecting different sensitivities
+        !-------------------------------------------------------------------------------
+
+        ! Convert pH to proton concentration for calculations
+        ! pH = -log10[H+], therefore [H+] = 10^(-pH)
+        h_depth(1) = 10.d0 ** (-ph_depth(1))
+
+        ! Note: Cunits conversion not needed for [H+] because pH is already in mol/L
+
+        !-------------------------------------------------------------------------------
+        ! Small Phytoplankton CO2 Response
+        !-------------------------------------------------------------------------------
+        ! Moderate sensitivity to ocean acidification
+        ! Represents diverse group with varied carbon acquisition strategies
+
+        PhyCO2 = a_co2_phy * HCO3_watercolumn(k) * Cunits &
+                / (b_co2_phy + HCO3_watercolumn(k) * Cunits) &
+                - exp(-c_co2_phy * CO2_watercolumn(k) * Cunits) &
+                - d_co2_phy * 10.d0 ** (-pH_watercolumn(k))
+
+        ! Apply empirical constraints based on observations
+        PhyCO2 = min(PhyCO2, 3.d0) ! Upper limit: maximum 3x enhancement
+        PhyCO2 = max(0.d0, PhyCO2) ! Lower limit: prevent negative growth response
+
+        ! Store for diagnostics and output
+        VTPhyCO2(k) = PhyCO2
+
+        !-------------------------------------------------------------------------------
+        ! Diatoms CO2 Response
+        !-------------------------------------------------------------------------------
+        ! Generally tolerant to elevated CO2
+        ! Efficient carbon concentrating mechanisms (CCMs)
+
+        DiaCO2 = a_co2_dia * HCO3_watercolumn(k) * Cunits &
+                / (b_co2_dia + HCO3_watercolumn(k) * Cunits) &
+                - exp(-c_co2_dia * CO2_watercolumn(k) * Cunits) &
+                - d_co2_dia * 10.d0 ** (-pH_watercolumn(k))
+
+        ! Apply constraints
+        DiaCO2 = min(DiaCO2, 3.d0) ! Upper limit: 3x enhancement
+        DiaCO2 = max(0.d0, DiaCO2) ! Lower limit: no negative effect
+
+        ! Store for diagnostics
+        VTDiaCO2(k) = DiaCO2
+
+        if (enable_coccos) then
+
+            !---------------------------------------------------------------------------
+            ! Coccolithophores CO2 Response
+            !---------------------------------------------------------------------------
+            ! Calcifying phytoplankton - highly sensitive to ocean acidification
+            ! Both photosynthesis and calcification affected by carbonate chemistry
+            ! May be disadvantaged under future high-CO2 conditions
+
+            CoccoCO2 = a_co2_cocco * HCO3_watercolumn(k) * Cunits &
+                    / (b_co2_cocco + HCO3_watercolumn(k) * Cunits) &
+                    - exp(-c_co2_cocco * CO2_watercolumn(k) * Cunits) &
+                    - d_co2_cocco * 10.d0 ** (-pH_watercolumn(k))
+
+            ! Apply constraints
+            CoccoCO2 = min(CoccoCO2, 3.d0) ! Upper limit: 3x enhancement
+            CoccoCO2 = max(0.d0, CoccoCO2) ! Lower limit: no negative effect
+
+            ! Store for diagnostics
+            VTCoccoCO2(k) = CoccoCO2
+
+            !---------------------------------------------------------------------------
+            ! Phaeocystis CO2 Response
+            !---------------------------------------------------------------------------
+            ! Colonial phytoplankton with variable CO2 sensitivity
+            ! Response may depend on bloom stage and environmental conditions
+
+            PhaeoCO2 = a_co2_phaeo * HCO3_watercolumn(k) * Cunits &
+                    / (b_co2_phaeo + HCO3_watercolumn(k) * Cunits) &
+                    - exp(-c_co2_phaeo * CO2_watercolumn(k) * Cunits) &
+                    - d_co2_phaeo * 10.d0 ** (-pH_watercolumn(k))
+
+            ! Apply constraints
+            PhaeoCO2 = min(PhaeoCO2, 3.d0) ! Upper limit: 3× enhancement
+            PhaeoCO2 = max(0.d0, PhaeoCO2) ! Lower limit: no negative effect
+
+            ! Store for diagnostics
+            VTPhaeoCO2(k) = PhaeoCO2
+
+        end if
+    end subroutine calculate_phytoplankton_co2_effects
 
     subroutine calculate_chlorophyll_degradation(maximum_photosynthesis_rate, &
             layer_available_radiation, &
