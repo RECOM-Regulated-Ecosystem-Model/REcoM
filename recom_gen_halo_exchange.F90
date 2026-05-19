@@ -175,7 +175,7 @@ contains
     !=======================================
 
     subroutine recom_exchange_nod_end(npes, request_count, array_of_requests)
-        use mpi, only: MPI_WAITALL, MPI_STATUSES_IGNORE
+        use mpi!, only: MPI_WAITALL, MPI_STATUSES_IGNORE
         implicit none
 
         integer, intent(in) :: request_count, npes
