@@ -24,4 +24,5 @@ repos:
     hooks:
       - id: fortitude
         exclude: 'mocsy'
-        args: [--target-std, "f2008", --line-length, "101"]
+        # Rule C121 refers to the use of the 'only' clause in imports
+        args: [--target-std, "f2008", --line-length, "101", --ignore, C121]

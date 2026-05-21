@@ -459,7 +459,7 @@ contains
         use recom_config, only: enable_3zoo2det, enable_coccos
         use recom_declarations, only: WP, is_3zoo2det, is_coccos
 
-        use mpi, only: MPI_allreduce, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_MIN
+        use mpi
 
         implicit none
 
