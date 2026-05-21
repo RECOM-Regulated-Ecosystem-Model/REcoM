@@ -197,7 +197,7 @@ contains
             areasvol)
 
         use recom_declarations, only: wp
-        use mpi!, only: MPI_DOUBLE_PRECISION, MPI_SUM, MPI_Allreduce
+        use mpi
 
         implicit none
 
