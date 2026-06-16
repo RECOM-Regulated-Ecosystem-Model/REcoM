@@ -3492,7 +3492,7 @@ contains
 
                     ! Call detailed krill respiration subroutine
                     ! Handles additional physiological processes (e.g., molting, reproduction)
-                    call krill_resp(n, daynew, geo_coord_nod2D)
+                    call krill_resp(daynew, geo_coord_nod2D(2, n))
 
                     ! Calculate feeding success modifier
                     ! Low feeding rates trigger stress response with elevated respiration

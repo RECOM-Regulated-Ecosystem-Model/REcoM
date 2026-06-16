@@ -154,19 +154,19 @@ contains
     !================================================================================
     ! Calculating second zooplankton respiration rates
     !================================================================================
-    subroutine krill_resp(n, daynew, geo_coord_nod2D)
+    subroutine krill_resp(daynew, node_latitude)
         use REcoM_declarations, only: wp
         use REcoM_LocVar, only: res_zoo2_a
 
         implicit none
 
         ! Input parameters
-        integer, intent(in) :: n, daynew
-        real(kind=WP), intent(in), dimension(:, :) :: geo_coord_nod2D
+        integer, intent(in) :: daynew
+        real(kind=WP), intent(in) :: node_latitude
 
         ! Values from FESOM
 
-        if (geo_coord_nod2D(2, n) < 0.0_WP) then !SH
+        if (node_latitude < 0.0_WP) then !SH
             if ((daynew <= 105)) then
                 res_zoo2_a = 0.d0
             else if ((105 <= daynew) .and. (daynew <= 150)) then
