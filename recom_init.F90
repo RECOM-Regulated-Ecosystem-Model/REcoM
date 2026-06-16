@@ -8,6 +8,8 @@ module recom_init_interface
     private
 
     public :: recom_init
+    public :: initialize_tracer_ids
+    public :: get_tracer_init_value
 
 contains
     !
