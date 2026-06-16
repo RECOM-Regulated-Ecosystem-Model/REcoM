@@ -417,7 +417,8 @@ contains
 
         else
             init_value = 0.0_wp
-            write(*, *) 'Warning: No initial value defined for tracer ID ', tracer_id, '. Setting to 0'
+            write(*, *) 'Warning: No initial value defined for tracer ID ', tracer_id, '.' // &
+                    ' Setting to 0'
         end if
     end function get_tracer_init_value
 
