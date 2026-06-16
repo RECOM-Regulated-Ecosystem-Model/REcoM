@@ -320,9 +320,11 @@ contains
         tracer_ids%diatom_chlorophyll = 1015
         tracer_ids%diatom_silica = 1016
         tracer_ids%detrital_silica = 1017
+        tracer_ids%silica = 1018
         tracer_ids%iron = 1019
         tracer_ids%phytoplankton_calcite = 1020
         tracer_ids%detrital_calcite = 1021
+        tracer_ids%oxygen = 1022
 
         current_tracer_id = 1023
 

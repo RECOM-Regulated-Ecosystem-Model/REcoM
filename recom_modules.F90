@@ -368,6 +368,7 @@ module REcoM_declarations
 
         ! --- Detrital Silica ---
         integer :: detrital_silica
+        integer :: silica
 
         ! --- --- Iron (micronutrient) ---
         integer :: iron
@@ -375,6 +376,8 @@ module REcoM_declarations
         ! --- Calcium Carbonate (Calcite) ---
         integer :: phytoplankton_calcite
         integer :: detrital_calcite
+
+        integer :: oxygen
 
         ! --- 3zoo2det extra tracers ---
         integer :: macrozooplankton_nitrogen
