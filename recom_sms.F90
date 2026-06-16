@@ -4,6 +4,7 @@ module recom_sms_module
 
     public :: REcoM_sms
     public :: iron_chemistry
+    public :: recom_limiter
 
 contains
 
