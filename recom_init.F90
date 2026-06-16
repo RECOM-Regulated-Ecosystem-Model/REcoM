@@ -411,6 +411,9 @@ contains
 
             init_value = tiny_chl / chl2N_max_d / NCmax_d / SiCmax
 
+        else
+            init_value = 0.0_wp
+            write(*, *) 'Warning: No initial value defined for tracer ID ', tracer_id, '. Setting to 0'
         end if
     end function get_tracer_init_value
 
