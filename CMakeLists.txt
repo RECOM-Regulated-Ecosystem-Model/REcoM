@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(REcoM LANGUAGES Fortran)
+project(recom LANGUAGES Fortran)
 find_package(MPI REQUIRED)
 
 # Get the list of Fortran sources in the folder
