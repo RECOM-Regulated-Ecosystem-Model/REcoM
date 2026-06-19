@@ -6,6 +6,8 @@ module recom_extra
     public :: krill_resp
     public :: Cobeta
     public :: Depth_calculations
+    public :: calculate_solar_declination
+    public :: solar_incidence_cosine
 
 contains
 
@@ -98,37 +100,19 @@ contains
     end subroutine Depth_calculations
 
     !===============================================================================
-    ! Subroutine for calculating cos(AngleOfIncidence)
+    ! Subroutine for calculating solar declination
     !===============================================================================
-    subroutine Cobeta(daynew, ndpyr, myDim_nod2D, geo_coord_nod2D)
+    subroutine calculate_solar_declination(daynew, ndpyr, declination)
 
-        use REcoM_GloVar, only: cosAI
         use recom_declarations, only: wp, pi
 
         implicit none
 
-        ! Local variables
+        integer, intent(in) :: daynew, ndpyr
+        real(kind=wp), intent(out) :: declination
+
         real(kind=wp) :: yearfrac ! Fraction of year [0 1]
         real(kind=wp) :: yDay ! Year fraction in radians [0 2*pi]
-        real(kind=wp) :: declination ! Declination of the sun at present lat and time
-        real(kind=wp) :: CosAngleNoon ! Cosine of Angle of Incidence at noon
-        integer :: n
-
-        ! Constants
-        real(kind=wp), parameter :: nWater = 1.33 ! Refractive indices of water
-
-        integer, intent(in) :: daynew, ndpyr, myDim_nod2D
-        real(kind=WP), intent(in), dimension(:, :) :: geo_coord_nod2D
-
-        declination = 0.d0
-        cosangleNoon = 0.d0
-
-        !! find day (****NOTE for year starting in winter*****)
-        !! Paltridge, G. W. and C. M. R. Platt, Radiative Processes
-        !! in Meteorology and Climatology, Developments in
-        !! Atmospheric Sciences, vol. 5, Elsevier Scientific
-        !! Publishing Company, Amsterdam, Oxford,
-        !! New York, 1976, ISBN 0-444-41444-4.
 
         !! Calculate solar declination using Paltridge & Platt (1976) formula
         yearfrac = mod(real(daynew), real(ndpyr)) / real(ndpyr)
@@ -141,13 +125,61 @@ contains
                 + 0.000907 * sin(2 * yDay) &
                 - 0.002697 * cos(3 * yDay) &
                 + 0.001480 * sin(3 * yDay)
+    end subroutine calculate_solar_declination
+
+    !===============================================================================
+    ! Function for calculating cos(AngleOfIncidence) at a single node
+    !===============================================================================
+    real(kind=wp) function solar_incidence_cosine(latitude, declination)
+
+        use recom_declarations, only: wp
+
+        implicit none
+
+        real(kind=wp), intent(in) :: latitude, declination
+
+        ! Local variables
+        real(kind=wp) :: cosAngleNoon
+
+        ! Constants
+        real(kind=wp), parameter :: nWater = 1.33 ! Refractive index of water
+
+        cosAngleNoon = sin(latitude) * sin(declination) &
+                + cos(latitude) * cos(declination)
+        solar_incidence_cosine = sqrt(1.0d0 - (1.0d0 - cosAngleNoon ** 2) / nWater ** 2)
+    end function solar_incidence_cosine
+
+    !===============================================================================
+    ! Subroutine for calculating cos(AngleOfIncidence)
+    !===============================================================================
+    subroutine Cobeta(daynew, ndpyr, myDim_nod2D, geo_coord_nod2D)
+
+        use REcoM_GloVar, only: cosAI
+        use recom_declarations, only: wp
+
+        implicit none
+
+        ! Local variables
+        real(kind=wp) :: declination ! Declination of the sun at present lat and time
+        integer :: n
+
+        integer, intent(in) :: daynew, ndpyr, myDim_nod2D
+        real(kind=WP), intent(in), dimension(:, :) :: geo_coord_nod2D
+
+        declination = 0.d0
+
+        !! find day (****NOTE for year starting in winter*****)
+        !! Paltridge, G. W. and C. M. R. Platt, Radiative Processes
+        !! in Meteorology and Climatology, Developments in
+        !! Atmospheric Sciences, vol. 5, Elsevier Scientific
+        !! Publishing Company, Amsterdam, Oxford,
+        !! New York, 1976, ISBN 0-444-41444-4.
+
+        call calculate_solar_declination(daynew, ndpyr, declination)
 
         !! Calculate cosine of angle of incidence for each node
         do n = 1, myDim_nod2D
-            cosAngleNoon = sin(geo_coord_nod2D(2, n)) * sin(declination) &
-                    + cos(geo_coord_nod2D(2, n)) * cos(declination)
-
-            cosAI(n) = sqrt(1.0d0 - (1.0d0 - cosAngleNoon ** 2) / nWater ** 2)
+            cosAI(n) = solar_incidence_cosine(geo_coord_nod2D(2, n), declination)
         end do
     end subroutine Cobeta
 
