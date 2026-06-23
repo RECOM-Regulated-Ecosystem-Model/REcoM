@@ -117,6 +117,7 @@ contains
         use recom_extra, only: krill_resp
         use recom_sms_update, only: sms_update_state, sms_update_tracer_scalars
         use recom_carbonate_chemistry, only: calculate_carbonate_chemistry
+        use recom_sms_init
 
         implicit none
 
