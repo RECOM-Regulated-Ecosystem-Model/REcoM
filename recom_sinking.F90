@@ -786,6 +786,7 @@ contains
                             / (rho_ref_part - rho_ref_water)
                     !endif
                     !endif
+                    if (enable_3zoo2det) then
                     !if (enable_3zoo2det .and. &
                     !tracers%data(tr_num)%ID ==1026)then ! idetz2c
                     !if (tracers%data(tr_num)%values(k,row)>0.001) then ! only apply ballasting
@@ -793,7 +794,7 @@ contains
                     scaling_density2_3D(k, row) = (rho_particle2(k, row) - rho_seawater(1)) &
                             / (rho_ref_part - rho_ref_water)
                     !endif
-                    !endif
+                    endif
                 end if
 
                 scaling_visc_3D(k, row) = 1.0
@@ -807,19 +808,24 @@ contains
                 end if
 
             end do
-            rho_particle1(nzmax + 1, row) = rho_particle1(nzmax, row)
-            rho_particle2(nzmax + 1, row) = rho_particle2(nzmax, row)
+            if (use_density_scaling) then
+                rho_particle1(nzmax + 1, row) = rho_particle1(nzmax, row)
+                if (enable_3zoo2det) then
+                    rho_particle2(nzmax + 1, row) = rho_particle2(nzmax, row)
+                end if
+            end if
             scaling_visc_3D(nzmax + 1, row) = scaling_visc_3D(nzmax, row)
         end do
         ! in the unlikely (if possible at all...) case that rho_particle(k)-rho_seawater(1)<0,
         ! prevent the scaling factor from being negative
 
         ! tiny = 2.23D-16
-        if (any(scaling_density1_3D(:, :) <= tiny)) scaling_density1_3D(:, :) = 1.0_WP
-
-        if (enable_3zoo2det) then
-            ! tiny = 2.23D-16
-            if (any(scaling_density2_3D(:, :) <= tiny)) scaling_density2_3D(:, :) = 1.0_WP
+        if (use_density_scaling) then
+            if (any(scaling_density1_3D(:, :) <= tiny)) scaling_density1_3D(:, :) = 1.0_WP
+            if (enable_3zoo2det) then
+                ! tiny = 2.23D-16
+                if (any(scaling_density2_3D(:, :) <= tiny)) scaling_density2_3D(:, :) = 1.0_WP
+            end if
         end if
 
     end subroutine ballast
@@ -925,7 +931,7 @@ contains
                 end if
             end do
 
-            do row = 1, myDim_nod2d + eDim_nod2D ! myDim is sufficient
+            do row = 1, myDim_nod2d ! + eDim_nod2D ! myDim is sufficient
                 !if (ulevels_nod2D(row)>1) cycle
                 nzmin = ulevels_nod2D(row)
                 nzmax = nlevels_nod2D(row)
