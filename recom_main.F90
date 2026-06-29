@@ -126,7 +126,7 @@ contains
                 glofedust, glondust, atmfeinput, atmninput, glohplus, pistonvelocity, alphaco2, &
                 glopco2surf, glodpco2surf, gloco2flux, gloco2flux_seaicemask, &
                 gloo2flux, glopco2surf, glodpco2surf, gloco2flux, gloco2flux_seaicemask, &
-                gloo2flux_seaicemask, glohplus, atmfeinput, atmninput, chldegp, x_co2atm
+                gloo2flux_seaicemask, glohplus, atmfeinput, atmninput, chldegp
 
         use recom_diags_management, only: allocate_and_init_diags, update_2d_diags, &
                 update_3d_diags, deallocate_diags
@@ -296,6 +296,7 @@ contains
                         LocAtmCO2_14 = AtmCO2_14(lat_zone(lat_val), month)
                     end if
                 end if
+                LocAtmCO2                   = x_co2atm(n) ! ppm; from oifs
             end if ! use_atbox
 
             if (ciso) then
@@ -644,8 +645,8 @@ contains
 
             GloPCO2surf(n) = pco2surf(1)
             GlodPCO2surf(n) = dpco2surf(1)
-            GloCO2flux(n) = dflux(1) !  [mmol/m2/d]
-            GloCO2flux_seaicemask(n) = co2flux_seaicemask(1) !  [mmol/m2/s]
+            GloCO2flux(n) = dflux(1) !  [mmolCO2/m2/d]
+            GloCO2flux_seaicemask(n) = co2flux_seaicemask(1) !  [mmolCO2/m2/s]
             GloO2flux_seaicemask(n) = o2flux_seaicemask(1) !  [mmol/m2/s]
             if (ciso) then
                 GloCO2flux_seaicemask_13(n) = co2flux_seaicemask_13(1) !  [mmol/m2/s]

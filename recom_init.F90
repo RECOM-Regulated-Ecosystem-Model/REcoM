@@ -113,10 +113,10 @@ contains
                 CO33D, OmegaC3D, kspc3D, rhoSW3D, rho_particle1, rho_particle2, &
                 scaling_density1_3D, scaling_density2_3D, scaling_visc_3D, seawater_visc_3D, &
                 Sinkingvel1, Sinkingvel2, Sinkvel1_tr, Sinkvel2_tr, GloSed, SinkFlx, &
-                SinkFlx_tr, lb_flux
+                SinkFlx_tr, lb_flux, x_co2atm
 
         use recom_locvar, only: LocBenthos
-        use recom_config, only: Diags, benthos_num, use_MEDUSA, bottflx_num, sedflx_num
+        use recom_config, only: Diags, benthos_num, use_MEDUSA, bottflx_num, sedflx_num, use_atbox
 
         implicit none
 
@@ -170,6 +170,12 @@ contains
         ! [1/day] Decay rate of detritus in the benthic layer
         allocate(decayBenthos(benthos_num), source=0.d0)
         allocate(PAR3D(nl - 1, node_size), source=0.d0)
+
+        if (use_atbox) then
+            allocate(x_co2atm(1), source=0.d0)
+        else
+            allocate(x_co2atm(node_size), source=0.d0)
+        endif
 
         if (Diags) then
             !! *** Allocate 2D diagnostics ***

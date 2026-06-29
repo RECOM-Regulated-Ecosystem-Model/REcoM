@@ -200,7 +200,7 @@ contains
             print*, 'REcoM_Si: ', REcoM_Si
             print*, 'REcoM_Phos: ', REcoM_Phos
             print*, 'kw660: ', kw660
-            print*, 'LocAtmCO2: ', LocAtmCO2
+            print*, 'LocAtmCO2 ppm: ', LocAtmCO2
             print*, 'Patm: ', Patm
             print*, 'thick(One): ', thick(One)
             print*, 'Nmocsy: ', Nmocsy
@@ -221,6 +221,7 @@ contains
         if ((co2flux(1) > 1.e10) .or. (co2flux(1) < -1.e10)) then
             !     co2flux(1)=0.0
             print*, 'ERROR: co2 flux !'
+            print*, 'co2flux molCO2 m-2 s-1: ', co2flux
             print*, 'pco2surf: ', pco2surf
             print*, 'co2: ', co2
             print*, 'rhoSW: ', rhoSW
@@ -232,7 +233,7 @@ contains
             print*, 'REcoM_Si: ', REcoM_Si
             print*, 'REcoM_Phos: ', REcoM_Phos
             print*, 'kw660: ', kw660
-            print*, 'LocAtmCO2: ', LocAtmCO2
+            print*, 'LocAtmCO2 ppm: ', LocAtmCO2
             print*, 'Patm: ', Patm
             print*, 'thick(One): ', thick(One)
             print*, 'Nmocsy: ', Nmocsy
@@ -243,15 +244,15 @@ contains
             stop
         end if
 
-        ! use ice-free area and also convert from mol/m2/s to mmol/m2/d
-        !   if(mype==0) write(*,*), 'co2flux (mol/m2/s) =',co2flux
+        ! use ice-free area and also convert from molCO2/m2/s to mmolCO2/m2/d
+        !   if(mype==0) write(*,*), 'co2flux (molCO2/m2/s) =',co2flux
 
         ! ice-fraction is already considered in piston-velocity, so don't apply it here
         dflux = co2flux * 1.e3 * SecondsPerDay !* (1.d0 - Loc_ice_conc)
-        !   if(mype==0) write(*,*), 'dflux (mmol/m2/d) =',dflux
+        !   if(mype==0) write(*,*), 'dflux (mmolCO2/m2/d) =',dflux
 
-        co2flux_seaicemask = co2flux * 1.e3 !  [mmol/m2/s]  * (1.d0 - Loc_ice_conc)
-        !   if(mype==0) write(*,*), 'co2flux_seaicemask (mmol/m2/s) =',co2flux_seaicemask
+        co2flux_seaicemask = co2flux * 1.e3 !  [mmolCO2/m2/s]  * (1.d0 - Loc_ice_conc)
+        !   if(mype==0) write(*,*), 'co2flux_seaicemask (mmolCO2/m2/s) =',co2flux_seaicemask
 
         ! then oxygen
         ppo = Loc_slp / Pa2atm !1 !slp divided by 1 atm
