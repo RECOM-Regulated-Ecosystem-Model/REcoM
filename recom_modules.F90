@@ -147,7 +147,7 @@ module REcoM_declarations
     real(kind=wp) :: DiaNsq
     real(kind=wp) :: varpzdia, fDiaN ! Part of Diatoms available for food
     real(kind=wp) :: PhyNsq
-    real(kind=wp) :: varpzPhy, fPhyN ! Part of Nano available for food
+    real(kind=wp) :: varpzPhy, fPhyN ! Part of Small phytoplankton available for food
     real(kind=wp) :: CoccoNsq
     real(kind=wp) :: varpzCocco, fCoccoN
     real(kind=wp) :: PhaeoNsq
@@ -732,13 +732,13 @@ module recom_config
     real(kind=wp) :: loss_het = 0.05d0
     real(kind=wp) :: pzDia = 0.5d0 ! Maximum diatom preference
     real(kind=wp) :: sDiaNsq = 0.d0
-    real(kind=wp) :: pzPhy = 1.0d0 ! Maximum nano-phytoplankton preference
+    real(kind=wp) :: pzPhy = 1.0d0 ! Maximum small phytoplankton preference
     real(kind=wp) :: sPhyNsq = 0.d0
     real(kind=wp) :: pzCocco = 0.5d0 ! NEW (value is just a guess)
     real(kind=wp) :: sCoccoNsq = 0.d0 ! NEW
     real(kind=wp) :: pzPhaeo = 1.0d0 ! Phaeocystis (to be tuned)
     real(kind=wp) :: sPhaeoNsq = 0.d0 ! Phaeocystis
-    real(kind=wp) :: pzMicZoo = 1.0d0 ! NEW 3Zoo Maximum nano-phytoplankton preference
+    real(kind=wp) :: pzMicZoo = 1.0d0 ! NEW 3Zoo Maximum small phytoplankton preference
     real(kind=wp) :: sMicZooNsq = 0.d0 ! NEW 3Zoo
 
     ! for more stable computation of HetRespFlux (_plus).
@@ -790,7 +790,7 @@ module recom_config
     real(kind=wp) :: res_miczoo = 0.01d0
     real(kind=wp) :: pzDia3 = 0.5d0 ! NEW 3Zoo Maximum diatom preference
     real(kind=wp) :: sDiaNsq3 = 0.d0 ! NEW 3Zoo
-    real(kind=wp) :: pzPhy3 = 1.0d0 ! NEW 3Zoo Maximum nano-phytoplankton preference
+    real(kind=wp) :: pzPhy3 = 1.0d0 ! NEW 3Zoo Maximum small phytoplankton preference
     real(kind=wp) :: sPhyNsq3 = 0.d0 ! NEW 3Zoo
     ! NEW 3Zoo Maximum coccolithophore preference
     ! ATTENTION: This value needs to be tuned; I start with zero preference!
@@ -2223,7 +2223,7 @@ module REcoM_ciso
     ! DIC in seawater
             r_dic_13, r_dic_14, &
 
-    ! nanophytoplankton
+    ! small phytoplankton
             r_phyc_13, r_phyc_14, &
 
     ! diatoms
@@ -2246,7 +2246,7 @@ module REcoM_ciso
     ! hydrolysis / dissociation of CO2 <-> DIC (equilibrium fract.)
             alpha_dic_13, alpha_dic_14, &
 
-    ! photosynthesis of nanophytoplankton
+    ! photosynthesis of small phytoplankton
             alpha_p_13, alpha_p_14, &
 
     ! photosynthesis of diatoms

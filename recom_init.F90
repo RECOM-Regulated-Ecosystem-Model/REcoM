@@ -79,7 +79,7 @@ contains
                 tracers_info%data_pointers(i)%tracer_data(:, :) = &
                         tracers_info%data_pointers(i)%tracer_data(:, :) * 1.e9
 
-                ! Avoids tracers 1001, 1002, 1018 and 1022
+                ! Avoids tracers 1001, 1002, 1003, 1018 and 1022
             else if (tracer_id > 1003 .and. tracer_id /= 1018 .and. tracer_id /= 1022) then
                 tracers_info%data_pointers(i)%tracer_data(:, :) = get_tracer_init_value(tracer_id)
             end if
