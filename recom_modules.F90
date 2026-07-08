@@ -380,22 +380,25 @@ module REcoM_declarations
         integer :: oxygen
 
         ! --- 3zoo2det extra tracers ---
-        integer :: macrozooplankton_nitrogen
-        integer :: macrozooplankton_carbon
-        integer :: macrozooplankton_detrital_nitrogen
-        integer :: macrozooplankton_detrital_carbon
-        integer :: macrozooplankton_detrital_silica
-        integer :: macrozooplankton_detrital_calcite
-        integer :: microzooplankton_nitrogen
-        integer :: microzooplankton_carbon
+        ! Default -1 sentinel: these are only assigned in initialize_tracer_ids when the
+        ! corresponding &parecomsetup flag is on. -1 never matches a real tracer id, so
+        ! id-based lookups (e.g. the otracers output loop) correctly skip inactive species.
+        integer :: macrozooplankton_nitrogen = -1
+        integer :: macrozooplankton_carbon = -1
+        integer :: macrozooplankton_detrital_nitrogen = -1
+        integer :: macrozooplankton_detrital_carbon = -1
+        integer :: macrozooplankton_detrital_silica = -1
+        integer :: macrozooplankton_detrital_calcite = -1
+        integer :: microzooplankton_nitrogen = -1
+        integer :: microzooplankton_carbon = -1
 
         ! --- coccos extra tracers ---
-        integer :: coccolithophore_nitrogen
-        integer :: coccolithophore_carbon
-        integer :: coccolithophore_chlorophyll
-        integer :: phaeocystis_nitrogen
-        integer :: phaeocystis_carbon
-        integer :: phaeocystis_chlorophyll
+        integer :: coccolithophore_nitrogen = -1
+        integer :: coccolithophore_carbon = -1
+        integer :: coccolithophore_chlorophyll = -1
+        integer :: phaeocystis_nitrogen = -1
+        integer :: phaeocystis_carbon = -1
+        integer :: phaeocystis_chlorophyll = -1
 
     end type recom_tracer_ids
 
