@@ -8,6 +8,8 @@ module recom_init_interface
     private
 
     public :: recom_init
+    public :: initialize_tracer_ids
+    public :: get_tracer_init_value
 
 contains
     !
@@ -77,7 +79,7 @@ contains
                 tracers_info%data_pointers(i)%tracer_data(:, :) = &
                         tracers_info%data_pointers(i)%tracer_data(:, :) * 1.e9
 
-                ! Avoids tracers 1001, 1002, 1018 and 1022
+                ! Avoids tracers 1001, 1002, 1003, 1018 and 1022
             else if (tracer_id > 1003 .and. tracer_id /= 1018 .and. tracer_id /= 1022) then
                 tracers_info%data_pointers(i)%tracer_data(:, :) = get_tracer_init_value(tracer_id)
             end if
@@ -326,9 +328,11 @@ contains
         tracer_ids%diatom_chlorophyll = 1015
         tracer_ids%diatom_silica = 1016
         tracer_ids%detrital_silica = 1017
+        tracer_ids%silica = 1018
         tracer_ids%iron = 1019
         tracer_ids%phytoplankton_calcite = 1020
         tracer_ids%detrital_calcite = 1021
+        tracer_ids%oxygen = 1022
 
         current_tracer_id = 1023
 
@@ -417,6 +421,10 @@ contains
 
             init_value = tiny_chl / chl2N_max_d / NCmax_d / SiCmax
 
+        else
+            init_value = 0.0_wp
+            write(*, *) 'Warning: No initial value defined for tracer ID ', tracer_id, '.' // &
+                    ' Setting to 0'
         end if
     end function get_tracer_init_value
 
