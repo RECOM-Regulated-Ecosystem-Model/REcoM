@@ -38,7 +38,7 @@ contains
     !===============================================================================
     subroutine recom_init(nl, ulevels_nod2D, nlevels_nod2D, geo_coord_nod2D, Z_3d_n, myDim_nod2d, &
             eDim_nod2D, mype, MPI_COMM_FESOM, myDim_elem2D, eDim_elem2D, tracers_info, &
-            num_tracers, rad)
+            num_tracers, rad, use_age_tracer)
 
         use REcoM_declarations, only: wp, tracer_ids
         use REcoM_GloVar, only: tracers_info_type
@@ -50,6 +50,7 @@ contains
         integer, intent(in) :: nl, mydim_nod2d, edim_nod2d, mype, num_tracers
         integer, intent(in) :: mpi_comm_fesom, mydim_elem2d, edim_elem2d
         real(kind=WP), intent(in) :: rad
+        logical, intent(in) :: use_age_tracer
         integer, intent(in), dimension(:) :: ulevels_nod2d, nlevels_nod2d
         real(kind=wp), intent(in), dimension(:, :) :: geo_coord_nod2d, z_3d_n
         type(tracers_info_type), intent(in) :: tracers_info
@@ -64,10 +65,10 @@ contains
         call initialize_tracer_indices
 
         ! Validation check here
-        call validate_recom_tracers(num_tracers, mype)
+        call validate_recom_tracers(num_tracers, use_age_tracer, mype)
 
         ! After reading tracer namelist - validate actual IDs
-        call validate_tracer_id_sequence(tracers_info%ids(1:num_tracers), num_tracers, mype)
+        call validate_tracer_id_sequence(tracers_info%ids(1:num_tracers), num_tracers, use_age_tracer, mype)
 
         ! Initializes tracer data
         do i = num_tracers - bgc_num + 1, num_tracers

@@ -1073,13 +1073,15 @@ contains
     ! Purpose: Validate consistency between namelist tracer configuration and
     !          biogeochemical model setup (enable_3zoo2det, enable_coccos)
     ! ==============================================================================
-    subroutine validate_recom_tracers(num_tracers, mype)
+    subroutine validate_recom_tracers(num_tracers, use_age_tracer, mype)
         use mpi, only: MPI_Abort, MPI_COMM_WORLD
+        !use g_forcing_param,  only: use_age_tracer
 
         implicit none
 
         ! Arguments
         integer, intent(in) :: num_tracers ! Total number of tracers from namelist
+        logical, intent(in) :: use_age_tracer
         integer, intent(in) :: mype ! MPI rank
 
         ! Local variables
@@ -1096,12 +1098,15 @@ contains
         logical, dimension(:), allocatable :: tracer_found
         integer :: num_expected_tracers
         logical :: id_error
+        integer :: slot                   ! running slot index when building expected_ids
 
         ! Physical tracers (temperature, salinity, etc.) - typically first 2
         num_physical_tracers = 2
 
-        ! Calculate actual BGC tracer count from namelist
+        ! ---- actual BGC count: strip non-BGC appended tracers --------------------
+        ! tracer_init appends in this order:  BGC | [age]
         actual_bgc_num = num_tracers - num_physical_tracers
+        if (use_age_tracer) actual_bgc_num = actual_bgc_num - 1
 
         ! ===========================================================================
         ! Determine expected BGC tracer count based on configuration
@@ -1150,7 +1155,9 @@ contains
 
         end if
 
+        !   T, S  +  BGC  +  age (opt)
         expected_total_tracers = num_physical_tracers + expected_bgc_num
+        if (use_age_tracer) expected_total_tracers = expected_total_tracers + 1
 
         ! ===========================================================================
         ! Build expected tracer ID list for current configuration
@@ -1210,11 +1217,25 @@ contains
             expected_tracer_ids(31) = 1029 ! Zoo3N
             expected_tracer_ids(32) = 1030 ! Zoo3C
         end if
+
+
+       ! Age tracer (ID=100): appended immediately after the last BGC slot.
+       ! slot = 2 (T,S) + expected_bgc_num + 1
+       slot = num_physical_tracers + expected_bgc_num + 1
+       if (use_age_tracer) then
+           expected_tracer_ids(slot) = 100
+           slot = slot + 1
+       end if
+
         ! else: base configuration only needs tracers 1, 2, 1001-1022
 
         ! ===========================================================================
         ! Perform validation checks
         ! ===========================================================================
+
+        ! --------------------------------------------------------------------------
+        ! Print configuration summary
+        ! --------------------------------------------------------------------------
 
         if (mype == 0) then
             write(*, *) ''
@@ -1224,9 +1245,11 @@ contains
             write(*, *) 'Model configuration:'
             write(*, *) '  enable_3zoo2det = ', enable_3zoo2det
             write(*, *) '  enable_coccos   = ', enable_coccos
+            write(*,*)  '  use_age_tracer  = ', use_age_tracer
             write(*, *) ''
             write(*, *) 'Tracer counts:'
             write(*, *) '  Physical tracers (T, S, ...)      = ', num_physical_tracers
+            write(*,*) '  Age tracer  (ID=100)               = ', merge(1, 0, use_age_tracer)
             write(*, *) '  Expected BGC tracers              = ', expected_bgc_num
             write(*, *) '  Expected TOTAL tracers            = ', expected_total_tracers
             write(*, *) '  Actual tracers from namelist      = ', num_tracers
@@ -1445,15 +1468,20 @@ contains
     ! ==============================================================================
     ! Purpose: Validate that actual tracer IDs from namelist match expected sequence
     !          Call this after reading the tracer namelist
+    ! Builds the expected ID array using a running slot index for the tail
+    ! (age), exactly mirroring the append order in tracer_init:
+    !   slot  2+bgc_num+1  : age tracer ID=100            (only if use_age_tracer)
     ! ==============================================================================
-    subroutine validate_tracer_id_sequence(tracer_ids, num_tracers, mype)
+    subroutine validate_tracer_id_sequence(tracer_ids, num_tracers, use_age_tracer, mype)
         use mpi, only: MPI_Abort, MPI_COMM_WORLD
+        !use g_forcing_param, only: use_age_tracer
 
         implicit none
 
         ! Arguments
         integer, dimension(:), intent(in) :: tracer_ids ! Actual IDs from namelist
         integer, intent(in) :: num_tracers ! Number of tracers
+        logical, intent(in) :: use_age_tracer
         integer, intent(in) :: mype ! MPI rank
 
         ! Local variables
@@ -1463,22 +1491,38 @@ contains
         logical :: error_found
         logical :: duplicate_found
         integer :: num_physical_tracers
+        integer :: bgc_num_local           ! local BGC count derived from config flags
+        integer :: slot                    ! running slot for age + transit tail
 
         error_found = .false.
         duplicate_found = .false.
         num_physical_tracers = 2
 
+        ! ---- derive local BGC count (same logic as validate_recom_tracers) --------
+        if (enable_3zoo2det .and. enable_coccos) then
+            bgc_num_local = 36
+        else if (enable_coccos .and. .not. enable_3zoo2det) then
+            bgc_num_local = 28
+        else if (enable_3zoo2det .and. .not. enable_coccos) then
+            bgc_num_local = 30
+        else
+            bgc_num_local = 22
+        end if
+
         ! Allocate expected IDs array
         allocate(expected_ids(num_tracers))
+        expected_ids = 0   ! zero-init; any unset slot is caught by the mismatch check
 
-        ! Build expected ID sequence
+        ! ---- physical tracers (slots 1-2) ----------------------------------------
         expected_ids(1) = 1
         expected_ids(2) = 2
 
+        ! ---- base BGC (slots 3-24, IDs 1001-1022, always present) ----------------
         do i = 1, 22
             expected_ids(num_physical_tracers + i) = 1000 + i
         end do
 
+        ! ---- config-specific BGC (slots 25 onwards) ------------------------------
         if (enable_3zoo2det .and. enable_coccos) then
             ! Full model configuration
             expected_ids(25:30) = [1023, 1024, 1025, 1026, 1027, 1028]
@@ -1491,6 +1535,18 @@ contains
         else if (enable_3zoo2det .and. .not.enable_coccos) then
             expected_ids(25:32) = [1023, 1024, 1025, 1026, 1027, 1028, 1029, 1030]
         end if
+
+        ! ---- age tracer (running slot) ----------------------
+        ! slot advances from the first position after the last BGC tracer.
+        slot = num_physical_tracers + bgc_num_local + 1
+
+        ! Age tracer (ID=100): appended first, immediately after the last BGC slot.
+        ! NOT a BGC tracer; not counted in bgc_num.
+        if (use_age_tracer) then
+            expected_ids(slot) = 100
+            slot = slot + 1
+        end if
+
 
         ! ===========================================================================
         ! Check 1: Compare actual vs expected tracer IDs
@@ -1509,6 +1565,10 @@ contains
                     write(*, *) 'ERROR at position ', i, ':'
                     write(*, *) '  Expected tracer ID: ', expected_ids(i)
                     write(*, *) '  Found tracer ID:    ', tracer_ids(i)
+                    ! position-specific hints
+                    if (use_age_tracer .and. &
+                        i == num_physical_tracers + bgc_num_local + 1) &
+                        write(*,*) '  HINT: this slot must be age tracer ID=100'
                     write(*, *) ''
                 end if
             end if
@@ -1566,6 +1626,8 @@ contains
                 write(*, *) 'Actual tracer ID sequence from namelist:'
                 write(*, *) tracer_ids
                 write(*, *) ''
+                if (use_age_tracer) &
+                    write(*,*) '  2. Age tracer          ID=100  (use_age_tracer = .true.)'
                 write(*, *) 'ACTION REQUIRED:'
                 write(*, *) '  Correct the tracer IDs in your namelist.config file'
                 write(*, *) '  Ensure the sequence matches exactly as expected'
@@ -1588,6 +1650,9 @@ contains
                         &===='
                 write(*, *) 'TRACER ID VALIDATION PASSED!'
                 write(*, *) 'All tracer IDs match expected sequence - no clashes detected.'
+                if (use_age_tracer) &
+                    write(*,*) '  Age tracer   (ID=100) correctly placed at slot ', &
+                    num_physical_tracers + bgc_num_local + 1
                 write(*, *) '======================================================================&
                         &===='
                 write(*, *) ''

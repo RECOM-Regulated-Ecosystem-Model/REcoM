@@ -80,7 +80,13 @@ contains
 
     end subroutine bio_fluxes
 end module bio_fluxes_interface
-
+! ==============================================================================
+! 24.03.2023 OG
+! MODULE / SUBROUTINE: recom
+! Purpose: Top-level REcoM biogeochemistry driver. Loops over all local nodes,
+!          sets up per-column forcing, calls REcoM_Forcing, collects diagnostics,
+!          and performs MPI halo exchanges.
+! ==============================================================================
 module recom_interface
     implicit none
     private
@@ -94,7 +100,7 @@ contains
             eDim_nod2D, mype, MPI_COMM_FESOM, tracers_info, num_tracers, tra_recom_sms, &
             npes, sn, rn, s_mpitype_nod2D, r_mpitype_nod2D, s_mpitype_nod3D, r_mpitype_nod3D, &
             sPE, rPE, requests, nreq, dt, daynew, month, mstep, ndpyr, yearold, timenew, rad, &
-            kappa, press_air, u_wind, v_wind, shortwave)
+            kappa, press_air, u_wind, v_wind, shortwave, use_age_tracer)
 
         use recom_g_comm_auto, only: recom_exchange_nod
 
@@ -147,6 +153,7 @@ contains
         real(kind=WP), intent(in), dimension(:, :) :: hnode, z_3d_n, zbar_3d_n
         real(kind=WP), intent(in), dimension(:, :) :: geo_coord_nod2D, areasvol
         real(kind=WP), intent(inout), dimension(:, :, :) :: tra_recom_sms
+        logical, intent(in) :: use_age_tracer
 
         ! These should all go into a dedicated REcoM type
         integer, intent(in) :: sn, rn, npes
@@ -196,6 +203,9 @@ contains
         real(kind=wp), allocatable :: rhoSW_watercolumn(:)
         real(kind=WP) :: ttf_rhs_bak(nl - 1, num_tracers) ! local variable
 
+        integer                    :: actual_bgc_num
+        integer                    :: num_physical_tracers
+
         allocate(Temp(nl - 1), Sali_depth(nl - 1), zr(nl - 1), PAR(nl - 1))
         allocate(C(nl - 1, bgc_num))
         allocate(CO2_watercolumn(nl - 1), pH_watercolumn(nl - 1), pCO2_watercolumn(nl - 1), &
@@ -237,6 +247,11 @@ contains
                         production_rate_to_flux_14
             end if
         end if
+
+        num_physical_tracers = 2
+        actual_bgc_num = num_tracers - num_physical_tracers
+        if (use_age_tracer) actual_bgc_num = actual_bgc_num - 1
+
         ! ======================================================================================
         !********************************* LOOP STARTS *****************************************
 
@@ -328,8 +343,10 @@ contains
             rhoSW_watercolumn(1:nzmax) = rhoSW3D(1:nzmax, n)
 
             !!---- Biogeochemical tracers
-            do tr_num = num_tracers - bgc_num + 1, num_tracers
-                C(1:nzmax, tr_num - 2) = tracers_info%data_pointers(tr_num)%tracer_data(1:nzmax, n)
+            !do tr_num = num_tracers - bgc_num + 1, num_tracers
+            do tr_num = num_physical_tracers+1, num_physical_tracers+actual_bgc_num
+               ! C(1:nzmax, tr_num - 2) = tracers_info%data_pointers(tr_num)%tracer_data(1:nzmax, n)
+                C(1:nzmax, tr_num-num_physical_tracers) = tracers_info%data_pointers(tr_num)%tracer_data(1:nzmax, n)
             end do
 
             ttf_rhs_bak = 0.0
@@ -486,8 +503,10 @@ contains
                     eDim_nod2D, nl, hnode, zbar_3d_n, &
                     geo_coord_nod2D, daynew, ndpyr, dt, kappa, mstep, rad)
 
-            do tr_num = num_tracers - bgc_num + 1, num_tracers !bgc_num+2
-                tracers_info%data_pointers(tr_num)%tracer_data(1:nzmax, n) = C(1:nzmax, tr_num - 2)
+            !do tr_num = num_tracers - bgc_num + 1, num_tracers !bgc_num+2
+            do tr_num = num_physical_tracers+1, num_physical_tracers+actual_bgc_num
+                !tracers_info%data_pointers(tr_num)%tracer_data(1:nzmax, n) = C(1:nzmax, tr_num - 2)
+                tracers_info%data_pointers(tr_num)%tracer_data(1:nzmax, n) = C(1:nzmax, tr_num-num_physical_tracers)
             end do
 
             ! recom_sms
