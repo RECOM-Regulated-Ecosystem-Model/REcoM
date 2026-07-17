@@ -36,9 +36,17 @@ contains
     !   - 3 Zooplankton: Het, Zoo2, Zoo3
     !   - 2 Detritus pools
     !===============================================================================
+    !
+    ! Tracer layout (fixed order):
+    !   T, S  |  BGC (bgc_num tracers)  |  age (optional, ID=100)  |  transit (optional)
+    !
+    ! BGC tracers always start immediately at slot 3, regardless of whether
+    ! transit tracers are active. Transit tracers (SF6, CFC-11, CFC-12, R14C,
+    ! R39Ar) are appended at the very end, after the optional age tracer.
+    !===============================================================================
     subroutine recom_init(nl, ulevels_nod2D, nlevels_nod2D, geo_coord_nod2D, Z_3d_n, myDim_nod2d, &
             eDim_nod2D, mype, MPI_COMM_FESOM, myDim_elem2D, eDim_elem2D, tracers_info, &
-            num_tracers, rad, use_age_tracer)
+            num_tracers, rad, use_age_tracer, use_transit, l_sf6, l_f11, l_f12, l_r14c, l_r39ar)
 
         use REcoM_declarations, only: wp, tracer_ids
         use REcoM_GloVar, only: tracers_info_type
@@ -50,12 +58,16 @@ contains
         integer, intent(in) :: nl, mydim_nod2d, edim_nod2d, mype, num_tracers
         integer, intent(in) :: mpi_comm_fesom, mydim_elem2d, edim_elem2d
         real(kind=WP), intent(in) :: rad
-        logical, intent(in) :: use_age_tracer
+        logical, intent(in) :: use_age_tracer, use_transit, l_sf6, l_f11, l_f12, l_r14c, l_r39ar
         integer, intent(in), dimension(:) :: ulevels_nod2d, nlevels_nod2d
         real(kind=wp), intent(in), dimension(:, :) :: geo_coord_nod2d, z_3d_n
         type(tracers_info_type), intent(in) :: tracers_info
 
         integer :: i, tracer_id
+        integer :: actual_bgc_num
+        integer :: num_physical_tracers
+        integer :: n_transit_tracers   ! number of active transit tracers
+        integer :: bgc_start, bgc_end  ! first/last slot of the BGC-only block
 
         call initialize_memory(myDim_nod2D + eDim_nod2D, nl, num_tracers)
 
@@ -65,13 +77,35 @@ contains
         call initialize_tracer_indices
 
         ! Validation check here
-        call validate_recom_tracers(num_tracers, use_age_tracer, mype)
+        call validate_recom_tracers(num_tracers, use_age_tracer, use_transit, l_sf6, l_f11, l_f12, l_r14c, l_r39ar, mype)
 
         ! After reading tracer namelist - validate actual IDs
-        call validate_tracer_id_sequence(tracers_info%ids(1:num_tracers), num_tracers, use_age_tracer, mype)
+        call validate_tracer_id_sequence(tracers_info%ids(1:num_tracers), num_tracers, use_age_tracer, use_transit, &
+                                            l_sf6, l_f11, l_f12, l_r14c, l_r39ar, mype)
 
-        ! Initializes tracer data
-        do i = num_tracers - bgc_num + 1, num_tracers
+        ! T,S | BGC | [age] | [transit] num_physical_tracers
+        ! is always just T,S (=2): BGC tracers start right after them, regardless
+        ! of whether transit tracers are active. Transit tracers are appended at
+        ! the tail instead and are not initialized here.
+        num_physical_tracers = 2
+
+        n_transit_tracers = 0
+        if (use_transit) then
+            if (l_sf6)   n_transit_tracers = n_transit_tracers + 1
+            if (l_f11)   n_transit_tracers = n_transit_tracers + 1
+            if (l_f12)   n_transit_tracers = n_transit_tracers + 1
+            if (l_r14c)  n_transit_tracers = n_transit_tracers + 1
+            if (l_r39ar) n_transit_tracers = n_transit_tracers + 1
+        end if
+
+        actual_bgc_num = num_tracers - num_physical_tracers
+        if (use_age_tracer) actual_bgc_num = actual_bgc_num - 1
+        if (use_transit) actual_bgc_num = actual_bgc_num - n_transit_tracers
+
+        bgc_start = num_physical_tracers + 1
+        bgc_end   = num_physical_tracers + actual_bgc_num
+
+        do i = bgc_start, bgc_end
             tracer_id = tracers_info%ids(i)
 
             !Iron (unit conversion: mol/L => umol/m3)
@@ -80,7 +114,7 @@ contains
                 tracers_info%data_pointers(i)%tracer_data(:, :) = &
                         tracers_info%data_pointers(i)%tracer_data(:, :) * 1.e9
 
-                ! Avoids tracers 1001, 1002, 1003, 1018 and 1022
+                ! Avoids tracers 1001, 1002, 1003, 1018 and 1022, age tracer 100
             else if (tracer_id > 1003 .and. tracer_id /= 1018 .and. tracer_id /= 1022) then
                 tracers_info%data_pointers(i)%tracer_data(:, :) = get_tracer_init_value(tracer_id)
             end if
@@ -439,6 +473,12 @@ contains
 
         integer :: row, k, nzmin, nzmax
 
+        ! Iron tracer (ID=1019) is always BGC tracer #17 in the base block
+        ! (1004..1022 shifted by 1003), so with the fixed T,S | BGC | [age] |
+        ! [transit] layout it always sits at slot 21 (= 2 physical + 19th BGC
+        ! slot: 1019 - 1000 = 19 -> n_base_physical + 19 = 2 + 19 = 21).
+        integer, parameter :: iron_slot = 21
+
         ! Mask hydrothermal vent in Eastern Equatorial Pacific GO
         do row = 1, myDim_nod2D + eDim_nod2D
             !if (ulevels_nod2D(row)>1) cycle
@@ -451,15 +491,15 @@ contains
                         .and. ((geo_coord_nod2D(1, row) > -106.0 * rad) .and. (geo_coord_nod2D(1, &
                         row) < -72.0 * rad))) then
                     if (abs(Z_3d_n(k, row)) < 2000.0_WP) cycle
-                    tracers_info%data_pointers(21)%tracer_data(k, row) = min(0.3, tracers_info%&
-                            data_pointers(21)%tracer_data(k, row)) ! OG todo: try 0.6
+                    tracers_info%data_pointers(iron_slot)%tracer_data(k, row) = &
+                            min(0.3, tracers_info%data_pointers(iron_slot)%tracer_data(k, row)) ! OG todo: try 0.6
                 end if
             end do
         end do
 
         ! Mask negative values
-        tracers_info%data_pointers(21)%tracer_data(:, :) = &
-                max(tiny, tracers_info%data_pointers(21)%tracer_data(:, :))
+        tracers_info%data_pointers(iron_slot)%tracer_data(:, :) = &
+                max(tiny, tracers_info%data_pointers(iron_slot)%tracer_data(:, :))
     end subroutine mask_hydrothermal_vents
 
     subroutine initialization_diagnostics(tracers_info, myDim_nod2D, ulevels_nod2D, nlevels_nod2D, &
@@ -482,6 +522,21 @@ contains
         real(kind=WP) :: locAlkmin, locDSimax, locDSimin, locDFemax, locDFemin
         real(kind=WP) :: locO2max, locO2min
 
+        ! With the fixed T,S | BGC | [age] | [transit] layout, BGC tracers
+        ! always start at slot 3 (right after T,S) regardless of use_transit.
+        ! These fixed slot numbers are therefore now constant and correct:
+        !   DIN (1001) -> slot 3, DIC (1002) -> slot 4, Alk (1003) -> slot 5,
+        !   DSi (1018) -> slot 20, DFe (1019) -> slot 21, O2 (1022) -> slot 24
+        ! (previously these shifted whenever use_transit was active, which was
+        ! a bug: this fixed indexing is now always correct, independent of
+        ! use_transit.)
+        integer, parameter :: din_slot = 3
+        integer, parameter :: dic_slot = 4
+        integer, parameter :: alk_slot = 5
+        integer, parameter :: dsi_slot = 20
+        integer, parameter :: dfe_slot = 21
+        integer, parameter :: o2_slot  = 24
+
         if (mype == 0) write(*, *) 'Tracers have been initialized as spinup from WOA/glodap' // &
                 ' netcdf files'
         locDINmax = -66666
@@ -498,29 +553,29 @@ contains
         locO2min = locDINmin
 
         do n = 1, myDim_nod2d
-            locDINmax = max(locDINmax, maxval(tracers_info%data_pointers(3)%tracer_data(&
+            locDINmax = max(locDINmax, maxval(tracers_info%data_pointers(din_slot)%tracer_data(&
                     ulevels_nod2D(n):nlevels_nod2D(n) - 1, n)))
-            locDINmin = min(locDINmin, minval(tracers_info%data_pointers(3)%tracer_data(&
+            locDINmin = min(locDINmin, minval(tracers_info%data_pointers(din_slot)%tracer_data(&
                     ulevels_nod2D(n):nlevels_nod2D(n) - 1, n)))
-            locDICmax = max(locDICmax, maxval(tracers_info%data_pointers(4)%tracer_data(&
+            locDICmax = max(locDICmax, maxval(tracers_info%data_pointers(dic_slot)%tracer_data(&
                     ulevels_nod2D(n):nlevels_nod2D(n) - 1, n)))
-            locDICmin = min(locDICmin, minval(tracers_info%data_pointers(4)%tracer_data(&
+            locDICmin = min(locDICmin, minval(tracers_info%data_pointers(dic_slot)%tracer_data(&
                     ulevels_nod2D(n):nlevels_nod2D(n) - 1, n)))
-            locAlkmax = max(locAlkmax, maxval(tracers_info%data_pointers(5)%tracer_data(&
+            locAlkmax = max(locAlkmax, maxval(tracers_info%data_pointers(alk_slot)%tracer_data(&
                     ulevels_nod2D(n):nlevels_nod2D(n) - 1, n)))
-            locAlkmin = min(locAlkmin, minval(tracers_info%data_pointers(5)%tracer_data(&
+            locAlkmin = min(locAlkmin, minval(tracers_info%data_pointers(alk_slot)%tracer_data(&
                     ulevels_nod2D(n):nlevels_nod2D(n) - 1, n)))
-            locDSimax = max(locDSimax, maxval(tracers_info%data_pointers(20)%tracer_data(&
+            locDSimax = max(locDSimax, maxval(tracers_info%data_pointers(dsi_slot)%tracer_data(&
                     ulevels_nod2D(n):nlevels_nod2D(n) - 1, n)))
-            locDSimin = min(locDSimin, minval(tracers_info%data_pointers(20)%tracer_data(&
+            locDSimin = min(locDSimin, minval(tracers_info%data_pointers(dsi_slot)%tracer_data(&
                     ulevels_nod2D(n):nlevels_nod2D(n) - 1, n)))
-            locDFemax = max(locDFemax, maxval(tracers_info%data_pointers(21)%tracer_data(&
+            locDFemax = max(locDFemax, maxval(tracers_info%data_pointers(dfe_slot)%tracer_data(&
                     ulevels_nod2D(n):nlevels_nod2D(n) - 1, n)))
-            locDFemin = min(locDFemin, minval(tracers_info%data_pointers(21)%tracer_data(&
+            locDFemin = min(locDFemin, minval(tracers_info%data_pointers(dfe_slot)%tracer_data(&
                     ulevels_nod2D(n):nlevels_nod2D(n) - 1, n)))
-            locO2max = max(locO2max, maxval(tracers_info%data_pointers(24)%tracer_data(&
+            locO2max = max(locO2max, maxval(tracers_info%data_pointers(o2_slot)%tracer_data(&
                     ulevels_nod2D(n):nlevels_nod2D(n) - 1, n)))
-            locO2min = min(locO2min, minval(tracers_info%data_pointers(24)%tracer_data(&
+            locO2min = min(locO2min, minval(tracers_info%data_pointers(o2_slot)%tracer_data(&
                     ulevels_nod2D(n):nlevels_nod2D(n) - 1, n)))
         end do
 
