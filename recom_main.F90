@@ -86,6 +86,14 @@ end module bio_fluxes_interface
 ! Purpose: Top-level REcoM biogeochemistry driver. Loops over all local nodes,
 !          sets up per-column forcing, calls REcoM_Forcing, collects diagnostics,
 !          and performs MPI halo exchanges.
+!
+! Tracer layout (fixed order): T, S | BGC (bgc_num tracers) | age (optional) |
+! transit (optional: SF6, CFC-11, CFC-12, R14C, R39Ar). BGC tracers always
+! start right after T, S (slot 3) and always occupy exactly bgc_num
+! contiguous slots; age (if enabled) and transit tracers (if enabled) are
+! appended after the BGC block, in that order, and must be excluded from any
+! loop that is meant to touch BGC tracers only.
+
 ! ==============================================================================
 module recom_interface
     implicit none
@@ -100,7 +108,8 @@ contains
             eDim_nod2D, mype, MPI_COMM_FESOM, tracers_info, num_tracers, tra_recom_sms, &
             npes, sn, rn, s_mpitype_nod2D, r_mpitype_nod2D, s_mpitype_nod3D, r_mpitype_nod3D, &
             sPE, rPE, requests, nreq, dt, daynew, month, mstep, ndpyr, yearold, timenew, rad, &
-            kappa, press_air, u_wind, v_wind, shortwave, use_age_tracer)
+            kappa, press_air, u_wind, v_wind, shortwave, use_age_tracer, use_transit, &
+            l_sf6, l_f11, l_f12, l_r14c, l_r39ar)
 
         use recom_g_comm_auto, only: recom_exchange_nod
 
@@ -153,7 +162,7 @@ contains
         real(kind=WP), intent(in), dimension(:, :) :: hnode, z_3d_n, zbar_3d_n
         real(kind=WP), intent(in), dimension(:, :) :: geo_coord_nod2D, areasvol
         real(kind=WP), intent(inout), dimension(:, :, :) :: tra_recom_sms
-        logical, intent(in) :: use_age_tracer
+        logical, intent(in) :: use_age_tracer, use_transit, l_sf6, l_f11, l_f12, l_r14c, l_r39ar
 
         ! These should all go into a dedicated REcoM type
         integer, intent(in) :: sn, rn, npes
@@ -205,6 +214,9 @@ contains
 
         integer                    :: actual_bgc_num
         integer                    :: num_physical_tracers
+        integer                    :: n_transit_tracers   ! number of active transit tracers
+        integer                    :: bgc_start, bgc_end  ! first/last slot of the BGC-only block
+ 
 
         allocate(Temp(nl - 1), Sali_depth(nl - 1), zr(nl - 1), PAR(nl - 1))
         allocate(C(nl - 1, bgc_num))
@@ -249,8 +261,22 @@ contains
         end if
 
         num_physical_tracers = 2
+
+        n_transit_tracers = 0
+        if (use_transit) then
+            if (l_sf6)   n_transit_tracers = n_transit_tracers + 1
+            if (l_f11)   n_transit_tracers = n_transit_tracers + 1
+            if (l_f12)   n_transit_tracers = n_transit_tracers + 1
+            if (l_r14c)  n_transit_tracers = n_transit_tracers + 1
+            if (l_r39ar) n_transit_tracers = n_transit_tracers + 1
+        end if
+
         actual_bgc_num = num_tracers - num_physical_tracers
         if (use_age_tracer) actual_bgc_num = actual_bgc_num - 1
+        if (use_transit) actual_bgc_num = actual_bgc_num - n_transit_tracers
+
+        bgc_start = num_physical_tracers + 1
+        bgc_end   = num_physical_tracers + actual_bgc_num
 
         ! ======================================================================================
         !********************************* LOOP STARTS *****************************************
@@ -343,9 +369,7 @@ contains
             rhoSW_watercolumn(1:nzmax) = rhoSW3D(1:nzmax, n)
 
             !!---- Biogeochemical tracers
-            !do tr_num = num_tracers - bgc_num + 1, num_tracers
-            do tr_num = num_physical_tracers+1, num_physical_tracers+actual_bgc_num
-               ! C(1:nzmax, tr_num - 2) = tracers_info%data_pointers(tr_num)%tracer_data(1:nzmax, n)
+            do tr_num = bgc_start, bgc_end
                 C(1:nzmax, tr_num-num_physical_tracers) = tracers_info%data_pointers(tr_num)%tracer_data(1:nzmax, n)
             end do
 
@@ -372,115 +396,6 @@ contains
                 ! Allocate and initialize all diagnostic arrays for a water column
                 call allocate_and_init_diags(nl)
             end if
-            !
-            !        !! * Allocate 3D diagnostics *
-            !            allocate(vertrespmeso(nl-1))
-            !            vertrespmeso  = 0.d0
-            !
-            !if (enable_3zoo2det) then
-            !            allocate(vertrespmacro(nl-1), vertrespmicro(nl-1))
-            !            vertrespmacro = 0.d0
-            !            vertrespmicro = 0.d0
-            !endif
-            !            allocate(vertcalcdiss(nl-1), vertcalcif(nl-1))
-            !            vertcalcdiss = 0.d0
-            !            vertcalcif   = 0.d0
-            !
-            !            allocate(vertaggn(nl-1), vertaggd(nl-1))
-            !            vertaggn = 0.d0
-            !            vertaggd = 0.d0
-            !
-            !            allocate(vertdocexn(nl-1), vertdocexd(nl-1))
-            !            vertdocexn = 0.d0
-            !            vertdocexd = 0.d0
-            !
-            !            allocate(vertrespn(nl-1), vertrespd(nl-1))
-            !            vertrespn = 0.d0
-            !            vertrespd = 0.d0
-            !
-            !            allocate(VTPhyCO2(nl-1), VTDiaCO2(nl-1))
-            !            VTPhyCO2 = 0.d0
-            !            VTDiaCO2 = 0.d0
-            !
-            !            allocate(VTCphotLigLim_phyto(nl-1), VTCphotLigLim_diatoms(nl-1))
-            !            VTCphotLigLim_phyto = 0.d0
-            !            VTCphotLigLim_diatoms = 0.d0
-            !
-            !            allocate(VTCphot_phyto(nl-1), VTCphot_diatoms(nl-1))
-            !            VTCphot_phyto = 0.d0
-            !            VTCphot_diatoms = 0.d0
-            !
-            !if (enable_coccos) then
-            !            allocate(VTTemp_diatoms(nl-1), VTTemp_phyto(nl-1))
-            !            VTTemp_diatoms = 0.d0
-            !            VTTemp_phyto = 0.d0
-            !
-            !            allocate(VTqlimitFac_phyto(nl-1), VTqlimitFac_diatoms(nl-1))
-            !            VTqlimitFac_phyto = 0.d0
-            !            VTqlimitFac_diatoms = 0.d0
-            !
-            !            allocate(VTSi_assimDia(nl-1))
-            !            VTSi_assimDia = 0.d0
-            !
-            !            allocate(vertaggc(nl-1), vertdocexc(nl-1), vertrespc(nl-1))
-            !            vertaggc = 0.d0
-            !            vertdocexc = 0.d0
-            !            vertrespc = 0.d0
-            !
-            !            allocate(vertaggp(nl-1), vertdocexp(nl-1), vertrespp(nl-1)) ! Phaeocystis
-            !            vertaggp = 0.d0
-            !            vertdocexp = 0.d0
-            !            vertrespp = 0.d0
-            !
-            !            allocate(VTTemp_cocco(nl-1), VTTemp_phaeo(nl-1))
-            !            VTTemp_cocco = 0.d0
-            !            VTTemp_phaeo = 0.d0
-            !
-            !            allocate(VTCoccoCO2(nl-1), VTPhaeoCO2(nl-1))
-            !            VTCoccoCO2 = 0.d0
-            !            VTPhaeoCO2 = 0.d0
-            !
-            !            allocate(VTqlimitFac_cocco(nl-1), VTqlimitFac_phaeo(nl-1))
-            !            VTqlimitFac_cocco  = 0.d0
-            !            VTqlimitFac_phaeo  = 0.d0
-            !
-            !            allocate(VTCphotLigLim_cocco(nl-1), VTCphotLigLim_phaeo(nl-1))
-            !            VTCphotLigLim_cocco  = 0.d0
-            !            VTCphotLigLim_phaeo  = 0.d0
-            !
-            !            allocate(VTCphot_cocco(nl-1), VTCphot_phaeo(nl-1))
-            !            VTCphot_cocco  = 0.d0
-            !            VTCphot_phaeo  = 0.d0
-            !
-            !
-            !endif
-            !
-            !            !! * Allocate 2D diagnostics *
-            !            allocate(vertNPPn(nl-1), vertGPPn(nl-1), vertNNAn(nl-1), vertChldegn(nl-1))
-            !            vertNPPn = 0.d0
-            !            vertGPPn = 0.d0
-            !            vertNNAn = 0.d0
-            !            vertChldegn  = 0.d0
-            !
-            !            allocate(vertNPPd(nl-1), vertGPPd(nl-1), vertNNAd(nl-1), vertChldegd(nl-1))
-            !            vertNPPd = 0.d0
-            !            vertGPPd = 0.d0
-            !            vertNNAd = 0.d0
-            !            vertChldegd  = 0.d0
-            !
-            !if (enable_coccos) then
-            !            allocate(vertNPPc(nl-1), vertGPPc(nl-1), vertNNAc(nl-1), vertChldegc(nl-1))
-            !            vertNPPc = 0.d0
-            !            vertGPPc = 0.d0
-            !            vertNNAc = 0.d0
-            !            vertChldegc = 0.d0
-            !
-            !            allocate(vertNPPp(nl-1), vertGPPp(nl-1), vertNNAp(nl-1), vertChldegp(nl-1))
-            !            vertNPPp = 0.d0
-            !            vertGPPp = 0.d0
-            !            vertNNAp = 0.d0
-            !            vertChldegp = 0.d0
-            !endif
 
             if (recom_debug .and. mype == 0) then
                 print *, achar(27) // '[36m' // '     -->' // &
@@ -496,16 +411,13 @@ contains
                     HCO3_watercolumn, & ! NEW MOCSY HCO3 for the whole watercolumn
                     CO3_watercolumn, & ! NEW DISS CO3 for the whole watercolumn
                     OmegaC_watercolumn, & ! NEW DISS OmegaC for the whole watercolumn
-            ! NEW DISS stoichiometric solubility product for calcite [mol^2/kg^2]
-                    kspc_watercolumn, &
+                    kspc_watercolumn, & ! NEW DISS stoichiometric solubility product for calcite [mol^2/kg^2]
                     rhoSW_watercolumn, & ! NEW DISS in-situ density of seawater [mol/m^3]
                     PAR, MPI_COMM_FESOM, mype, myDim_nod2D, &
                     eDim_nod2D, nl, hnode, zbar_3d_n, &
                     geo_coord_nod2D, daynew, ndpyr, dt, kappa, mstep, rad)
 
-            !do tr_num = num_tracers - bgc_num + 1, num_tracers !bgc_num+2
-            do tr_num = num_physical_tracers+1, num_physical_tracers+actual_bgc_num
-                !tracers_info%data_pointers(tr_num)%tracer_data(1:nzmax, n) = C(1:nzmax, tr_num - 2)
+            do tr_num = bgc_start, bgc_end
                 tracers_info%data_pointers(tr_num)%tracer_data(1:nzmax, n) = C(1:nzmax, tr_num-num_physical_tracers)
             end do
 
@@ -537,123 +449,6 @@ contains
                 ! Deallocate vertical tracer array
                 call deallocate_diags()
             end if
-            !            !! * Update 2D diagnostics *
-            !            NPPn(n) = locNPPn
-            !            NPPd(n) = locNPPd
-            !            GPPn(n) = locGPPn
-            !            GPPd(n) = locGPPd
-            !            NNAn(n) = locNNAn
-            !            NNAd(n) = locNNAd
-            !            Chldegn(n) = locChldegn
-            !            Chldegd(n) = locChldegd
-            !
-            !if (enable_coccos) then
-            !            NPPc(n) = locNPPc
-            !            GPPc(n) = locGPPc
-            !            NNAc(n) = locNNAc
-            !            Chldegc(n) = locChldegc
-            !            NPPp(n) = locNPPp
-            !            GPPp(n) = locGPPp
-            !            NNAp(n) = locNNAp
-            !            Chldegp(n) = locChldegp
-            !endif
-            !
-            !            !! * Update 3D diagnostics *
-            !            respmeso     (1:nzmax,n) = vertrespmeso     (1:nzmax)
-            !if (enable_3zoo2det) then
-            !            respmacro    (1:nzmax,n) = vertrespmacro    (1:nzmax)
-            !            respmicro    (1:nzmax,n) = vertrespmicro    (1:nzmax)
-            !endif
-            !            calcdiss     (1:nzmax,n) = vertcalcdiss     (1:nzmax)
-            !            calcif       (1:nzmax,n) = vertcalcif       (1:nzmax)
-            !
-            !            aggn         (1:nzmax,n) = vertaggn         (1:nzmax)
-            !            docexn       (1:nzmax,n) = vertdocexn       (1:nzmax)
-            !            respn        (1:nzmax,n) = vertrespn        (1:nzmax)
-            !            NPPn3D       (1:nzmax,n) = vertNPPn         (1:nzmax)
-            !
-            !            aggd         (1:nzmax,n) = vertaggd         (1:nzmax)
-            !            docexd       (1:nzmax,n) = vertdocexd       (1:nzmax)
-            !            respd        (1:nzmax,n) = vertrespd        (1:nzmax)
-            !            NPPd3D       (1:nzmax,n) = vertNPPd         (1:nzmax)
-            !
-            !            TPhyCO2             (1:nzmax,n) = VTPhyCO2                  (1:nzmax)
-            !            TDiaCO2             (1:nzmax,n) = VTDiaCO2                  (1:nzmax)
-            !            TCphotLigLim_phyto  (1:nzmax,n) = VTCphotLigLim_phyto       (1:nzmax)
-            !            TCphotLigLim_diatoms(1:nzmax,n) = VTCphotLigLim_diatoms     (1:nzmax)
-            !            TCphot_phyto        (1:nzmax,n) = VTCphot_phyto             (1:nzmax)
-            !            TCphot_diatoms      (1:nzmax,n) = VTCphot_diatoms           (1:nzmax)
-            !
-            !if (enable_coccos) then
-            !
-            !            TTemp_phyto         (1:nzmax,n) = VTTemp_phyto              (1:nzmax)
-            !            TqlimitFac_phyto    (1:nzmax,n) = VTqlimitFac_phyto         (1:nzmax)
-            !            TTemp_diatoms       (1:nzmax,n) = VTTemp_diatoms            (1:nzmax) !!
-            ! NEW from here tracking vars
-            !            TqlimitFac_diatoms  (1:nzmax,n) = VTqlimitFac_diatoms       (1:nzmax)
-            !            TSi_assimDia        (1:nzmax,n) = VTSi_assimDia             (1:nzmax)
-            !
-            !            aggc         (1:nzmax,n) = vertaggc         (1:nzmax)
-            !            docexc       (1:nzmax,n) = vertdocexc       (1:nzmax)
-            !            respc        (1:nzmax,n) = vertrespc        (1:nzmax)
-            !            NPPc3D       (1:nzmax,n) = vertNPPc         (1:nzmax)
-            !
-            !            aggp         (1:nzmax,n) = vertaggp         (1:nzmax)
-            !            docexp       (1:nzmax,n) = vertdocexp       (1:nzmax)
-            !            respp        (1:nzmax,n) = vertrespp        (1:nzmax)
-            !            NPPp3D       (1:nzmax,n) = vertNPPp         (1:nzmax)
-            !
-            !            TTemp_cocco         (1:nzmax,n) = VTTemp_cocco              (1:nzmax)
-            !            TCoccoCO2           (1:nzmax,n) = VTCoccoCO2                (1:nzmax)
-            !            TqlimitFac_cocco    (1:nzmax,n) = VTqlimitFac_cocco         (1:nzmax)
-            !            TCphotLigLim_cocco  (1:nzmax,n) = VTCphotLigLim_cocco       (1:nzmax)
-            !            TCphot_cocco        (1:nzmax,n) = VTCphot_cocco             (1:nzmax)
-            !
-            !            TTemp_phaeo         (1:nzmax,n) = VTTemp_phaeo              (1:nzmax)
-            !            TPhaeoCO2           (1:nzmax,n) = VTPhaeoCO2                (1:nzmax)
-            !            TqlimitFac_phaeo    (1:nzmax,n) = VTqlimitFac_phaeo         (1:nzmax)
-            !            TCphotLigLim_phaeo  (1:nzmax,n) = VTCphotLigLim_phaeo       (1:nzmax)
-            !            TCphot_phaeo        (1:nzmax,n) = VTCphot_phaeo             (1:nzmax)
-            !
-            !    endif
-            !
-            !if (recom_debug .and. mype==0) print *, achar(27)//'[36m'//'     --> ciso after
-            !REcoM_Forcing'//achar(27)//'[0m'
-            !
-            !            !! * Deallocating 2D diagnostics *
-            !            deallocate(vertNPPn, vertGPPn, vertNNAn, vertChldegn)
-            !            deallocate(vertNPPd, vertGPPd, vertNNAd, vertChldegd)
-            !if (enable_coccos) then
-            !            deallocate(vertNPPc, vertGPPc, vertNNAc, vertChldegc)
-            !            deallocate(vertNPPp, vertGPPp, vertNNAp, vertChldegp)
-            !endif
-            !
-            !            !! * Deallocating 3D Diagnostics *
-            !            deallocate(vertrespmeso)
-            !if (enable_3zoo2det) then
-            !            deallocate(vertrespmacro, vertrespmicro)
-            !endif
-            !            deallocate(vertcalcdiss, vertcalcif)
-            !            deallocate(vertaggn, vertdocexn, vertrespn)
-            !            deallocate(vertaggd, vertdocexd, vertrespd)
-            !            deallocate(VTPhyCO2, VTCphotLigLim_phyto, VTCphot_phyto)
-            !            deallocate(VTDiaCO2, VTCphotLigLim_diatoms, VTCphot_diatoms)
-            !
-            !if (enable_coccos) then
-            !           deallocate(vertgrazmeso_c)
-            !            deallocate(VTTemp_phyto, VTqlimitFac_phyto)
-            !            deallocate(VTTemp_diatoms, VTqlimitFac_diatoms)
-            !
-            !            deallocate(VTSi_assimDia)
-            !            deallocate(vertaggc, vertdocexc, vertrespc)
-            !            deallocate(vertaggp, vertdocexp, vertrespp)
-            !
-            !            deallocate(VTTemp_cocco, VTCoccoCO2, VTqlimitFac_cocco,
-            ! VTCphotLigLim_cocco, VTCphot_cocco)
-            !            deallocate(VTTemp_phaeo, VTPhaeoCO2, VTqlimitFac_phaeo,
-            ! VTCphotLigLim_phaeo, VTCphot_phaeo)
-            !
-            !endif
 
             AtmFeInput(n) = FeDust
             AtmNInput(n) = NDust
