@@ -366,16 +366,16 @@ contains
     !===============================================================================
     subroutine initialize_ciso(node_size, nl, ocean_area)
         use recom_declarations, only: wp
-        use recom_config, only: ciso, bgc_base_num, CO2_for_spinup
-        use recom_ciso, only: ciso_14, ciso_organic_14, use_atbox, delta_co2_13, &
+        use recom_config, only: ciso, bgc_base_num, CO2_for_spinup, use_atbox
+        use recom_ciso, only: ciso_14, ciso_organic_14, delta_co2_13, &
                 big_delta_co2_14, cosmic_14_init, delta_co2_14, r_atm_spinup_13, &
                 r_atm_spinup_14, production_rate_to_flux_14, cosmic_14, x_co2atm_13, &
                 x_co2atm_14, idic_13, iphyc_13, idetc_13, ihetc_13, idoc_13, idiac_13, &
                 iphycal_13, idetcal_13, idic_14, iphyc_14, idetc_14, ihetc_14, idoc_14, &
                 idiac_14, iphycal_14, idetcal_14, delta_dic_13_init, delta_dic_14_init, &
-                big_delta_dic_14_init
-        use recom_glovar, only: x_co2atm, GloPCO2surf_13, GloPCO2surf_14, GloCO2flux_13, &
+                big_delta_dic_14_init, GloPCO2surf_13, GloPCO2surf_14, GloCO2flux_13, &
                 GloCO2flux_14, GloCO2flux_seaicemask_13, GloCO2flux_seaicemask_14
+        use recom_glovar, only: x_co2atm
 
         implicit none
 
