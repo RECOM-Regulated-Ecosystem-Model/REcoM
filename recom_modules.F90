@@ -514,6 +514,8 @@ module recom_config
 
     ! Decides if grazing should have preference for phyN or DiaN
     logical :: REcoM_Grazing_Variable_Preference = .true.
+    logical :: REcoM_Grazing_Variable_Efficiency = .true. ! allows grazing efficiency to vary
+    ! with food availability
     logical :: Grazing_detritus = .false. ! Decides grazing on detritus
     logical :: het_resp_noredfield = .true. ! Decides respiratation of copepods
     logical :: diatom_mucus = .true. ! Effect of nutrient limitation on the aggregation
@@ -579,7 +581,7 @@ module recom_config
             VPhy, VDia, VCocco, &
             VPhaeo, &
             allow_var_sinking, biostep, REcoM_Geider_limiter, &
-            REcoM_Grazing_Variable_Preference, &
+            REcoM_Grazing_Variable_Preference, REcoM_Grazing_Variable_Efficiency, &
             Grazing_detritus, &
             het_resp_noredfield, &
             diatom_mucus, &

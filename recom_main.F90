@@ -487,7 +487,7 @@ contains
         ! ======================================================================================
         !************************** EXCHANGE NODAL INFORMATION *********************************
 
-        do tr_num = num_tracers - bgc_num + 1, num_tracers
+        do tr_num = bgc_start, bgc_end
             call recom_exchange_nod(tracers_info%data_pointers(tr_num)%tracer_data(:, :), &
                     npes, sn, rn, MPI_COMM_FESOM, mype, s_mpitype_nod3D, &
                     r_mpitype_nod3D, sPE, rPE, requests, nreq)

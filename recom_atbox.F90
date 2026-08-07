@@ -31,8 +31,8 @@ contains
                 total_co2flux_14 ! (mol / s) radiocarbon
 
         ! Globally integrated air-sea CO2 flux (mol / s)
-        total_co2flux = 0.
-        call integrate_nod_2d_recom(0.001 * GloCO2flux_seaicemask, total_CO2flux, MPI_COMM_FESOM, &
+        total_co2flux = 0.0_WP
+        call integrate_nod_2d_recom(0.001_WP * GloCO2flux_seaicemask, total_CO2flux, MPI_COMM_FESOM, &
                 myDim_nod2D, ulevels_nod2D, areasvol)
 
         ! Atmospheric carbon budget (mol)
@@ -52,8 +52,8 @@ contains
             ! Consider 13CO2 (and maybe also 14CO2)
 
             ! Globally integrated air-sea 13CO2 flux (mol / s)
-            total_co2flux_13 = 0.
-            call integrate_nod_2d_recom(0.001 * GloCO2flux_seaicemask_13, total_co2flux_13, &
+            total_co2flux_13 = 0.0_WP
+            call integrate_nod_2d_recom(0.001_WP * GloCO2flux_seaicemask_13, total_co2flux_13, &
                     MPI_COMM_FESOM, myDim_nod2D, ulevels_nod2D, areasvol)
 
             ! Atmospheric carbon-13 budget (mol)
@@ -64,8 +64,8 @@ contains
             x_co2atm_13 = x_co2atm_13(1)
 
             if (ciso_14) then
-                total_co2flux_14 = 0. ! globally integrated air-sea 14CO2 flux (mol / s)
-                call integrate_nod_2d_recom(0.001 * GloCO2flux_seaicemask_14, total_co2flux_14, &
+                total_co2flux_14 = 0.0_WP ! globally integrated air-sea 14CO2 flux (mol / s)
+                call integrate_nod_2d_recom(0.001_WP * GloCO2flux_seaicemask_14, total_co2flux_14, &
                         MPI_COMM_FESOM, myDim_nod2D, ulevels_nod2D, &
                         areasvol)
                 ! Atmospheric radiocarbon budget in mol:
@@ -82,7 +82,7 @@ contains
                 ! Adjust cosmogenic 14C production (mol / s) in spinup runs,
                 r_atm_14 = x_co2atm_14(1) / x_co2atm(1)
                 ! r_atm_spinup_14 is calculated once-only in subroutine recom_init
-                if (atbox_spinup .and. abs(r_atm_14 - r_atm_spinup_14) > 0.001) then
+                if (atbox_spinup .and. abs(r_atm_14 - r_atm_spinup_14) > 0.001_WP) then
                     cosmic_14(1) = cosmic_14(1) * (r_atm_spinup_14 / r_atm_14)
                     ! cosmic_14(1) = cosmic_14(1) * (1 + 0.01 * (r_atm_14_spinup /
                     ! r_atm_14))
