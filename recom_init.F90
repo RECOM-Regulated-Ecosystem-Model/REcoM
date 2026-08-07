@@ -114,8 +114,9 @@ contains
                 tracers_info%data_pointers(i)%tracer_data(:, :) = &
                         tracers_info%data_pointers(i)%tracer_data(:, :) * 1.e9
 
-                ! Avoids tracers 1001, 1002, 1003, 1018 and 1022, age tracer 100
-            else if (tracer_id > 1003 .and. tracer_id /= 1018 .and. tracer_id /= 1022) then
+                ! Avoids tracers 1001, 1002, 1003, 1018, 1022 and DICremin (read from gen_ic3d)
+            else if (tracer_id > 1003 .and. tracer_id /= 1018 .and. tracer_id /= 1022 .and. &
+                    tracer_id /= tracer_ids%dic_remineralization) then  ! allowed since call initialize_tracer_ids happens earlier
                 tracers_info%data_pointers(i)%tracer_data(:, :) = get_tracer_init_value(tracer_id)
             end if
         end do
@@ -343,6 +344,9 @@ contains
 
         integer :: current_tracer_id, total_tracers
 
+        tracer_ids%dissolved_inorganic_nitrogen = 1001
+        tracer_ids%dissolved_inorganic_carbon = 1002
+        tracer_ids%alkalinity = 1003
         tracer_ids%phytoplankton_nitrogen = 1004
         tracer_ids%phytoplankton_carbon = 1005
         tracer_ids%phytoplankton_chlorophyll = 1006
@@ -362,6 +366,9 @@ contains
         tracer_ids%phytoplankton_calcite = 1020
         tracer_ids%detrital_calcite = 1021
         tracer_ids%oxygen = 1022
+
+        ! DIC remineralization diagnostic tracer (added by Sina) -- always present, always last
+        tracer_ids%dic_remineralization = 1037
 
         current_tracer_id = 1023
 
@@ -390,6 +397,7 @@ contains
         if (enable_3zoo2det) then
             tracer_ids%microzooplankton_nitrogen = current_tracer_id
             tracer_ids%microzooplankton_carbon = current_tracer_id + 1
+            current_tracer_id = current_tracer_id + 2   ! << required so DICremin doesn't overwrite microzoo_carbon's slot
         end if
 
     end subroutine initialize_tracer_ids

@@ -113,7 +113,7 @@ contains
 
         use recom_g_comm_auto, only: recom_exchange_nod
 
-        use recom_declarations, only: wp, decaybenthos
+        use recom_declarations, only: wp, decaybenthos, tracer_ids
         use bio_fluxes_interface, only: bio_fluxes
 
         use recom_config, only: benthos_num, bgc_num, ciso, diags, dust_sol, enable_3zoo2det, &
@@ -190,7 +190,7 @@ contains
         ! ======================================================================================
 
         real(kind=wp) :: SW, Loc_slp
-        integer :: tr_num
+        integer :: tr_num, tracer_id
         integer :: n, nzmax
 
         real(kind=wp) :: Sali
@@ -225,6 +225,24 @@ contains
         allocate(CO3_watercolumn(nl - 1), OmegaC_watercolumn(nl - 1), kspc_watercolumn(nl - 1), &
                 rhoSW_watercolumn(nl - 1))
 
+        num_physical_tracers = 2
+
+        n_transit_tracers = 0
+        if (use_transit) then
+            if (l_sf6)   n_transit_tracers = n_transit_tracers + 1
+            if (l_f11)   n_transit_tracers = n_transit_tracers + 1
+            if (l_f12)   n_transit_tracers = n_transit_tracers + 1
+            if (l_r14c)  n_transit_tracers = n_transit_tracers + 1
+            if (l_r39ar) n_transit_tracers = n_transit_tracers + 1
+        end if
+
+        actual_bgc_num = num_tracers - num_physical_tracers
+        if (use_age_tracer) actual_bgc_num = actual_bgc_num - 1
+        if (use_transit) actual_bgc_num = actual_bgc_num - n_transit_tracers
+
+        bgc_start = num_physical_tracers + 1
+        bgc_end   = num_physical_tracers + actual_bgc_num
+
         do_update = .false.
 
         ! ice concentration [0 to 1]
@@ -233,7 +251,8 @@ contains
         ! virtual flux is possible
 
         if (restore_alkalinity) then
-            call bio_fluxes(tracers_info%data_pointers(2 + ialk)%tracer_data(:, :), &
+            !call bio_fluxes(tracers_info%data_pointers(2 + ialk)%tracer_data(:, :), &
+            call bio_fluxes(tracers_info%data_pointers(bgc_start - 1 + ialk)%tracer_data(:, :), &
                     MPI_COMM_FESOM, myDim_nod2D, eDim_nod2D, ocean_area, ulevels_nod2D, areasvol)
         end if
 
@@ -260,23 +279,13 @@ contains
             end if
         end if
 
-        num_physical_tracers = 2
-
-        n_transit_tracers = 0
-        if (use_transit) then
-            if (l_sf6)   n_transit_tracers = n_transit_tracers + 1
-            if (l_f11)   n_transit_tracers = n_transit_tracers + 1
-            if (l_f12)   n_transit_tracers = n_transit_tracers + 1
-            if (l_r14c)  n_transit_tracers = n_transit_tracers + 1
-            if (l_r39ar) n_transit_tracers = n_transit_tracers + 1
-        end if
-
-        actual_bgc_num = num_tracers - num_physical_tracers
-        if (use_age_tracer) actual_bgc_num = actual_bgc_num - 1
-        if (use_transit) actual_bgc_num = actual_bgc_num - n_transit_tracers
-
-        bgc_start = num_physical_tracers + 1
-        bgc_end   = num_physical_tracers + actual_bgc_num
+        ! Resetting DICremin tracer to zero when reaching surface (added by Sina) 
+        do tr_num = 1,num_tracers
+            tracer_id = tracers_info%ids(tr_num)
+            if (tracer_id == tracer_ids%dic_remineralization) then
+                tracers_info%data_pointers(tr_num)%tracer_data(1, :)  = 0.0_WP
+            end if
+        end do
 
         ! ======================================================================================
         !********************************* LOOP STARTS *****************************************
@@ -487,7 +496,8 @@ contains
         ! ======================================================================================
         !************************** EXCHANGE NODAL INFORMATION *********************************
 
-        do tr_num = num_tracers - bgc_num + 1, num_tracers
+        !do tr_num = num_tracers - bgc_num + 1, num_tracers
+        do tr_num = bgc_start, bgc_end
             call recom_exchange_nod(tracers_info%data_pointers(tr_num)%tracer_data(:, :), &
                     npes, sn, rn, MPI_COMM_FESOM, mype, s_mpitype_nod3D, &
                     r_mpitype_nod3D, sPE, rPE, requests, nreq)

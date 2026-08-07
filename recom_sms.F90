@@ -205,7 +205,8 @@ contains
                 PhyCalc, & ! [mmol/m3] Phytoplankton calcite
                 DetCalc, & ! [mmol/m3] Detrital calcite
                 FreeFe, & ! [mmol/m3] Free iron
-                O2 ! [mmol/m3] Dissolved oxygen
+                O2, & ! [mmol/m3] Dissolved oxygen
+                DICremin ! [mmol/m3] Dissolved inorganic carbon remineralization
 
         ! Coccolithophore variables (conditionally used based on namelist)
         real(kind=wp) :: &
@@ -477,7 +478,7 @@ contains
                 call sms_initialize_variables(n, k, state, sms, thick, Temp, Sali_depth, SurfSR, &
                         PAR, kappa, DIN, DIC, Alk, PhyN, PhyC, PhyChl, DetN, DetC, HetN, HetC, &
                         DON, EOC, DiaN, DiaC, DiaChl, DiaSi, DetSi, Si, Fe, PhyCalc, DetCalc, &
-                        FreeFe, O2, CoccoN, CoccoC, CoccoChl, PhaeoN, PhaeoC, PhaeoChl, Zoo2N, &
+                        FreeFe, O2, DICremin, CoccoN, CoccoC, CoccoChl, PhaeoN, PhaeoC, PhaeoChl, Zoo2N, &
                         Zoo2C, DetZ2N, DetZ2C, DetZ2Si, DetZ2Calc, MicZooN, MicZooC, &
                         recip_hetN_plus, REcoM_T_depth, REcoM_S_depth, REcoM_DIC_depth, &
                         REcoM_Alk_depth, REcoM_Si_depth, REcoM_Phos_depth)
@@ -3782,6 +3783,7 @@ contains
         !       with species-specific parameters reflecting different sensitivities
         !-------------------------------------------------------------------------------
 
+        ! OG Why do we keep h_depth ? Do we use proton concentration somewhere in the code?
         ! Convert pH to proton concentration for calculations
         ! pH = -log10[H+], therefore [H+] = 10^(-pH)
         h_depth(1) = 10.d0 ** (-ph_depth(1))
