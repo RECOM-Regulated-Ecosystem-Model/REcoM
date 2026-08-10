@@ -571,10 +571,6 @@ module recom_config
     integer :: bottflx_num = 4
     logical :: use_atbox = .false. ! switch for atmospheric box model for CO2
 
-    logical :: fe_2ligands = .false. ! consider Fe-ligand binding with two ligands
-    ! use Fe-ligand parameterisation dependent on DOC and pH (Ye2020)
-    logical :: fe_compl_nica = .false.
-
     namelist /pavariables/ use_REcoM, REcoM_restart, &
             bgc_num, diags3d_num, bgc_base_num, &
             VDet, VDet_zoo2, &
@@ -597,8 +593,7 @@ module recom_config
             currentCO2cycle, DIC_PI, Nmocsy, &
             recom_debug, ciso, benthos_num, &
             use_MEDUSA, sedflx_num, bottflx_num, &
-            add_loopback, lb_tscale, use_atbox, &
-            fe_2ligands, fe_compl_nica
+            add_loopback, lb_tscale, use_atbox
 
     !!------------------------------------------------------------------------------
     !! *** Sinking ***
@@ -723,7 +718,10 @@ module recom_config
     real(kind=wp) :: totalligand = 1.d0 ! [mumol/m3] order 1. Total free ligand
     ! [m3/mumol] order 100. Ligand-free iron stability constant
     real(kind=wp) :: ligandStabConst = 100.d0
-    namelist /pairon_chem/ totalligand, ligandStabConst
+    logical :: fe_2ligands = .false. ! consider Fe-ligand binding with two ligands
+    ! use Fe-ligand parameterisation dependent on DOC and pH (Ye2020)
+    logical :: fe_compl_nica = .false.
+    namelist /pairon_chem/ totalligand, ligandStabConst, fe_2ligands, fe_compl_nica
     !!------------------------------------------------------------------------------
     !! *** Zooplankton ***
     real(kind=wp) :: graz_max = 2.4d0 ! [mmol N/(m3 * day)] Maximum grazing loss parameter
@@ -2670,6 +2668,14 @@ contains
         vertaggd = 0.d0
 
         ! --------------------------------------------------------------------------
+        ! Mesozooplankton (base heterotroph group, present in every configuration;
+        ! used unconditionally in REcoM_sms regardless of Grazing_detritus/
+        ! enable_3zoo2det, so it must be allocated unconditionally too)
+        ! --------------------------------------------------------------------------
+        allocate(vertrespmeso(nl - 1))
+        vertrespmeso = 0.d0
+
+        ! --------------------------------------------------------------------------
         ! Coccolithophores (if enabled)
         ! --------------------------------------------------------------------------
         if (enable_coccos) then
@@ -2728,7 +2734,6 @@ contains
                 allocate(vertgrazmeso_tot(nl - 1), vertgrazmeso_n(nl - 1), vertgrazmeso_d(nl - 1))
                 allocate(vertgrazmeso_det(nl - 1), vertgrazmeso_mic(nl - 1), vertgrazmeso_det2(nl &
                         &- 1))
-                allocate(vertrespmeso(nl - 1))
 
                 vertgrazmeso_tot = 0.d0
                 vertgrazmeso_n = 0.d0
@@ -2736,7 +2741,6 @@ contains
                 vertgrazmeso_det = 0.d0
                 vertgrazmeso_mic = 0.d0
                 vertgrazmeso_det2 = 0.d0
-                vertrespmeso = 0.d0
 
                 if (enable_coccos) then
                     allocate(vertgrazmicro_c(nl - 1), vertgrazmicro_p(nl - 1))
@@ -3086,6 +3090,12 @@ contains
         deallocate(vertaggd, vertdocexd, vertrespd)
         deallocate(VTDiaCO2, VTCphotLigLim_diatoms, VTCphot_diatoms)
 
+        ! --------------------------------------------------------------------------
+        ! Mesozooplankton (base heterotroph group; see matching unconditional
+        ! allocation above)
+        ! --------------------------------------------------------------------------
+        deallocate(vertrespmeso)
+
         if (enable_coccos) then
             deallocate(VTTemp_phyto, VTqlimitFac_phyto)
             deallocate(VTTemp_diatoms, VTqlimitFac_diatoms)
@@ -3113,7 +3123,7 @@ contains
         ! --------------------------------------------------------------------------
         if (Grazing_detritus) then
             deallocate(vertgrazmeso_tot, vertgrazmeso_n, vertgrazmeso_d)
-            deallocate(vertgrazmeso_det, vertrespmeso)
+            deallocate(vertgrazmeso_det)
 
             if (enable_coccos) then
                 deallocate(vertgrazmeso_c, vertgrazmeso_p)
