@@ -12,10 +12,26 @@ public :: get_seawater_viscosity
 contains
 
     !===============================================================================
-    ! YY: sinking of second detritus adapted from Ozgur's code
-    ! but not using recom_det_tracer_id, since
-    ! second detritus has a different sinking speed than the first
-    ! define recom_det2_tracer_id to make it consistent???
+    ! ver_sinking_recom_benthos
+    !   Computes vertical sinking of particulate tracers into the benthos layer.
+    !
+    !   For each locally-owned open-ocean node the sinking velocity is selected
+    !   by tracer ID, the downward flux through each layer interface is accumulated
+    !   into str_bf, and the net material reaching the seafloor is added to the
+    !   appropriate Benthos bucket (N, C, Si, Cal) and optionally to the MEDUSA
+    !   sediment flux arrays.
+    !
+    !   Cavity nodes (ulevels_nod2D > 1) are skipped - there is no overlying
+    !   water column above the ice-shelf cavity base that could deposit material
+    !   onto a benthic boundary.
+    !
+    !   Note: second-detritus class (zoo2det) uses a separate sinking speed
+    !   (VDet_zoo2) and is identified by hardcoded IDs (1025-1028) because no
+    !   recom_det2_tracer_id array is defined yet.
+    !   TODO: define recom_det2_tracer_id in recom_declarations for consistency
+    !         with recom_det_tracer_id / recom_phy_tracer_id / recom_dia_tracer_id.
+    !   TODO: replace all hardcoded tracer IDs with named constants from
+    !         recom_declarations throughout this file.
     !===============================================================================
     subroutine ver_sinking_recom_benthos(tr_num, nl, ulevels_nod2D, nlevels_nod2D, zbar_3d_n, &
             nod_in_elem2D_num, nod_in_elem2D, nlevels, area, tracer_id, tracer_data_values, &
@@ -59,6 +75,9 @@ contains
         real(kind=WP) :: tv
 
         do n = 1, myDim_nod2D ! needs exchange_nod in the end
+
+            if (ulevels_nod2D(n) > 1) cycle ! Cavity guard
+
             nl1 = nlevels_nod2D(n) - 1
             ul1 = ulevels_nod2D(n)
 
@@ -333,7 +352,7 @@ contains
 
             select case (tracer_id)
             case (1001)
-                bottom_flux = GloSed(:, 1) * area(1, :) ! DIN
+                bottom_flux = GloSed(:, 1) * area(1, :) ! DIN     !FIXME: (areasvol(ul1,:) OG: 02.06.2026
             case (1002)
                 bottom_flux = GloSed(:, 2) * area(1, :) ! DIC
             case (1003)
@@ -413,10 +432,13 @@ contains
             !_______________________________________________________________________
             ! Bottom flux
             do nz = nlevels_nod2D_minimum, nl1
-                vd_flux(nz) = (area(nz, n) - area(nz + 1, n)) * bottom_flux(n) / (area(1, n))
+                !vd_flux(nz) = (area(nz, n) - area(nz + 1, n)) * bottom_flux(n) / (area(1, n))
+                vd_flux(nz)=(area(nz,n)-area(nz+1,n))* bottom_flux(n)/(areasvol(ul1,n))
             end do
             nz = nl1
-            vd_flux(nz + 1) = (area(nz + 1, n)) * bottom_flux(n) / (area(1, n))
+            !vd_flux(nz + 1) = (area(nz + 1, n)) * bottom_flux(n) / (area(1, n))
+            vd_flux(nz+1)= (area(nz+1,n))* bottom_flux(n)/(areasvol(ul1,n))
+
             !_______________________________________________________________________
             ! writing flux into rhs
             do nz = ul1, nl1
@@ -584,10 +606,10 @@ contains
 
                     !! ---- We assume constant sinking for second detritus
                     if (enable_3zoo2det .and. &
-                        tracer_id == tracer_ids%macrozooplankton_detrital_nitrogen .or. & !idetz2n
+                        (tracer_id == tracer_ids%macrozooplankton_detrital_nitrogen .or. & !idetz2n
                         tracer_id == tracer_ids%macrozooplankton_detrital_carbon .or. & !idetz2c
                         tracer_id == tracer_ids%macrozooplankton_detrital_silica .or. & !idetz2si
-                        tracer_id == tracer_ids%macrozooplankton_detrital_calcite) then !idetz2calc
+                        tracer_id == tracer_ids%macrozooplankton_detrital_calcite)) then !idetz2calc
                         Wvel_flux(nz) = -VDet_zoo2 / SecondsPerDay
 
                         if (use_ballasting) then
@@ -622,10 +644,7 @@ contains
                 dt_sink = dt
                 vd_flux = 0.0d0
 
-                !FIXME: Having IF True and IF False is bad practice. Either throw away the old code,
-                !or make a namelist switch...
                 ! 3rd Order DST Sceheme with flux limiting. This code comes from old recom
-                if (.true.) then
 
                     k = nod_in_elem2D_num(n)
                     ! Screening minimum depth in neigbouring nodes around node n
@@ -664,9 +683,8 @@ contains
                                 0.5 * wM * (tracer_data_values(max(nzmin, nz - 1), n) + psiP * Rj))
                         vd_flux(nz) = -tv * area(nz, n)
                     end do
-                end if ! 3rd Order DST Sceheme with flux limiting
 
-                if (.false.) then ! simple upwind
+                if (.false.) then ! simple upwind FIXME: use a flag here later
 
                     ! Surface flux
                     vd_flux(nzmin) = 0.0_WP
@@ -703,9 +721,23 @@ contains
 
     end subroutine ver_sinking_recom
 
-    !-------------------------------------------------------------------------------
-    ! Subroutine calculate ballasting
-    !-------------------------------------------------------------------------------
+!===============================================================================
+! ballast
+!   Computes per-node, per-level scaling factors for the ballasted sinking
+!   velocity parameterisation (Cram et al. 2018).
+!
+!   Scaling factors:
+!     scaling_density1/2_3D - ratio of (particle - seawater) excess density
+!                              to a reference excess density; set to 1.0 if
+!                              density scaling is disabled or particle is less
+!                              dense than seawater.
+!     scaling_visc_3D       - ratio of reference viscosity to local seawater
+!                              viscosity; set to 1.0 if viscosity scaling is
+!                              disabled or viscosity is zero.
+!
+!   The actual sinking velocities are assembled in ver_sinking_recom using
+!   w_ref1/2 * scaling_density * scaling_visc (+ optional depth term).
+!===============================================================================
     subroutine ballast(myDim_nod2D, ulevels_nod2D, nlevels_nod2D, geo_coord_nod2D, Z_3d_n, &
             tracer_data_values_1, tracer_data_values_2, rad)
 
@@ -727,107 +759,94 @@ contains
         real(kind=WP), intent(in), dimension(:, :) :: geo_coord_nod2D, Z_3d_n
         real(kind=WP), intent(in), dimension(:, :) :: tracer_data_values_1, tracer_data_values_2
 
-        integer :: row, k, nzmin, nzmax
-        real(kind=wp) :: depth_pos(1)
-        real(kind=wp) :: pres(1)
-        real(kind=wp) :: sa(1)
-        real(kind=wp) :: ct(1)
-        real(kind=wp) :: rho_seawater(1)
+        integer       :: row, k, nzmin, nzmax
+        real(kind=wp) :: depth_pos(1)    ! Layer mid-depth [m, positive]
+        real(kind=wp) :: pres(1)         ! Layer mid-depth [m, positive]
+        real(kind=wp) :: sa(1)           ! Absolute salinity [g/kg]
+        real(kind=wp) :: ct(1)           ! Conservative temperature [deg C]
+        real(kind=wp) :: rho_seawater(1) ! In-situ seawater density [kg/m3]
         real(kind=wp) :: Lon_degree(1)
         real(kind=wp) :: Lat_degree(1)
 
-        ! For ballasting, calculate scaling factors here and pass them to FESOM, where sinking
-        ! velocities are calculated
-        ! -----
-        ! If ballasting is used, sinking velocities are a function of a) particle composition
-        ! (=density),
-        ! b) sea water viscosity, c) depth (currently for small detritus only), and d) a constant
-        ! reference sinking speed
-        ! -----
-
-        ! check oce_ale_tracer.F90
-        !     call get_seawater_viscosity(mesh) ! seawater_visc_3D
-        !     call get_particle_density(mesh) ! rho_particle = density of particle class 1 and 2
-        !___________________________________________________________________________
-        ! loop over local nodes
+        ! For ballasting, calculate scaling factors here and pass them to FESOM,
+        ! where sinking velocities are computed from these factors plus a reference speed.
+        !
+        ! Sinking velocity depends on:
+        !   a) particle composition (= density)
+        !   b) sea-water viscosity
+        !   c) depth (currently small detritus only)
+        !   d) a constant reference sinking speed
         do row = 1, myDim_nod2D
-            ! max. number of levels at node n
+
             nzmin = ulevels_nod2D(row)
+            ! nlevels_nod2D counts layer interfaces; subtract 1 to get the number
+            ! of layer centres (= the last valid tracer/velocity level index).
+
             nzmax = nlevels_nod2D(row)
-            !! lon
-            Lon_degree(1) = geo_coord_nod2D(1, row) / rad !! convert from rad to degree
-            !! lat
-            Lat_degree(1) = geo_coord_nod2D(2, row) / rad !! convert from rad to degree
 
-            ! get scaling vectors -> these need to be passed to FESOM to get sinking velocities
-            ! get local seawater density
+            Lon_degree(1) = geo_coord_nod2D(1, row) / rad
+            Lat_degree(1) = geo_coord_nod2D(2, row) / rad
+
             do k = nzmin, nzmax
-
-                !! level depth
-                ! take depth of tracers instead of levels abs(zbar_3d_n(k,row))
+                ! --- seawater density at this node/level ---
                 depth_pos(1) = abs(Z_3d_n(k, row))
-
-                ! pres is output of function,1=number of records
+                ! FIX OG: Pass length-1 arrays (not scalar elements) to depth2press so
+                !      the interface matches its expected array dummy arguments.
                 call depth2press(depth_pos(1), Lat_degree(1), pres, 1)
-                sa = gsw_sa_from_sp(tracer_data_values_2(k, row), pres, Lon_degree(1), Lat_degree(1&
-                        ))
+                ! FIX OG: Pass length-1 array literals for scalar tracer values so all
+                !      GSW arguments are consistently rank-1 arrays of length 1.
+                sa = gsw_sa_from_sp(tracer_data_values_2(k, row), pres, Lon_degree(1), Lat_degree(1))
                 ct = gsw_ct_from_pt(sa, tracer_data_values_1(k, row))
                 rho_seawater = gsw_rho(sa, ct, pres)
 
-                ! (i.e. no density scaling)
-                scaling_density1_3D(k, row) = 1.0
-                scaling_density2_3D(k, row) = 1.0
+                ! Default: no density effect (neutral scaling)
+                scaling_density1_3D(k, row) = 1.0_WP
+                scaling_density2_3D(k, row) = 1.0_WP
 
                 if (use_density_scaling) then
                     !if (tracers%data(tr_num)%ID ==1008)then !idetc
                     !if (tracers%data(tr_num)%values(k,row)>0.001) then ! only apply ballasting
-                    !above a certain biomass (OG Todo: remove)
-                    scaling_density1_3D(k, row) = (rho_particle1(k, row) - rho_seawater(1)) &
-                            / (rho_ref_part - rho_ref_water)
+                    scaling_density1_3D(k, row) = &
+                        (rho_particle1(k, row) - rho_seawater(1)) / (rho_ref_part - rho_ref_water)
                     !endif
                     !endif
-                    !if (enable_3zoo2det .and. &
-                    !tracers%data(tr_num)%ID ==1026)then ! idetz2c
+                    if (enable_3zoo2det) &
                     !if (tracers%data(tr_num)%values(k,row)>0.001) then ! only apply ballasting
-                    !above a certain biomass (OG Todo: remove)
-                    scaling_density2_3D(k, row) = (rho_particle2(k, row) - rho_seawater(1)) &
-                            / (rho_ref_part - rho_ref_water)
+                    scaling_density2_3D(k, row) = &
+                        (rho_particle2(k, row) - rho_seawater(1)) / (rho_ref_part - rho_ref_water)
                     !endif
                     !endif
                 end if
 
                 scaling_visc_3D(k, row) = 1.0
-
-                if (use_viscosity_scaling) then
-                    if (seawater_visc_3D(k, row) < tiny) then
-                        scaling_visc_3D(k, row) = 1.0
-                    else
-                        scaling_visc_3D(k, row) = visc_ref_water / seawater_visc_3D(k, row)
-                    end if
+                if (use_viscosity_scaling .and. seawater_visc_3D(k, row) /= 0.0_WP) then
+                    scaling_visc_3D(k, row) = visc_ref_water / seawater_visc_3D(k, row)
                 end if
 
             end do
-            rho_particle1(nzmax + 1, row) = rho_particle1(nzmax, row)
-            rho_particle2(nzmax + 1, row) = rho_particle2(nzmax, row)
-            scaling_visc_3D(nzmax + 1, row) = scaling_visc_3D(nzmax, row)
+
+            ! Extend bottom values one level for flux-point access in ver_sinking_recom
+            ! FIXED OG:
+            scaling_density1_3D(nzmax+1, row)    = scaling_density1_3D(nzmax, row)
+            scaling_visc_3D(nzmax+1, row)  = scaling_visc_3D(nzmax, row)
+            if (enable_3zoo2det) then
+                scaling_density2_3D(nzmax+1, row) = scaling_density2_3D(nzmax, row)
+            end if
         end do
-        ! in the unlikely (if possible at all...) case that rho_particle(k)-rho_seawater(1)<0,
-        ! prevent the scaling factor from being negative
-
-        ! tiny = 2.23D-16
-        if (any(scaling_density1_3D(:, :) <= tiny)) scaling_density1_3D(:, :) = 1.0_WP
-
-        if (enable_3zoo2det) then
-            ! tiny = 2.23D-16
-            if (any(scaling_density2_3D(:, :) <= tiny)) scaling_density2_3D(:, :) = 1.0_WP
-        end if
 
     end subroutine ballast
 
-    !-------------------------------------------------------------------------------
-    ! Subroutine calculate density of particle
-    ! depending on composition (detC, detOpal, detCaCO3) based on Cram et al. (2018)
-    !-------------------------------------------------------------------------------
+!===============================================================================
+! get_particle_density
+!   Computes the bulk density of each detritus class from its elemental
+!   composition, following Cram et al. (2018).
+!
+!   rho_particle = rho_CaCO3 * f_cal + rho_opal * f_si
+!                + rho_POC   * f_c   + rho_PON  * f_n
+!
+!   where fractions f_x = component_x / sum(all components).
+!
+!===============================================================================
     subroutine get_particle_density(num_tracers, myDim_nod2d, eDim_nod2D, nl, ulevels_nod2D, &
             nlevels_nod2D, tracers_info)
 
@@ -887,7 +906,7 @@ contains
 
         do row = 1, myDim_nod2d
             nzmin = ulevels_nod2D(row)
-            nzmax = nlevels_nod2D(row)
+            nzmax = nlevels_nod2D(row) - 1 
             aux(nzmin:nzmax, row) = b1(nzmin:nzmax, row) + b2(nzmin:nzmax, row) &
                     + b3(nzmin:nzmax, row) + b4(nzmin:nzmax, row)
             a1(nzmin:nzmax, row) = b1(nzmin:nzmax, row) / aux(nzmin:nzmax, row)
@@ -926,9 +945,8 @@ contains
             end do
 
             do row = 1, myDim_nod2d + eDim_nod2D ! myDim is sufficient
-                !if (ulevels_nod2D(row)>1) cycle
                 nzmin = ulevels_nod2D(row)
-                nzmax = nlevels_nod2D(row)
+                nzmax = nlevels_nod2D(row) - 1
                 aux(nzmin:nzmax, row) = b1(nzmin:nzmax, row) + b2(nzmin:nzmax, row) &
                         + b3(nzmin:nzmax, row) + b4(nzmin:nzmax, row)
                 a1(nzmin:nzmax, row) = b1(nzmin:nzmax, row) / aux(nzmin:nzmax, row)
@@ -943,10 +961,19 @@ contains
 
     end subroutine get_particle_density
 
-    !-------------------------------------------------------------------------------
-    ! Subroutine to approximate seawater viscosity with current temperature
-    ! based on Cram et al. (2018)
-    !-------------------------------------------------------------------------------
+!===============================================================================
+! get_seawater_viscosity
+!   Approximates dynamic seawater viscosity [kg/(m<C2><B7>s)] as a function of
+!   temperature and salinity using Sharqawy et al. (2010).
+!
+!   Validity: T <E2><88><88> [0, 180] deg C,  S <E2><88><88> [0, 0.15] kg/kg.
+!   Salinity effects are secondary to temperature but included via the
+!   A/B correction terms; salinity is converted from practical units to
+!   kg/kg by multiplying by 0.001.
+!
+!   Cavity nodes are included <E2><80><94> viscosity affects sinking in sub-shelf
+!   waters too.
+!===============================================================================
 
     ! neglecting salinity effects, which are much smaller than those of temperature
     ! https://bitbucket.org/ohnoplus/ballasted-sinking/src/master/tools/waterviscosity.m
@@ -977,7 +1004,7 @@ contains
             ! OG Do we need any limitation here?
             ! i.e., if (seawater_visc_3D(row)<=0.0_WP) cycle
             nzmin = ulevels_nod2D(row)
-            nzmax = nlevels_nod2D(row)
+            nzmax = nlevels_nod2D(row) - 1
 
             do k = nzmin, nzmax
                 ! Eq from Sharaway 2010
