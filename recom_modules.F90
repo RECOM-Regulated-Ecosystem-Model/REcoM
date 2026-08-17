@@ -1205,7 +1205,6 @@ contains
         logical :: id_error
         integer :: slot                   ! running slot index when building expected_ids
 
-        logical :: num_physical_tracers
         integer, parameter :: n_base_physical = 2   ! T (id=1), S (id=2)
 
         ! ---- count active transit tracers -----------------------------------------
@@ -1220,7 +1219,7 @@ contains
 
         ! ---- actual BGC count: strip non-BGC appended tracers --------------------
         ! tracer_init now appends in this order:  T,S | BGC | [age] | [transit]
-        ! num_physical_tracers here is just T,S (=2) in the reordered layout.
+        ! n_base_physical here is just T,S (=2) in the reordered layout.
         actual_bgc_num = num_tracers - n_base_physical
         if (use_age_tracer) actual_bgc_num = actual_bgc_num - 1
         actual_bgc_num = actual_bgc_num - n_transit_tracers
@@ -1280,8 +1279,6 @@ contains
         expected_total_tracers = n_base_physical + expected_bgc_num
         if (use_age_tracer) expected_total_tracers = expected_total_tracers + 1
         expected_total_tracers = expected_total_tracers + n_transit_tracers
-
-        num_physical_tracers = n_base_physical
 
         ! ===========================================================================
         ! Build expected tracer ID list for current configuration
@@ -1669,7 +1666,6 @@ contains
         integer :: slot                    ! running slot for age + transit tail
         integer :: n_transit_tracers       ! number of active transit tracers
         integer, parameter :: n_base_physical = 2   ! T (id=1), S (id=2)
-        logical :: num_physical_tracers
 
         error_found = .false.
         duplicate_found = .false.
@@ -1688,9 +1684,6 @@ contains
             ! Additional DICremin: 1 tracer (1037) (added by Sina)
             bgc_num_local = 23
         end if
-
-        ! num_physical_tracers (global) is just T,S in the new layout
-        num_physical_tracers = n_base_physical
 
         ! Allocate expected IDs array
         allocate(expected_ids(num_tracers))

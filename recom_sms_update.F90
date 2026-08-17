@@ -7,7 +7,7 @@ module recom_sms_update
 
 contains
 
-    subroutine sms_update_tracer_scalars(n, k, state, sms, thick, Temp, Sali_depth, SurfSR, PAR, &
+    subroutine sms_update_tracer_scalars(n, nzmin, k, state, sms, thick, Temp, Sali_depth, SurfSR, PAR, &
             kappa, DIN, DIC, Alk, PhyN, PhyC, PhyChl, DetN, DetC, HetN, HetC, DON, EOC, DiaN, &
             DiaC, DiaChl, DiaSi, DetSi, Si, Fe, PhyCalc, DetCalc, FreeFe, O2, DICremin, CoccoN, CoccoC, &
             CoccoChl, PhaeoN, PhaeoC, PhaeoChl, Zoo2N, Zoo2C, DetZ2N, DetZ2C, DetZ2Si, DetZ2Calc, &
@@ -49,7 +49,7 @@ contains
 
         implicit none
 
-        integer, intent(in) :: n, k
+        integer, intent(in) :: n, nzmin, k
 
         real(kind=wp), intent(in) :: SurfSR
         real(kind=wp), intent(in), dimension(:) :: thick, Temp, Sali_depth
@@ -961,8 +961,8 @@ contains
         !   - Self-shading is key negative feedback on bloom magnitude
         !-------------------------------------------------------------------------------
 
-        if (k == 1) then
-
+        !if (k == 1) then
+        if (k == nzmin) then
             !===========================================================================
             ! SURFACE LAYER INITIALIZATION
             !===========================================================================

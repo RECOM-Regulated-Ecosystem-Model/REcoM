@@ -8,7 +8,7 @@ module recom_sms_module
 
 contains
 
-    subroutine REcoM_sms(n, Nn, state, thick, SurfSR, sms, Temp, Sali_depth, CO2_watercolumn, &
+    subroutine REcoM_sms(n, nzmin, Nn, state, thick, SurfSR, sms, Temp, Sali_depth, CO2_watercolumn, &
             pH_watercolumn, pCO2_watercolumn, HCO3_watercolumn, CO3_watercolumn, &
             OmegaC_watercolumn, kspc_watercolumn, rhoSW_watercolumn, Loc_slp, &
             zF, PAR, Latd, daynew, dt, kappa, mstep, MPI_COMM_FESOM, mype, &
@@ -125,6 +125,7 @@ contains
         integer, intent(in) :: n, daynew, mype, myDim_nod2D, eDim_nod2D, nl, mstep
         integer, intent(in) :: MPI_COMM_FESOM
         integer, intent(in) :: Nn !< Total number of nodes in the vertical
+        integer, intent(in) :: nzmin
 
         real(kind=wp), intent(in) :: SurfSR, dt !< [W/m2] ShortWave radiation at surface
         real(kind=wp), intent(in) :: Loc_slp ![Pa] sea-level pressure
@@ -468,14 +469,15 @@ contains
             !   - myDim_nod2D: Horizontal dimension (for 3D unstructured grids)
             !---------------------------------------------------------------------------
 
-            do k = one, nn
+            !do k = one, nn
+            do k = nzmin, nn
                 ! Alternative loop structures (commented out):
                 ! do n = 1, myDim_nod2D
                 !     Nn = nlevels_nod2D(n) - 1
                 !     nzmin = ulevels_nod2D(row)
                 !     nzmax = nlevels_nod2D(row)
 
-                call sms_initialize_variables(n, k, state, sms, thick, Temp, Sali_depth, SurfSR, &
+                call sms_initialize_variables(n, nzmin, k, state, sms, thick, Temp, Sali_depth, SurfSR, &
                         PAR, kappa, DIN, DIC, Alk, PhyN, PhyC, PhyChl, DetN, DetC, HetN, HetC, &
                         DON, EOC, DiaN, DiaC, DiaChl, DiaSi, DetSi, Si, Fe, PhyCalc, DetCalc, &
                         FreeFe, O2, DICremin, CoccoN, CoccoC, CoccoChl, PhaeoN, PhaeoC, PhaeoChl, Zoo2N, &
