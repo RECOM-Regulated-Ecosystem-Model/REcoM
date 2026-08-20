@@ -2718,6 +2718,11 @@ contains
 
 end module REcoM_ciso
 
+! ==============================================================================
+! MODULE: recom_diags_management
+! Purpose: Allocation, initialization, update, and deallocation of all REcoM
+!          diagnostic arrays (per-node water column and global 2D/3D fields).
+! ==============================================================================
 module recom_diags_management
     use recom_config, only: enable_3zoo2det, enable_coccos, grazing_detritus
 
@@ -2734,30 +2739,52 @@ contains
 
     ! ==============================================================================
     ! SUBROUTINE: allocate_and_init_diags
-    ! Purpose: Allocate and initialize all diagnostic arrays for a water column
+    ! Purpose: Allocate and initialize all local (per-column) diagnostic arrays
     ! ==============================================================================
     subroutine allocate_and_init_diags(nl)
 
-        use REcoM_declarations, only: vertaggc, vertaggd, vertaggn, vertaggp, vertcalcdiss, &
-                vertcalcif, vertchldegc, vertchldegd, vertchldegn, vertchldegp, vertdocexc, &
-                vertdocexd, vertdocexn, vertdocexp, vertgppc, vertgppd, vertgppn, vertgppp, &
-                vertgrazmacro_c, vertgrazmacro_d, vertgrazmacro_det, vertgrazmacro_det2, &
-                vertgrazmacro_mes, vertgrazmacro_mic, vertgrazmacro_n, vertgrazmacro_p, &
-                vertgrazmacro_tot, vertgrazmeso_c, vertgrazmeso_d, vertgrazmeso_det, &
-                vertgrazmeso_det2, vertgrazmeso_mic, vertgrazmeso_n, vertgrazmeso_p, &
-                vertgrazmicro_c, vertgrazmicro_d, vertgrazmicro_n, vertgrazmicro_p, &
-                vertnnac, vertnnad, vertnnan, vertnnap, vertnppc, vertnppd, vertnppn, vertnppp, &
-                vertrespc, vertrespd, vertrespmacro, vertrespmeso, vertrespmicro, vertrespn, &
-                vertrespp, vtcoccoco2, vtcphot_cocco, vtcphot_diatoms, vtcphot_phaeo, &
-                vtcphotliglim_cocco, vtcphotliglim_diatoms, vtcphotliglim_phaeo, &
-                vtdiaco2, vtphaeoco2, vtphyco2, vtqlimitfac_cocco, vtqlimitfac_diatoms, &
-                vtqlimitfac_phaeo, vtqlimitfac_phyto, vtsi_assimdia, vttemp_cocco, vttemp_diatoms, &
-                vertgrazmeso_tot, vertgrazmicro_tot, vttemp_phaeo, vttemp_phyto, &
-                vtcphot_phyto, vtcphotliglim_phyto
+        use REcoM_declarations, only: vertcalcdiss, vertcalcif
 
         implicit none
 
         integer, intent(in) :: nl ! Number of vertical levels
+
+        ! --------------------------------------------------------------------------
+        ! Small Phytoplankton & Diatoms (always active)
+        ! --------------------------------------------------------------------------
+
+        call alloc_init_phyto_diags(nl)
+        ! --------------------------------------------------------------------------
+        ! Coccolithophores and Phaeocystis (optional)
+        ! --------------------------------------------------------------------------
+        if (enable_coccos) call alloc_init_cocco_diags(nl)
+
+        ! Calcification arrays (always needed)
+        allocate(vertcalcdiss(nl - 1), vertcalcif(nl - 1))
+        vertcalcdiss = 0.d0
+        vertcalcif = 0.d0
+
+        ! --------------------------------------------------------------------------
+        ! Zooplankton grazing (optional)
+        ! --------------------------------------------------------------------------
+        if (Grazing_detritus) call alloc_init_zoo_diags(nl)
+
+    end subroutine allocate_and_init_diags
+
+    ! ==============================================================================
+    ! SUBROUTINE: alloc_init_phyto_diags
+    ! Purpose: Allocate and initialize small phytoplankton and diatom diagnostics
+    ! ==============================================================================
+    subroutine alloc_init_phyto_diags(nl)
+
+        use REcoM_declarations, only: vertNPPn, vertGPPn, vertNNAn, vertChldegn, vertrespn, &
+                vertdocexn, vertaggn, vertNPPd, vertGPPd, vertNNAd, vertChldegd, vertrespd, &
+                vertdocexd, vertaggd, VTPhyCO2, VTDiaCO2, VTCphotLigLim_phyto, &
+                VTCphotLigLim_diatoms, VTCphot_phyto, VTCphot_diatoms
+
+        implicit none
+
+        integer, intent(in) :: nl
 
         ! --------------------------------------------------------------------------
         ! Small Phytoplankton
@@ -2788,111 +2815,8 @@ contains
         vertaggd = 0.d0
 
         ! --------------------------------------------------------------------------
-        ! Coccolithophores (if enabled)
-        ! --------------------------------------------------------------------------
-        if (enable_coccos) then
-            allocate(vertNPPc(nl - 1), vertGPPc(nl - 1), vertNNAc(nl - 1), vertChldegc(nl - 1))
-            allocate(vertrespc(nl - 1), vertdocexc(nl - 1), vertaggc(nl - 1))
-            allocate(vertcalcdiss(nl - 1), vertcalcif(nl - 1))
-
-            vertNPPc = 0.d0
-            vertGPPc = 0.d0
-            vertNNAc = 0.d0
-            vertChldegc = 0.d0
-            vertrespc = 0.d0
-            vertdocexc = 0.d0
-            vertaggc = 0.d0
-            vertcalcdiss = 0.d0
-            vertcalcif = 0.d0
-
-            ! ----------------------------------------------------------------------
-            ! Phaeocystis
-            ! ----------------------------------------------------------------------
-            allocate(vertNPPp(nl - 1), vertGPPp(nl - 1), vertNNAp(nl - 1), vertChldegp(nl - 1))
-            allocate(vertrespp(nl - 1), vertdocexp(nl - 1), vertaggp(nl - 1))
-
-            vertNPPp = 0.d0
-            vertGPPp = 0.d0
-            vertNNAp = 0.d0
-            vertChldegp = 0.d0
-            vertrespp = 0.d0
-            vertdocexp = 0.d0
-            vertaggp = 0.d0
-        else
-            ! Allocate calcification arrays even if coccos are disabled
-            allocate(vertcalcdiss(nl - 1), vertcalcif(nl - 1))
-            vertcalcdiss = 0.d0
-            vertcalcif = 0.d0
-        end if
-
-        ! --------------------------------------------------------------------------
-        ! Zooplankton Grazing (if enabled)
-        ! --------------------------------------------------------------------------
-        if (Grazing_detritus) then
-
-            if (enable_3zoo2det) then
-                ! Microzooplankton
-                allocate(vertgrazmicro_tot(nl - 1), &
-                        vertgrazmicro_n(nl - 1), &
-                        vertgrazmicro_d(nl - 1))
-                allocate(vertrespmicro(nl - 1))
-
-                vertgrazmicro_tot = 0.d0
-                vertgrazmicro_n = 0.d0
-                vertgrazmicro_d = 0.d0
-                vertrespmicro = 0.d0
-
-                ! Mesozooplankton
-                allocate(vertgrazmeso_tot(nl - 1), vertgrazmeso_n(nl - 1), vertgrazmeso_d(nl - 1))
-                allocate(vertgrazmeso_det(nl - 1), vertgrazmeso_mic(nl - 1), vertgrazmeso_det2(nl &
-                        &- 1))
-                allocate(vertrespmeso(nl - 1))
-
-                vertgrazmeso_tot = 0.d0
-                vertgrazmeso_n = 0.d0
-                vertgrazmeso_d = 0.d0
-                vertgrazmeso_det = 0.d0
-                vertgrazmeso_mic = 0.d0
-                vertgrazmeso_det2 = 0.d0
-                vertrespmeso = 0.d0
-
-                if (enable_coccos) then
-                    allocate(vertgrazmicro_c(nl - 1), vertgrazmicro_p(nl - 1))
-                    allocate(vertgrazmeso_c(nl - 1), vertgrazmeso_p(nl - 1))
-
-                    vertgrazmicro_c = 0.d0
-                    vertgrazmicro_p = 0.d0
-                    vertgrazmeso_c = 0.d0
-                    vertgrazmeso_p = 0.d0
-                end if
-            end if
-
-            ! Macrozooplankton
-            allocate(vertgrazmacro_tot(nl - 1), vertgrazmacro_n(nl - 1), vertgrazmacro_d(nl - 1))
-            allocate(vertgrazmacro_mes(nl - 1), vertgrazmacro_det(nl - 1))
-            allocate(vertgrazmacro_mic(nl - 1), vertgrazmacro_det2(nl - 1))
-            allocate(vertrespmacro(nl - 1))
-
-            vertgrazmacro_tot = 0.d0
-            vertgrazmacro_n = 0.d0
-            vertgrazmacro_d = 0.d0
-            vertgrazmacro_mes = 0.d0
-            vertgrazmacro_det = 0.d0
-            vertgrazmacro_mic = 0.d0
-            vertgrazmacro_det2 = 0.d0
-            vertrespmacro = 0.d0
-
-            if (enable_coccos) then
-                allocate(vertgrazmacro_c(nl - 1), vertgrazmacro_p(nl - 1))
-                vertgrazmacro_c = 0.d0
-                vertgrazmacro_p = 0.d0
-            end if
-        end if
-
-        ! --------------------------------------------------------------------------
         ! Temperature and Photosynthesis Tracking Variables
         ! --------------------------------------------------------------------------
-
         allocate(VTPhyCO2(nl - 1), VTDiaCO2(nl - 1))
         VTPhyCO2 = 0.d0
         VTDiaCO2 = 0.d0
@@ -2905,46 +2829,172 @@ contains
         VTCphot_phyto = 0.d0
         VTCphot_diatoms = 0.d0
 
-        if (enable_coccos) then
+    end subroutine alloc_init_phyto_diags
 
-            allocate(VTTemp_diatoms(nl - 1), VTTemp_phyto(nl - 1))
-            VTTemp_diatoms = 0.d0
-            VTTemp_phyto = 0.d0
+    ! ==============================================================================
+    ! SUBROUTINE: alloc_init_cocco_diags
+    ! Purpose: Allocate and initialize coccolithophore and Phaeocystis diagnostics
+    ! ==============================================================================
+    subroutine alloc_init_cocco_diags(nl)
 
-            allocate(VTqlimitFac_phyto(nl - 1), VTqlimitFac_diatoms(nl - 1))
-            VTqlimitFac_phyto = 0.d0
-            VTqlimitFac_diatoms = 0.d0
+        use REcoM_declarations, only: vertNPPc, vertGPPc, vertNNAc, vertChldegc, vertrespc, &
+                vertdocexc, vertaggc, vertNPPp, vertGPPp, vertNNAp, vertChldegp, vertrespp, &
+                vertdocexp, vertaggp, VTTemp_diatoms, VTTemp_phyto, VTqlimitFac_phyto, &
+                VTqlimitFac_diatoms, VTSi_assimDia, VTTemp_cocco, VTTemp_phaeo, VTCoccoCO2, &
+                VTPhaeoCO2, VTqlimitFac_cocco, VTqlimitFac_phaeo, VTCphotLigLim_cocco, &
+                VTCphotLigLim_phaeo, VTCphot_cocco, VTCphot_phaeo
 
-            allocate(VTSi_assimDia(nl - 1))
-            VTSi_assimDia = 0.d0
+        implicit none
 
-            ! --------------------------------------------------------------------------
-            ! Coccolithophores and Phaeocystis Tracking (if enabled)
-            ! --------------------------------------------------------------------------
+        integer, intent(in) :: nl
 
-            allocate(VTTemp_cocco(nl - 1), VTTemp_phaeo(nl - 1))
-            VTTemp_cocco = 0.d0
-            VTTemp_phaeo = 0.d0
+        ! ----------------------------------------------------------------------
+        ! Coccolithophores
+        ! ----------------------------------------------------------------------
+        allocate(vertNPPc(nl - 1), vertGPPc(nl - 1), vertNNAc(nl - 1), vertChldegc(nl - 1))
+        allocate(vertrespc(nl - 1), vertdocexc(nl - 1), vertaggc(nl - 1))
 
-            allocate(VTCoccoCO2(nl - 1), VTPhaeoCO2(nl - 1))
-            VTCoccoCO2 = 0.d0
-            VTPhaeoCO2 = 0.d0
+        vertNPPc = 0.d0
+        vertGPPc = 0.d0
+        vertNNAc = 0.d0
+        vertChldegc = 0.d0
+        vertrespc = 0.d0
+        vertdocexc = 0.d0
+        vertaggc = 0.d0
 
-            allocate(VTqlimitFac_cocco(nl - 1), VTqlimitFac_phaeo(nl - 1))
-            VTqlimitFac_cocco = 0.d0
-            VTqlimitFac_phaeo = 0.d0
+        ! ----------------------------------------------------------------------
+        ! Phaeocystis
+        ! ----------------------------------------------------------------------
+        allocate(vertNPPp(nl - 1), vertGPPp(nl - 1), vertNNAp(nl - 1), vertChldegp(nl - 1))
+        allocate(vertrespp(nl - 1), vertdocexp(nl - 1), vertaggp(nl - 1))
 
-            allocate(VTCphotLigLim_cocco(nl - 1), VTCphotLigLim_phaeo(nl - 1))
-            VTCphotLigLim_cocco = 0.d0
-            VTCphotLigLim_phaeo = 0.d0
+        vertNPPp = 0.d0
+        vertGPPp = 0.d0
+        vertNNAp = 0.d0
+        vertChldegp = 0.d0
+        vertrespp = 0.d0
+        vertdocexp = 0.d0
+        vertaggp = 0.d0
 
-            allocate(VTCphot_cocco(nl - 1), VTCphot_phaeo(nl - 1))
-            VTCphot_cocco = 0.d0
-            VTCphot_phaeo = 0.d0
+        ! --------------------------------------------------------------------------
+        ! Temperature / nutrient / light tracking - Phytoplankton and Diatoms
+        ! (only allocated when coccos are enabled, matching original file1 logic)
+        ! --------------------------------------------------------------------------
+        allocate(VTTemp_diatoms(nl - 1), VTTemp_phyto(nl - 1))
+        VTTemp_diatoms = 0.d0
+        VTTemp_phyto = 0.d0
 
+        allocate(VTqlimitFac_phyto(nl - 1), VTqlimitFac_diatoms(nl - 1))
+        VTqlimitFac_phyto = 0.d0
+        VTqlimitFac_diatoms = 0.d0
+
+        allocate(VTSi_assimDia(nl - 1))
+        VTSi_assimDia = 0.d0
+
+        ! --------------------------------------------------------------------------
+        ! Temperature / photosynthesis tracking - Coccos and Phaeocystis
+        ! --------------------------------------------------------------------------
+        allocate(VTTemp_cocco(nl - 1), VTTemp_phaeo(nl - 1))
+        VTTemp_cocco = 0.d0
+        VTTemp_phaeo = 0.d0
+
+        allocate(VTCoccoCO2(nl - 1), VTPhaeoCO2(nl - 1))
+        VTCoccoCO2 = 0.d0
+        VTPhaeoCO2 = 0.d0
+
+        allocate(VTqlimitFac_cocco(nl - 1), VTqlimitFac_phaeo(nl - 1))
+        VTqlimitFac_cocco = 0.d0
+        VTqlimitFac_phaeo = 0.d0
+
+        allocate(VTCphotLigLim_cocco(nl - 1), VTCphotLigLim_phaeo(nl - 1))
+        VTCphotLigLim_cocco = 0.d0
+        VTCphotLigLim_phaeo = 0.d0
+
+        allocate(VTCphot_cocco(nl - 1), VTCphot_phaeo(nl - 1))
+        VTCphot_cocco = 0.d0
+        VTCphot_phaeo = 0.d0
+
+    end subroutine alloc_init_cocco_diags
+
+    ! ==============================================================================
+    ! SUBROUTINE: alloc_init_zoo_diags
+    ! Purpose: Allocate and initialize zooplankton grazing diagnostics
+    ! ==============================================================================
+    subroutine alloc_init_zoo_diags(nl)
+
+        use REcoM_declarations, only: vertgrazmicro_tot, vertgrazmicro_n, vertgrazmicro_d, &
+                vertgrazmicro_c, vertgrazmicro_p, vertrespmicro, vertgrazmeso_tot, &
+                vertgrazmeso_n, vertgrazmeso_d, vertgrazmeso_det, vertgrazmeso_mic, &
+                vertgrazmeso_det2, vertrespmeso, vertgrazmeso_c, vertgrazmeso_p, &
+                vertgrazmacro_tot, vertgrazmacro_n, vertgrazmacro_d, vertgrazmacro_mes, &
+                vertgrazmacro_det, vertgrazmacro_mic, vertgrazmacro_det2, vertrespmacro, &
+                vertgrazmacro_c, vertgrazmacro_p
+
+        implicit none
+
+        integer, intent(in) :: nl
+
+        ! --------------------------------------------------------------------------
+        ! Microzooplankton and Mesozooplankton (3-zoo configuration only)
+        ! --------------------------------------------------------------------------
+        if (enable_3zoo2det) then
+            ! Microzooplankton
+            allocate(vertgrazmicro_tot(nl - 1), vertgrazmicro_n(nl - 1), vertgrazmicro_d(nl - 1))
+            allocate(vertrespmicro(nl - 1))
+
+            vertgrazmicro_tot = 0.d0
+            vertgrazmicro_n = 0.d0
+            vertgrazmicro_d = 0.d0
+            vertrespmicro = 0.d0
+
+            ! Mesozooplankton
+            allocate(vertgrazmeso_tot(nl - 1), vertgrazmeso_n(nl - 1), vertgrazmeso_d(nl - 1))
+            allocate(vertgrazmeso_det(nl - 1), vertgrazmeso_mic(nl - 1), vertgrazmeso_det2(nl - 1))
+            allocate(vertrespmeso(nl - 1))
+
+            vertgrazmeso_tot = 0.d0
+            vertgrazmeso_n = 0.d0
+            vertgrazmeso_d = 0.d0
+            vertgrazmeso_det = 0.d0
+            vertgrazmeso_mic = 0.d0
+            vertgrazmeso_det2 = 0.d0
+            vertrespmeso = 0.d0
+
+            if (enable_coccos) then
+                allocate(vertgrazmicro_c(nl - 1), vertgrazmicro_p(nl - 1))
+                allocate(vertgrazmeso_c(nl - 1), vertgrazmeso_p(nl - 1))
+
+                vertgrazmicro_c = 0.d0
+                vertgrazmicro_p = 0.d0
+                vertgrazmeso_c = 0.d0
+                vertgrazmeso_p = 0.d0
+            end if
         end if
 
-    end subroutine allocate_and_init_diags
+        ! --------------------------------------------------------------------------
+        ! Macrozooplankton (always allocated when Grazing_detritus is on)
+        ! --------------------------------------------------------------------------
+        allocate(vertgrazmacro_tot(nl - 1), vertgrazmacro_n(nl - 1), vertgrazmacro_d(nl - 1))
+        allocate(vertgrazmacro_mes(nl - 1), vertgrazmacro_det(nl - 1))
+        allocate(vertgrazmacro_mic(nl - 1), vertgrazmacro_det2(nl - 1))
+        allocate(vertrespmacro(nl - 1))
+
+        vertgrazmacro_tot = 0.d0
+        vertgrazmacro_n = 0.d0
+        vertgrazmacro_d = 0.d0
+        vertgrazmacro_mes = 0.d0
+        vertgrazmacro_det = 0.d0
+        vertgrazmacro_mic = 0.d0
+        vertgrazmacro_det2 = 0.d0
+        vertrespmacro = 0.d0
+
+        if (enable_coccos) then
+            allocate(vertgrazmacro_c(nl - 1), vertgrazmacro_p(nl - 1))
+            vertgrazmacro_c = 0.d0
+            vertgrazmacro_p = 0.d0
+        end if
+
+    end subroutine alloc_init_zoo_diags
 
     ! ==============================================================================
     ! SUBROUTINE: update_2d_diags
