@@ -25,10 +25,10 @@ contains
         use recom_g_comm_auto, only: recom_exchange_nod
 
         use recom_declarations, only: wp, tracer_ids
-        use recom_glovar, only: Benthos, Benthos_tr, SinkFlx_tr
+        use recom_glovar, only: Benthos, Benthos_tr, SinkFlx, SinkFlx_tr
 
         use recom_config, only: allow_var_sinking, benthos_num, bottflx_num, ciso, Vdet, VPhy, &
-            VDia, VDet_zoo2, enable_3zoo2det, use_MEDUSA, sedflx_num, recom_det_tracer_id, &
+            VDia, VDet_zoo2, enable_3zoo2det, use_MEDUSA, recom_det_tracer_id, &
             recom_phy_tracer_id, recom_dia_tracer_id, SecondsPerDay, vdet_a
 
         use recom_ciso, only: ciso_organic_14
@@ -112,7 +112,11 @@ contains
                 tracer_id == tracer_ids%detrital_nitrogen .or. & !idetn
                 tracer_id == tracer_ids%diatom_nitrogen .or. & !idian
                 tracer_id == tracer_ids%macrozooplankton_detrital_nitrogen) then !idetz2n
-                Benthos(n, 1) = Benthos(n, 1) + add_benthos_2d(n) ![mmol]
+#if defined(__usetp)
+                ! kh 25.03.22 buffer sums per tracer index to avoid non bit identical results
+                ! regarding global sums when running the tracer loop in parallel; summed into
+                ! Benthos across tr_num by oce_ale_tracer.F90 after the tracer loop
+                Benthos_tr(n, 1, tr_num) = Benthos_tr(n, 1, tr_num) + add_benthos_2d(n) ![mmol]
 
                 if (use_MEDUSA) then
                     ! kh 25.03.22 buffer sums per tracer index to avoid non bit identical results
@@ -122,11 +126,13 @@ contains
                     ! now SinkFlx hat the unit mmol/time step
                     ! but mmol/m2/time is needed for MEDUSA: thus /area
                 end if
-                if ((.not.use_MEDUSA) .or. (sedflx_num == 0)) then
-                    ! kh 25.03.22 buffer sums per tracer index to avoid non bit identical results
-                    ! regarding global sums when running the tracer loop in parallel
-                    Benthos_tr(n, 1, tr_num) = Benthos_tr(n, 1, tr_num) + add_benthos_2d(n) ![mmol]
+#else
+                Benthos(n, 1) = Benthos(n, 1) + add_benthos_2d(n) ![mmol]
+
+                if (use_MEDUSA) then
+                    SinkFlx(n, 1) = SinkFlx(n, 1) + add_benthos_2d(n) / area(1, n) / dt ![mmol/m2]
                 end if
+#endif
 
             end if
 
@@ -135,7 +141,11 @@ contains
                 tracer_id == tracer_ids%detrital_carbon .or. & !idetc
                 tracer_id == tracer_ids%diatom_carbon .or. & !idiac
                 tracer_id == tracer_ids%macrozooplankton_detrital_carbon) then !idetz2c
-                Benthos(n, 2) = Benthos(n, 2) + add_benthos_2d(n)
+#if defined(__usetp)
+                ! kh 25.03.22 buffer sums per tracer index to avoid non bit identical results
+                ! regarding global sums when running the tracer loop in parallel; summed into
+                ! Benthos across tr_num by oce_ale_tracer.F90 after the tracer loop
+                Benthos_tr(n, 2, tr_num) = Benthos_tr(n, 2, tr_num) + add_benthos_2d(n)
 
                 if (use_MEDUSA) then
                     ! kh 25.03.22 buffer sums per tracer index to avoid non bit identical results
@@ -143,11 +153,13 @@ contains
                     SinkFlx_tr(n, 2, tr_num) = SinkFlx_tr(n, 2, tr_num) &
                             + add_benthos_2d(n) / area(1, n) / dt
                 end if
-                if ((.not.use_MEDUSA) .or. (sedflx_num == 0)) then
-                    ! kh 25.03.22 buffer sums per tracer index to avoid non bit identical results
-                    ! regarding global sums when running the tracer loop in parallel
-                    Benthos_tr(n, 2, tr_num) = Benthos_tr(n, 2, tr_num) + add_benthos_2d(n)
+#else
+                Benthos(n, 2) = Benthos(n, 2) + add_benthos_2d(n)
+
+                if (use_MEDUSA) then
+                    SinkFlx(n, 2) = SinkFlx(n, 2) + add_benthos_2d(n) / area(1, n) / dt
                 end if
+#endif
 
             end if
 
@@ -155,7 +167,11 @@ contains
             if (tracer_id == tracer_ids%diatom_silica .or. & !idiasi
                     tracer_id == tracer_ids%detrital_silica .or. & !idetsi
                     tracer_id == tracer_ids%macrozooplankton_detrital_silica) then !idetz2si
-                Benthos(n, 3) = Benthos(n, 3) + add_benthos_2d(n)
+#if defined(__usetp)
+                ! kh 25.03.22 buffer sums per tracer index to avoid non bit identical results
+                ! regarding global sums when running the tracer loop in parallel; summed into
+                ! Benthos across tr_num by oce_ale_tracer.F90 after the tracer loop
+                Benthos_tr(n, 3, tr_num) = Benthos_tr(n, 3, tr_num) + add_benthos_2d(n)
 
                 if (use_MEDUSA) then
                     ! kh 25.03.22 buffer sums per tracer index to avoid non bit identical results
@@ -163,11 +179,13 @@ contains
                     SinkFlx_tr(n, 3, tr_num) = SinkFlx_tr(n, 3, tr_num) &
                             + add_benthos_2d(n) / area(1, n) / dt
                 end if
-                if ((.not.use_MEDUSA) .or. (sedflx_num == 0)) then
-                    ! kh 25.03.22 buffer sums per tracer index to avoid non bit identical results
-                    ! regarding global sums when running the tracer loop in parallel
-                    Benthos_tr(n, 3, tr_num) = Benthos_tr(n, 3, tr_num) + add_benthos_2d(n)
+#else
+                Benthos(n, 3) = Benthos(n, 3) + add_benthos_2d(n)
+
+                if (use_MEDUSA) then
+                    SinkFlx(n, 3) = SinkFlx(n, 3) + add_benthos_2d(n) / area(1, n) / dt
                 end if
+#endif
 
             end if
 
@@ -175,7 +193,11 @@ contains
             if (tracer_id == tracer_ids%phytoplankton_calcite .or. & !iphycal
                     tracer_id == tracer_ids%detrital_calcite .or. & !idetcal
                     tracer_id == tracer_ids%macrozooplankton_detrital_calcite) then !idetz2cal
-                Benthos(n, 4) = Benthos(n, 4) + add_benthos_2d(n)
+#if defined(__usetp)
+                ! kh 25.03.22 buffer sums per tracer index to avoid non bit identical results
+                ! regarding global sums when running the tracer loop in parallel; summed into
+                ! Benthos across tr_num by oce_ale_tracer.F90 after the tracer loop
+                Benthos_tr(n, 4, tr_num) = Benthos_tr(n, 4, tr_num) + add_benthos_2d(n)
 
                 if (use_MEDUSA) then
                     ! kh 25.03.22 buffer sums per tracer index to avoid non bit identical results
@@ -183,11 +205,13 @@ contains
                     SinkFlx_tr(n, 4, tr_num) = SinkFlx_tr(n, 4, tr_num) &
                             + add_benthos_2d(n) / area(1, n) / dt
                 end if
-                if ((.not.use_MEDUSA) .or. (sedflx_num == 0)) then
-                    ! kh 25.03.22 buffer sums per tracer index to avoid non bit identical results
-                    ! regarding global sums when running the tracer loop in parallel
-                    Benthos_tr(n, 4, tr_num) = Benthos_tr(n, 4, tr_num) + add_benthos_2d(n)
+#else
+                Benthos(n, 4) = Benthos(n, 4) + add_benthos_2d(n)
+
+                if (use_MEDUSA) then
+                    SinkFlx(n, 4) = SinkFlx(n, 4) + add_benthos_2d(n) / area(1, n) / dt
                 end if
+#endif
 
             end if
 
@@ -197,22 +221,37 @@ contains
                         tracer_id == 1308 .or. & !idetc_13
                         tracer_id == 1314) then !idiac_14
 
+#if defined(__usetp)
+                    ! kh 25.03.22 buffer sums per tracer index to avoid non bit identical
+                    ! results regarding global sums when running the tracer loop in parallel;
+                    ! summed into Benthos across tr_num by oce_ale_tracer.F90 after the
+                    ! tracer loop
+                    Benthos_tr(n, 5, tr_num) = Benthos_tr(n, 5, tr_num) + add_benthos_2d(n)
+
                     if (use_MEDUSA) then
                         ! kh 25.03.22 buffer sums per tracer index to avoid non bit identical
                         ! results regarding global sums when running the tracer loop in parallel
                         SinkFlx_tr(n, 5, tr_num) = SinkFlx_tr(n, 5, tr_num) &
                                 + add_benthos_2d(n) / area(1, n) / dt
                     end if
-                    if ((.not.use_MEDUSA) .or. (sedflx_num == 0)) then
-                        ! kh 25.03.22 buffer sums per tracer index to avoid non bit identical
-                        ! results regarding global sums when running the tracer loop in parallel
-                        Benthos_tr(n, 5, tr_num) = Benthos_tr(n, 5, tr_num) + add_benthos_2d(n)
+#else
+                    Benthos(n, 5) = Benthos(n, 5) + add_benthos_2d(n)
+                    if (use_MEDUSA) then
+                        SinkFlx(n, 5) = SinkFlx(n, 5) + add_benthos_2d(n) / area(1, n) / dt
                     end if
+#endif
 
                 end if
 
                 if (tracer_id == 1320 .or. & !iphycal
                         tracer_id == 1321) then !idetcal
+
+#if defined(__usetp)
+                    ! kh 25.03.22 buffer sums per tracer index to avoid non bit identical
+                    ! results regarding global sums when running the tracer loop in parallel;
+                    ! summed into Benthos across tr_num by oce_ale_tracer.F90 after the
+                    ! tracer loop
+                    Benthos_tr(n, 6, tr_num) = Benthos_tr(n, 6, tr_num) + add_benthos_2d(n)
 
                     if (use_MEDUSA) then
                         ! kh 25.03.22 buffer sums per tracer index to avoid non bit identical
@@ -220,11 +259,12 @@ contains
                         SinkFlx_tr(n, 6, tr_num) = SinkFlx_tr(n, 6, tr_num) &
                                 + add_benthos_2d(n) / area(1, n) / dt
                     end if
-                    if ((.not.use_MEDUSA) .or. (sedflx_num == 0)) then
-                        ! kh 25.03.22 buffer sums per tracer index to avoid non bit identical
-                        ! results regarding global sums when running the tracer loop in parallel
-                        Benthos_tr(n, 6, tr_num) = Benthos_tr(n, 6, tr_num) + add_benthos_2d(n)
+#else
+                    Benthos(n, 6) = Benthos(n, 6) + add_benthos_2d(n)
+                    if (use_MEDUSA) then
+                        SinkFlx(n, 6) = SinkFlx(n, 6) + add_benthos_2d(n) / area(1, n) / dt
                     end if
+#endif
 
                 end if
 
@@ -236,33 +276,49 @@ contains
                         tracer_id == 1408 .or. & !idetc_13
                         tracer_id == 1414) then !idiac_14
 
+#if defined(__usetp)
+                    ! kh 25.03.22 buffer sums per tracer index to avoid non bit identical
+                    ! results regarding global sums when running the tracer loop in parallel;
+                    ! summed into Benthos across tr_num by oce_ale_tracer.F90 after the
+                    ! tracer loop
+                    Benthos_tr(n, 7, tr_num) = Benthos_tr(n, 7, tr_num) + add_benthos_2d(n)
+
                     if (use_MEDUSA) then
                         ! kh 25.03.22 buffer sums per tracer index to avoid non bit identical
                         ! results regarding global sums when running the tracer loop in parallel
                         SinkFlx_tr(n, 7, tr_num) = SinkFlx_tr(n, 7, tr_num) &
                                 + add_benthos_2d(n) / area(1, n) / dt
                     end if
-                    if ((.not.use_MEDUSA) .or. (sedflx_num == 0)) then
-                        ! kh 25.03.22 buffer sums per tracer index to avoid non bit identical
-                        ! results regarding global sums when running the tracer loop in parallel
-                        Benthos_tr(n, 7, tr_num) = Benthos_tr(n, 7, tr_num) + add_benthos_2d(n)
+#else
+                    Benthos(n, 7) = Benthos(n, 7) + add_benthos_2d(n)
+                    if (use_MEDUSA) then
+                        SinkFlx(n, 7) = SinkFlx(n, 7) + add_benthos_2d(n) / area(1, n) / dt
                     end if
+#endif
 
                 end if
 
                 if (tracer_id == 1420 .or. & !iphycal
                         tracer_id == 1421) then !idetcal
+#if defined(__usetp)
+                    ! kh 25.03.22 buffer sums per tracer index to avoid non bit identical
+                    ! results regarding global sums when running the tracer loop in parallel;
+                    ! summed into Benthos across tr_num by oce_ale_tracer.F90 after the
+                    ! tracer loop
+                    Benthos_tr(n, 8, tr_num) = Benthos_tr(n, 8, tr_num) + add_benthos_2d(n)
+
                     if (use_MEDUSA) then
                         ! kh 25.03.22 buffer sums per tracer index to avoid non bit identical
                         ! results regarding global sums when running the tracer loop in parallel
                         SinkFlx_tr(n, 8, tr_num) = SinkFlx_tr(n, 8, tr_num) &
                                 + add_benthos_2d(n) / area(1, n) / dt
                     end if
-                    if ((.not.use_MEDUSA) .or. (sedflx_num == 0)) then
-                        ! kh 25.03.22 buffer sums per tracer index to avoid non bit identical
-                        ! results regarding global sums when running the tracer loop in parallel
-                        Benthos_tr(n, 8, tr_num) = Benthos_tr(n, 8, tr_num) + add_benthos_2d(n)
+#else
+                    Benthos(n, 8) = Benthos(n, 8) + add_benthos_2d(n)
+                    if (use_MEDUSA) then
+                        SinkFlx(n, 8) = SinkFlx(n, 8) + add_benthos_2d(n) / area(1, n) / dt
                     end if
+#endif
                 end if
 
             end if
@@ -272,21 +328,29 @@ contains
         if (use_MEDUSA) then
             do n = 1, bottflx_num
                 !           SinkFlx(:,n) = Sinkflx(:,n)/dt
+#if defined(__usetp)
                 ! kh 25.03.22 buffer sums per tracer index to avoid non bit identical results
                 ! regarding global sums when running the tracer loop in parallel
                 call recom_exchange_nod(SinkFlx_tr(:, n, tr_num), npes, sn, rn, MPI_COMM_FESOM, &
                         mype, s_mpitype_nod2D, r_mpitype_nod2D, sPE, rPE, requests, nreq)
+#else
+                call recom_exchange_nod(SinkFlx(:, n), npes, sn, rn, MPI_COMM_FESOM, mype, &
+                        s_mpitype_nod2D, r_mpitype_nod2D, sPE, rPE, requests, nreq)
+#endif
             end do
         end if ! use_MEDUSA
 
         do n = 1, benthos_num
+#if defined(__usetp)
             ! kh 25.03.22 buffer sums per tracer index to avoid non bit identical results regarding
-            ! global sums when running the tracer loop in parallel
+            ! global sums when running the tracer loop in parallel; summed into Benthos across
+            ! tr_num by oce_ale_tracer.F90 after the tracer loop
             call recom_exchange_nod(Benthos_tr(:, n, tr_num), npes, sn, rn, MPI_COMM_FESOM, &
                     mype, s_mpitype_nod2D, r_mpitype_nod2D, sPE, rPE, requests, nreq)
-
+#else
             call recom_exchange_nod(Benthos(:, n), npes, sn, rn, MPI_COMM_FESOM, mype, &
                     s_mpitype_nod2D, r_mpitype_nod2D, sPE, rPE, requests, nreq)
+#endif
         end do
 
     end subroutine ver_sinking_recom_benthos
