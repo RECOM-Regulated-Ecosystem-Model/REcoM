@@ -62,7 +62,7 @@ contains
                 vertgppp, vertgppp, vertnnan, vertnnan, vertnnad, vertnnad, vertnnac, vertnnac, &
                 vertnnap, vertnnap, vertchldegn, vertchldegn, vertchldegd, vertchldegd, &
                 si_assim, varpzphaeo2, vttemp_phaeo, vertchldegc, vertchldegc, vertchldegp, &
-                vertchldegp
+                vertchldegp, logk1, logk2, klig1, klig2
 
         use recom_locvar, only: betad_depth, co2_depth, co3_depth, dpos, fco2_depth, &
                 grazingfluxcarbon_mes, grazingfluxcarbonzoo2, hco3_depth, kspc_depth, locbenthos, &
@@ -87,13 +87,15 @@ contains
                 ncuptakeratio_d, ncuptakeratio_p, nmaxslope, nminslope, nmocsy, o2dep_remin, &
                 omegac_diss, one, ord_cocco, ord_d, ord_phy, p_cm, p_cm_d, pa2atm, pzcocco, &
                 pzmiczoo2, pzphaeo, pzphaeo2, pzphaeo3, pzphy, pzphy2, pzphy3, &
-                recom_grazing_variable_preference, recom_tref, redfield, redo2c, reminc, reminn, &
+                recom_grazing_variable_preference, recom_grazing_variable_efficiency, &
+                recom_tref, redfield, redo2c, reminc, reminn, &
                 reminsi, res_het, res_miczoo, res_phy, res_phy_c, res_phy_d, res_phy_p, res_zoo2, &
                 rho_c1, rho_n, secondsperday, sedflx_num, sicmax, sicmin, sicuptakeratio, &
                 calc_diss_exp, gfin, idetsi, idon, k_fe_c, lossc_z3, pzcocco2, simaxslope, &
                 siminslope, t1_zoo2, t2_zoo2, t3_zoo2, t4_zoo2, tiny, tiny_chl, tiny_het, &
                 topt_phaeo, totalligand, uopt_phaeo, use_medusa, use_photodamage, v_cm_fact, &
                 v_cm_fact_c, v_cm_fact_d, v_cm_fact_p, vdet, vdet_a, zero, tmax_phaeo, &
+                fe_2ligands, fe_compl_nica, &
                 calc_diss_guts, calc_diss_omegac, calc_diss_rate, calc_diss_rate2, &
                 calc_prod_ratio, chl2n_max, chl2n_max_c, chl2n_max_d, chl2n_max_p, ciso, co2lim, &
                 cunits, d_co2_calc, enable_3zoo2det, enable_coccos, epsilon2, epsilon3, epsilonr, &
@@ -1072,9 +1074,29 @@ contains
                 !   totalligand         : Total organic ligand concentration [µmol m-3]
                 !   ligandStabConst     : Conditional stability constant [M-1]
                 !   freeFe              : Free (inorganic) iron concentration [µmol m-3]
+                !
+                !   fe_2ligands         : Switch to use a two-ligand iron-binding model [-]
+                !   fe_compl_nica       : Switch to use the pH/DOC dependent (NICA) ligand
+                !                         stability constants of Ye et al. (2020) [-]
+                !   logK1, logK2        : log10 conditional stability constants for the two
+                !                         ligand classes [-]
+                !   Klig1, Klig2        : Conditional stability constants for the two ligand
+                !                         classes [(mol/kg)-1]
                 !-------------------------------------------------------------------------------
 
-                freeFe = iron_chemistry(Fe, totalligand, ligandStabConst)
+                if (fe_2ligands) then
+                    if (fe_compl_nica) then
+                        ! pH/DOC dependent parameterisation of Fe-binding ligands (Ye et al. 2020)
+                        logK1 = max(tiny, 24.36 - 1.67 * pH_watercolumn(k) + &
+                                EOC * (-2.e-4 * EOC + 0.034))
+                        logK2 = logK1 + 2.67
+                        Klig1 = 10 ** (logK1 - 9)
+                        Klig2 = 10 ** (logK2 - 9)
+                        freeFe = iron_chemistry_2ligands(Fe, 1.7d0, 0.6d0, Klig1, Klig2)
+                    end if
+                else
+                    freeFe = iron_chemistry(Fe, totalligand, ligandStabConst)
+                end if
 
                 !===============================================================================
                 ! 4. CHLOROPHYLL SYNTHESIS
@@ -1399,8 +1421,13 @@ contains
 
                 ! Calculate food-dependent grazing efficiency
                 ! Increases with food availability, representing improved assimilation at higher
-                ! rations
-                grazEff = gfin + 1.0 / (0.2 * food + 2.0)
+                ! constant efficiency by REcoM_Grazing_Variable_Efficiency (ported from old
+                ! recom).
+                if (REcoM_Grazing_Variable_Efficiency) then
+                    grazEff = gfin + 1.0 / (0.2 * food + 2.0)
+                else
+                    grazEff = gfin
+                end if
 
                 ! Convert grazed nitrogen to carbon flux using prey C:N ratios
                 grazingFluxcarbon_mes = (grazingFlux_phy * recipQuota * grazEff) + &

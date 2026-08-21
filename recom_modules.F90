@@ -407,7 +407,6 @@ module REcoM_declarations
         integer :: phaeocystis_carbon = -1
         integer :: phaeocystis_chlorophyll = -1
 
-
     end type recom_tracer_ids
 
     type(recom_tracer_ids) :: tracer_ids
@@ -440,7 +439,7 @@ module recom_config
     integer :: izoo2n = 23, izoo2c = 24, idetz2n = 25, &
             idetz2c = 26, idetz2si = 27, idetz2calc = 28
 
-    integer :: idicremin = 0  ! added by Sina
+    integer :: idicremin = 0
 
     ! Microzooplankton (third zooplankton group)
     integer :: imiczoon = 0 ! Microzooplankton Nitrogen (set below)
@@ -525,6 +524,8 @@ module recom_config
 
     ! Decides if grazing should have preference for phyN or DiaN
     logical :: REcoM_Grazing_Variable_Preference = .true.
+    logical :: REcoM_Grazing_Variable_Efficiency = .true. ! allows grazing efficiency to vary
+    ! with food availability
     logical :: Grazing_detritus = .false. ! Decides grazing on detritus
     logical :: het_resp_noredfield = .true. ! Decides respiratation of copepods
     logical :: diatom_mucus = .true. ! Effect of nutrient limitation on the aggregation
@@ -580,17 +581,13 @@ module recom_config
     integer :: bottflx_num = 4
     logical :: use_atbox = .false. ! switch for atmospheric box model for CO2
 
-    logical :: fe_2ligands = .false. ! consider Fe-ligand binding with two ligands
-    ! use Fe-ligand parameterisation dependent on DOC and pH (Ye2020)
-    logical :: fe_compl_nica = .false.
-
     namelist /pavariables/ use_REcoM, REcoM_restart, &
             bgc_num, diags3d_num, bgc_base_num, &
             VDet, VDet_zoo2, &
             VPhy, VDia, VCocco, &
             VPhaeo, &
             allow_var_sinking, biostep, REcoM_Geider_limiter, &
-            REcoM_Grazing_Variable_Preference, &
+            REcoM_Grazing_Variable_Preference, REcoM_Grazing_Variable_Efficiency, &
             Grazing_detritus, &
             het_resp_noredfield, &
             diatom_mucus, &
@@ -606,8 +603,7 @@ module recom_config
             currentCO2cycle, DIC_PI, Nmocsy, &
             recom_debug, ciso, benthos_num, &
             use_MEDUSA, sedflx_num, bottflx_num, &
-            add_loopback, lb_tscale, use_atbox, &
-            fe_2ligands, fe_compl_nica
+            add_loopback, lb_tscale, use_atbox
 
     !!------------------------------------------------------------------------------
     !! *** Sinking ***
@@ -732,7 +728,10 @@ module recom_config
     real(kind=wp) :: totalligand = 1.d0 ! [mumol/m3] order 1. Total free ligand
     ! [m3/mumol] order 100. Ligand-free iron stability constant
     real(kind=wp) :: ligandStabConst = 100.d0
-    namelist /pairon_chem/ totalligand, ligandStabConst
+    logical :: fe_2ligands = .false. ! consider Fe-ligand binding with two ligands
+    ! use Fe-ligand parameterisation dependent on DOC and pH (Ye2020)
+    logical :: fe_compl_nica = .false.
+    namelist /pairon_chem/ totalligand, ligandStabConst, fe_2ligands, fe_compl_nica
     !!------------------------------------------------------------------------------
     !! *** Zooplankton ***
     real(kind=wp) :: graz_max = 2.4d0 ! [mmol N/(m3 * day)] Maximum grazing loss parameter
@@ -1239,7 +1238,7 @@ contains
             ! Additional phaeocystis: 3 tracers (1032-1034)
             ! Additional microzoo: 2 tracers (1035-1036)
             ! Total: 22 + 4 + 6 + 3 + 2 = 36 (actually 22 + 14 = 36)
-            ! Additional DICremin: 1 tracer (1037) (added by Sina)
+            ! Additional DICremin: 1 tracer (1037)
             expected_bgc_num = 37
 
         else if (enable_coccos .and. .not.enable_3zoo2det) then
@@ -1250,7 +1249,7 @@ contains
             ! Additional coccos: 3 tracers (1023-1025)
             ! Additional phaeocystis: 3 tracers (1026-1028)
             ! Total: 22 + 6 = 28
-            ! Additional DICremin: 1 tracer (1037) (added by Sina)
+            ! Additional DICremin: 1 tracer (1037)
             expected_bgc_num = 29
 
         else if (enable_3zoo2det .and. .not.enable_coccos) then
@@ -1262,7 +1261,7 @@ contains
             ! Additional det2: 4 tracers (1025-1028)
             ! Additional microzoo: 2 tracers (1029-1030)
             ! Total: 22 + 8 = 30
-            ! Additional DICremin: 1 tracer (1037) (added by Sina)
+            ! Additional DICremin: 1 tracer (1037)
             expected_bgc_num = 31
 
         else
@@ -1270,7 +1269,7 @@ contains
             ! Configuration 1: Base model (2 phyto + 1 zoo + 1 detritus)
             ! ---------------------------------------------------------------------------
             ! Base: 22 tracers (1001-1022)
-            ! Additional DICremin: 1 tracer (1037) (added by Sina)
+            ! Additional DICremin: 1 tracer (1037)
             expected_bgc_num = 23
 
         end if
@@ -1320,7 +1319,7 @@ contains
             expected_tracer_ids(bgc_offset + 12) = 1034 ! PhaeoChl
             expected_tracer_ids(bgc_offset + 13) = 1035 ! Zoo3N
             expected_tracer_ids(bgc_offset + 14) = 1036 ! Zoo3C
-            expected_tracer_ids(bgc_offset + 15) = 1037 ! DIC remin (added by Sina)
+            expected_tracer_ids(bgc_offset + 15) = 1037 ! DIC remin
 
         else if (enable_coccos .and. .not.enable_3zoo2det) then
             ! Coccos only: base + 1023-1028 (coccos+phaeo)
@@ -1330,7 +1329,7 @@ contains
             expected_tracer_ids(bgc_offset + 4) = 1026 ! PhaeoN
             expected_tracer_ids(bgc_offset + 5) = 1027 ! PhaeoC
             expected_tracer_ids(bgc_offset + 6) = 1028 ! PhaeoChl
-            expected_tracer_ids(bgc_offset + 7) = 1037 ! DIC remin (added by Sina)
+            expected_tracer_ids(bgc_offset + 7) = 1037 ! DIC remin
 
         else if (enable_3zoo2det .and. .not.enable_coccos) then
             ! 3Zoo2Det only: base + 1023-1030 (zoo2+det2+zoo3)
@@ -1342,12 +1341,12 @@ contains
             expected_tracer_ids(bgc_offset + 6) = 1028 ! DetZ2Calc
             expected_tracer_ids(bgc_offset + 7) = 1029 ! Zoo3N
             expected_tracer_ids(bgc_offset + 8) = 1030 ! Zoo3C
-            expected_tracer_ids(bgc_offset + 9) = 1037 ! DIC remin (added by Sina)
+            expected_tracer_ids(bgc_offset + 9) = 1037 ! DIC remin
 
         else
-       
+
             ! else: base configuration only needs tracers 1, 2, 1001-1022
-            expected_tracer_ids(bgc_offset + 1) = 1037 ! add DIC remin tracer to base BGC tracers (added by Sina)
+            expected_tracer_ids(bgc_offset + 1) = 1037 ! add DIC remin tracer to base BGC tracers
 
         end if
 
@@ -1438,12 +1437,12 @@ contains
                     write(*, *) '    - Zoo2N, Zoo2C:       1023-1024'
                     write(*, *) '    - DetZ2 pool:         1025-1028'
                     write(*, *) '    - MicZooN, MicZooC:   1029-1030'
-                    write(*, *) '  DICremin:               1037     ' ! added by Sina
+                    write(*, *) '  DICremin:               1037     '
                 else if (enable_coccos .and. .not.enable_3zoo2det) then
                     write(*, *) '  Coccos extension:       1023-1028 (6 tracers)'
                     write(*, *) '    - CoccoN, C, Chl:     1023-1025'
                     write(*, *) '    - PhaeoN, C, Chl:     1026-1028'
-                    write(*, *) '  DICremin:               1037     ' ! added by Sina
+                    write(*, *) '  DICremin:               1037     '
                 else if (enable_3zoo2det .and. enable_coccos) then
                     write(*, *) '    - Zoo2N, Zoo2C:       1023-1024'
                     write(*, *) '  3Zoo2Det extension:     1025-1028 (4 tracers for det2)'
@@ -1451,7 +1450,7 @@ contains
                     write(*, *) '    - CoccoN, C, Chl:     1029-1031'
                     write(*, *) '    - PhaeoN, C, Chl:     1032-1034'
                     write(*, *) '  MicroZoo extension:     1035-1036 (2 tracers)'
-                    write(*, *) '  DICremin:               1037     ' ! added by Sina
+                    write(*, *) '  DICremin:               1037     '
                 end if
 
                 write(*, *) ''
@@ -1558,13 +1557,13 @@ contains
                 write(*, *) '  - Coccos uses:       1029-1031'
                 write(*, *) '  - Phaeocystis uses:  1032-1034'
                 write(*, *) '  - Microzooplankton:  1035-1036'
-                write(*, *) '  - DIC remin:         1037     ' ! added by Sina
+                write(*, *) '  - DIC remin:         1037     '
                 write(*, *) ''
             else if (enable_coccos .and. .not.enable_3zoo2det) then
                 write(*, *) 'IMPORTANT for COCCOS-ONLY configuration:'
                 write(*, *) '  - Coccos uses:       1023-1025 (NOT 1029-1031)'
                 write(*, *) '  - Phaeocystis uses:  1026-1028 (NOT 1032-1034)'
-                write(*, *) '  - DIC remin:         1037     ' ! added by Sina
+                write(*, *) '  - DIC remin:         1037     '
                 write(*, *) '  - Tracers 1029+ are NOT used in this configuration'
                 write(*, *) ''
             else if (enable_3zoo2det .and. .not.enable_coccos) then
@@ -1572,12 +1571,12 @@ contains
                 write(*, *) '  - Zoo2 uses:         1023-1024'
                 write(*, *) '  - Det2 pool uses:    1025-1028'
                 write(*, *) '  - Microzoo uses:     1029-1030 (NOT 1035-1036)'
-                write(*, *) '  - DIC remin:         1037     ' ! added by Sina
+                write(*, *) '  - DIC remin:         1037     '
                 write(*, *) '  - Tracers 1031+ are NOT used in this configuration'
                 write(*, *) ''
             else
                 write(*, *) 'IMPORTANT for BASE configuration:'
-                write(*, *) '  - Only tracers 1-2, 1001-1022 and 1037 should be present' ! 1037 added by Sina
+                write(*, *) '  - Only tracers 1-2, 1001-1022 and 1037 should be present'
                 write(*, *) '  - Tracers 1023+ are NOT used in base configuration'
                 write(*, *) ''
             end if
@@ -1672,16 +1671,16 @@ contains
 
         ! ---- derive local BGC count (same logic as validate_recom_tracers) --------
         if (enable_3zoo2det .and. enable_coccos) then
-            ! Additional DICremin: 1 tracer (1037) (added by Sina)
+            ! Additional DICremin: 1 tracer (1037)
             bgc_num_local = 37
         else if (enable_coccos .and. .not. enable_3zoo2det) then
-            ! Additional DICremin: 1 tracer (1037) (added by Sina)
+            ! Additional DICremin: 1 tracer (1037)
             bgc_num_local = 29
         else if (enable_3zoo2det .and. .not. enable_coccos) then
-            ! Additional DICremin: 1 tracer (1037) (added by Sina)
+            ! Additional DICremin: 1 tracer (1037)
             bgc_num_local = 31
         else
-            ! Additional DICremin: 1 tracer (1037) (added by Sina)
+            ! Additional DICremin: 1 tracer (1037)
             bgc_num_local = 23
         end if
 
@@ -1704,19 +1703,19 @@ contains
             expected_ids(n_base_physical+23:n_base_physical+28) = [1023, 1024, 1025, 1026, 1027, 1028]
             expected_ids(n_base_physical+29:n_base_physical+34) = [1029, 1030, 1031, 1032, 1033, 1034]
             expected_ids(n_base_physical+35:n_base_physical+36) = [1035, 1036]
-            expected_ids(n_base_physical+37)    = 1037 ! DICremin, added by Sina
+            expected_ids(n_base_physical+37)    = 1037 ! DICremin
 
         else if (enable_coccos .and. .not.enable_3zoo2det) then
             expected_ids(n_base_physical+23:n_base_physical+28) = [1023, 1024, 1025, 1026, 1027, 1028]
-            expected_ids(n_base_physical+29)    = 1037 ! DICremin, added by Sina
+            expected_ids(n_base_physical+29)    = 1037 ! DICremin
 
         else if (enable_3zoo2det .and. .not.enable_coccos) then
             expected_ids(n_base_physical+23:n_base_physical+30) = [1023, 1024, 1025, 1026, 1027, 1028, 1029, 1030]
-            expected_ids(n_base_physical+31)    = 1037 ! DICremin, added by Sina
+            expected_ids(n_base_physical+31)    = 1037 ! DICremin
 
         else
             ! Base configuration
-            expected_ids(n_base_physical+23)    = 1037 ! DICremin, added by Sina
+            expected_ids(n_base_physical+23)    = 1037 ! DICremin
         end if
 
         ! ---- age tracer (running slot, right after BGC) ----------------------------
