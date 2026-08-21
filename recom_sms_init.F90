@@ -960,7 +960,6 @@ contains
         !   - Self-shading is key negative feedback on bloom magnitude
         !-------------------------------------------------------------------------------
 
-        !if (k == 1) then ! OG: Under the ice shelf set SurfSR = 0.0_WP. for consistency, I keep it as nzmin.
         if (k == nzmin) then
 
             !===========================================================================

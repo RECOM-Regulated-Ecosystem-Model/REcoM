@@ -438,7 +438,7 @@ contains
             ! Mid-layer depths and PAR initialisation
             !-----------------------------------------------------------------------
             PAR(1:nzmax) = 0.d0
-        
+
             !-----------------------------------------------------------------------
             ! Atmospheric dust / nitrogen deposition
             !   Cavity nodes: no atmospheric input reaching the ocean surface.
@@ -555,7 +555,6 @@ contains
         ! ======================================================================================
         !************************** EXCHANGE NODAL INFORMATION *********************************
 
-        !do tr_num = num_tracers - bgc_num + 1, num_tracers
         do tr_num = bgc_start, bgc_end
             call recom_exchange_nod(tracers_info%data_pointers(tr_num)%tracer_data(:, :), &
                     npes, sn, rn, MPI_COMM_FESOM, mype, s_mpitype_nod3D, &
