@@ -471,7 +471,6 @@ contains
             !   - myDim_nod2D: Horizontal dimension (for 3D unstructured grids)
             !---------------------------------------------------------------------------
 
-            !do k = one, nn
             do k = nzmin, nn
                 ! Alternative loop structures (commented out):
                 ! do n = 1, myDim_nod2D
@@ -581,9 +580,13 @@ contains
                 !-------------------------------------------------------------------------------
                 ! Calculate Sinking Velocity
                 !-------------------------------------------------------------------------------
-                ! Sinking velocity increases with depth (particle compaction, reduced drag)
+                ! Sinking velocity increases with depth (particle compaction, reduced drag).
+                ! Uses Vcalc (not the general detritus sinking coefficient Vdet_a) so that the
+                ! depth-dependence of calcite dissolution can be tuned independently of the
+                ! detritus sinking parameterisation.
 
-                Sink_Vel = Vdet_a * abs(zF(k)) + Vdet
+                !Sink_Vel = Vdet_a * abs(zF(k)) + Vdet
+                Sink_Vel = Vcalc * abs(zF(k)) + Vdet
 
                 if (OmegaC_diss) then
 
