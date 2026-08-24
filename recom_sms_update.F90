@@ -1092,7 +1092,7 @@ contains
                 lossc, lossc_d, lossc_c, lossc_p, &
                 lossc_z, lossc_z2, lossc_z3, &
                 reminn, reminc, rho_n, rho_c1, &
-                fe2n, kscavfe, redo2c, calc_diss_guts, &
+                fe2n, kscavfe, kscavfe2, redo2c, calc_diss_guts, &
                 grazeff2, grazeff3, ciso, tiny
 
         use recom_locvar, only: locriverdoc
@@ -2822,7 +2822,9 @@ contains
         !   lossN, lossN_d, etc.        : N excretion rates [day-1]
         !   limitFacN, etc.             : Nutrient limitation factors [-]
         !   reminN                      : Temperature-dependent remineralization [day-1]
-        !   kScavFe                     : Iron scavenging rate [m3 mmol C-1 day-1]
+        !   kScavFe                     : Iron scavenging rate onto particles [m3 mmol C-1 day-1]
+        !   kScavFe2                    : Background iron scavenging rate, independent of
+        !                                 particle concentration [day-1]
         !   FreeFe                      : Free dissolved iron [μmol Fe m-3]
         !-------------------------------------------------------------------------------
 
@@ -2858,10 +2860,11 @@ contains
                 + lossN_z3 * MicZooN * is_3zoo2det & ! Microzooplankton
                 ) &
         !---------------------------------------------------------------------------
-        ! SINKS: Abiotic Iron Scavenging onto Particles
+        ! SINKS: Iron Scavenging onto Particles
         !---------------------------------------------------------------------------
                 - kScavFe * DetC * FreeFe & ! Slow-sinking detritus
                 - kScavFe * DetZ2C * FreeFe * is_3zoo2det & ! Fast-sinking detritus
+                - kScavFe2 * FreeFe &
                 ) * dt_b + sms(k, ife)
 
         !===============================================================================
