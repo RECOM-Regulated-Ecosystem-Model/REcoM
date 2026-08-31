@@ -36,9 +36,18 @@ contains
     !   - 3 Zooplankton: Het, Zoo2, Zoo3
     !   - 2 Detritus pools
     !===============================================================================
+    !
+    ! Tracer layout (fixed order):
+    !   T, S  |  BGC (bgc_num tracers)  |  age (optional, ID=100)  |  transit (optional)
+    !
+    ! BGC tracers always start immediately at slot 3, regardless of whether
+    ! transit tracers are active. Transit tracers (SF6, CFC-11, CFC-12, R14C,
+    ! R39Ar) are appended at the very end, after the optional age tracer.
+    !===============================================================================
     subroutine recom_init(nl, ulevels_nod2D, nlevels_nod2D, geo_coord_nod2D, Z_3d_n, myDim_nod2d, &
             eDim_nod2D, mype, MPI_COMM_FESOM, myDim_elem2D, eDim_elem2D, tracers_info, &
-            num_tracers, rad)
+            num_tracers, rad, use_age_tracer, use_transit, l_sf6, l_f11, l_f12, l_r14c, l_r39ar, &
+            ocean_area)
 
         use REcoM_declarations, only: wp, tracer_ids
         use REcoM_GloVar, only: tracers_info_type
@@ -50,13 +59,25 @@ contains
         integer, intent(in) :: nl, mydim_nod2d, edim_nod2d, mype, num_tracers
         integer, intent(in) :: mpi_comm_fesom, mydim_elem2d, edim_elem2d
         real(kind=WP), intent(in) :: rad
+        ! [m2] Total ocean surface area; only used to convert the initial cosmogenic 14C
+        ! production rate into a flux (see initialize_ciso). Ported from int_recom, where this
+        ! was pulled in implicitly via unrestricted `use MOD_MESH` instead of being passed in --
+        ! this decoupled build has no such module to draw it from, so it must be an argument.
+        real(kind=WP), intent(in) :: ocean_area
+        logical, intent(in) :: use_age_tracer, use_transit, l_sf6, l_f11, l_f12, l_r14c, l_r39ar
         integer, intent(in), dimension(:) :: ulevels_nod2d, nlevels_nod2d
         real(kind=wp), intent(in), dimension(:, :) :: geo_coord_nod2d, z_3d_n
         type(tracers_info_type), intent(in) :: tracers_info
 
         integer :: i, tracer_id
+        integer :: actual_bgc_num
+        integer :: num_physical_tracers
+        integer :: n_transit_tracers   ! number of active transit tracers
+        integer :: bgc_start, bgc_end  ! first/last slot of the BGC-only block
 
         call initialize_memory(myDim_nod2D + eDim_nod2D, nl, num_tracers)
+
+        call initialize_ciso(myDim_nod2D + eDim_nod2D, nl, ocean_area)
 
         call initialize_tracer_ids
 
@@ -64,13 +85,35 @@ contains
         call initialize_tracer_indices
 
         ! Validation check here
-        call validate_recom_tracers(num_tracers, mype)
+        call validate_recom_tracers(num_tracers, use_age_tracer, use_transit, l_sf6, l_f11, l_f12, l_r14c, l_r39ar, mype)
 
         ! After reading tracer namelist - validate actual IDs
-        call validate_tracer_id_sequence(tracers_info%ids(1:num_tracers), num_tracers, mype)
+        call validate_tracer_id_sequence(tracers_info%ids(1:num_tracers), num_tracers, use_age_tracer, use_transit, &
+                                            l_sf6, l_f11, l_f12, l_r14c, l_r39ar, mype)
 
-        ! Initializes tracer data
-        do i = num_tracers - bgc_num + 1, num_tracers
+        ! T,S | BGC | [age] | [transit] num_physical_tracers
+        ! is always just T,S (=2): BGC tracers start right after them, regardless
+        ! of whether transit tracers are active. Transit tracers are appended at
+        ! the tail instead and are not initialized here.
+        num_physical_tracers = 2
+
+        n_transit_tracers = 0
+        if (use_transit) then
+            if (l_sf6)   n_transit_tracers = n_transit_tracers + 1
+            if (l_f11)   n_transit_tracers = n_transit_tracers + 1
+            if (l_f12)   n_transit_tracers = n_transit_tracers + 1
+            if (l_r14c)  n_transit_tracers = n_transit_tracers + 1
+            if (l_r39ar) n_transit_tracers = n_transit_tracers + 1
+        end if
+
+        actual_bgc_num = num_tracers - num_physical_tracers
+        if (use_age_tracer) actual_bgc_num = actual_bgc_num - 1
+        if (use_transit) actual_bgc_num = actual_bgc_num - n_transit_tracers
+
+        bgc_start = num_physical_tracers + 1
+        bgc_end   = num_physical_tracers + actual_bgc_num
+
+        do i = bgc_start, bgc_end
             tracer_id = tracers_info%ids(i)
 
             !Iron (unit conversion: mol/L => umol/m3)
@@ -79,11 +122,15 @@ contains
                 tracers_info%data_pointers(i)%tracer_data(:, :) = &
                         tracers_info%data_pointers(i)%tracer_data(:, :) * 1.e9
 
-                ! Avoids tracers 1001, 1002, 1003, 1018 and 1022
+                ! Avoids tracers 1001, 1002, 1003, 1018 and 1022, age tracer 100
             else if (tracer_id > 1003 .and. tracer_id /= 1018 .and. tracer_id /= 1022) then
                 tracers_info%data_pointers(i)%tracer_data(:, :) = get_tracer_init_value(tracer_id)
             end if
         end do
+
+        ! Must run after the loop above: reads the DIN/DIC/PhyC/DetC/HetC/DOC/DiaC/DSi/
+        ! PhyCalc/DetCalc values it just set to derive isotope tracers' initial profiles.
+        call initialize_ciso_tracers(tracers_info, num_physical_tracers)
 
         call mask_hydrothermal_vents(tracers_info, myDim_nod2D, eDim_nod2D, ulevels_nod2D, &
                 nlevels_nod2D, geo_coord_nod2D, Z_3d_n, rad)
@@ -308,6 +355,224 @@ contains
         end if
     end subroutine initialize_memory
 
+    !===============================================================================
+    ! Ported from int_recom's recom_init (OLD: "Atmospheric box model" section and the
+    ! "if (ciso) then" block that followed it). Both were entirely absent from this file even
+    ! though recom_atbox.F90/recom_main.F90 read and write these arrays and tracer indices
+    ! whenever ciso is enabled -- without this, a ciso run would reference unallocated
+    ! allocatable arrays and tracer indices left at their default (0) value.
+    !
+    ! delta_dic_13_init/delta_dic_14_init/big_delta_dic_14_init are also allocated here, sized
+    ! to the *local* partition (node_size) like every other REcoM per-node field -- the
+    ! "awiesm-2.6-recom-corr" lineage this file was otherwise merged against still allocated
+    ! them too, but at (nl-1, nod2D), FESOM's *global* node count, and never actually used
+    ! them (dead code by that point). Tracing further back to fesom-2.1's recom_init.F90 shows
+    ! they were originally used to set isotopically-informed initial DIC_13/DIC_14 profiles;
+    ! that usage was ported into initialize_ciso_tracers below, sized locally to match.
+    !===============================================================================
+    subroutine initialize_ciso(node_size, nl, ocean_area)
+        use recom_declarations, only: wp
+        use recom_config, only: ciso, bgc_base_num, CO2_for_spinup, use_atbox
+        use recom_ciso, only: ciso_14, ciso_organic_14, delta_co2_13, &
+                big_delta_co2_14, cosmic_14_init, delta_co2_14, r_atm_spinup_13, &
+                r_atm_spinup_14, production_rate_to_flux_14, cosmic_14, x_co2atm_13, &
+                x_co2atm_14, idic_13, iphyc_13, idetc_13, ihetc_13, idoc_13, idiac_13, &
+                iphycal_13, idetcal_13, idic_14, iphyc_14, idetc_14, ihetc_14, idoc_14, &
+                idiac_14, iphycal_14, idetcal_14, delta_dic_13_init, delta_dic_14_init, &
+                big_delta_dic_14_init, GloPCO2surf_13, GloPCO2surf_14, GloCO2flux_13, &
+                GloCO2flux_14, GloCO2flux_seaicemask_13, GloCO2flux_seaicemask_14
+        use recom_glovar, only: x_co2atm
+
+        implicit none
+
+        integer, intent(in) :: node_size, nl
+        real(kind=wp), intent(in) :: ocean_area
+
+        ! --- Atmospheric box model (13C/14C spin-up ratios) ---
+        if (use_atbox) then
+            allocate(x_co2atm(node_size), source=CO2_for_spinup)
+
+            if (ciso) then
+                allocate(x_co2atm_13(node_size))
+                r_atm_spinup_13 = 1. + 0.001 * delta_co2_13
+                x_co2atm_13 = CO2_for_spinup * r_atm_spinup_13
+
+                if (ciso_14) then
+                    allocate(x_co2atm_14(node_size))
+                    allocate(cosmic_14(node_size))
+
+                    if (ciso_organic_14) then
+                        delta_co2_14 = (big_delta_co2_14(1) + 2. * delta_co2_13 + 50.) &
+                                / (0.95 - 0.002 * delta_co2_13)
+                    else
+                        delta_co2_14 = big_delta_co2_14(1)
+                    end if
+
+                    r_atm_spinup_14 = 1. + 0.001 * delta_co2_14
+                    x_co2atm_14 = CO2_for_spinup * r_atm_spinup_14
+
+                    ! Conversion of initial cosmogenic 14C production rate (mol / s) to a flux
+                    ! (atoms / s / cm**2). Since 14C values are scaled to 12C, this includes the
+                    ! standard 14C / 12C ratio: 1.176e-12 (Karlen et al., 1964) * 6.0221e23
+                    ! (Avogadro constant) * 1.e-4 (cm**2 / m**2) = 7.0820e7 cm**2 / m**2
+                    production_rate_to_flux_14 = 7.0820e7 / ocean_area
+                    cosmic_14 = cosmic_14_init / production_rate_to_flux_14
+                end if
+            end if
+        end if
+
+        ! --- ciso tracer indices and surface diagnostic fields ---
+        ! MERGE-REVIEW: bgc_base_num is a fixed count for the base 2-phytoplankton/1-zoo/1-det
+        ! configuration (see its declaration in recom_config); int_recom's own comment on
+        ! bgc_base_num confirms this. These offsets do not account for the variable tracer
+        ! count when enable_3zoo2det/enable_coccos are also active, so combining ciso with
+        ! those config options would misindex these tracers in both int_recom and here. Ported
+        ! as-is; re-derive these offsets first if ciso needs to work alongside
+        ! enable_3zoo2det/enable_coccos.
+        if (ciso) then
+            idic_13 = bgc_base_num + 1
+            iphyc_13 = bgc_base_num + 2
+            idetc_13 = bgc_base_num + 3
+            ihetc_13 = bgc_base_num + 4
+            idoc_13 = bgc_base_num + 5
+            idiac_13 = bgc_base_num + 6
+            iphycal_13 = bgc_base_num + 7
+            idetcal_13 = bgc_base_num + 8
+            idic_14 = bgc_base_num + 9
+            iphyc_14 = bgc_base_num + 10
+            idetc_14 = bgc_base_num + 11
+            ihetc_14 = bgc_base_num + 12
+            idoc_14 = bgc_base_num + 13
+            idiac_14 = bgc_base_num + 14
+            iphycal_14 = bgc_base_num + 15
+            idetcal_14 = bgc_base_num + 16
+
+            allocate(GloPCO2surf_13(node_size), source=0.d0)
+            allocate(GloCO2flux_13(node_size), source=0.d0)
+            allocate(GloCO2flux_seaicemask_13(node_size), source=0.d0)
+
+            ! Auxiliary initial delta13C_DIC field, used by initialize_ciso_tracers below
+            allocate(delta_dic_13_init(nl - 1, node_size))
+
+            if (ciso_14) then
+                allocate(GloPCO2surf_14(node_size), source=0.d0)
+                allocate(GloCO2flux_14(node_size), source=0.d0)
+                allocate(GloCO2flux_seaicemask_14(node_size), source=0.d0)
+
+                ! Auxiliary initial d|Delta14C_DIC fields, used by initialize_ciso_tracers below
+                allocate(delta_dic_14_init(nl - 1, node_size))
+                allocate(big_delta_dic_14_init(nl - 1, node_size))
+            end if
+        end if
+    end subroutine initialize_ciso
+
+    !===============================================================================
+    ! Ported from fesom-2.1's recom_init.F90: sets isotopically-informed initial DIC_13/DIC_14
+    ! and POC_13/POC_14 (PhyC/DetC/HetC/DOC/DiaC/PhyCalc/DetCalc isotope variants) tracer
+    ! values, instead of letting them fall through to the generic tiny/Redfield defaults that
+    ! get_tracer_init_value assigns to every other tracer. Must run after the main tracer
+    ! initialization loop in recom_init, since it reads the already-initialized DIN/DIC/PhyC/
+    ! DetC/HetC/DOC/DiaC/DSi/PhyCalc/DetCalc values. fesom-2.1 also had a related ciso_warp
+    ! feature (tra04-tra30, trall, tr_arr_warp); confirmed no longer needed, not ported.
+    !
+    ! MERGE-REVIEW: the final DIC_14 rescale below uses delta_co2_14, which both here and in
+    ! the fesom-2.1 source this was ported from is only ever assigned inside initialize_ciso's
+    ! `if (use_atbox)` branch. Running with ciso_14=.true. and use_atbox=.false. would read it
+    ! uninitialized -- a pre-existing latent bug carried forward faithfully, not something this
+    ! port introduced.
+    !===============================================================================
+    subroutine initialize_ciso_tracers(tracers_info, num_physical_tracers)
+        use recom_declarations, only: wp
+        use recom_config, only: ciso, idin, idic, iphyc, idetc, ihetc, idoc, idiac, isi, &
+                iphycal, idetcal
+        use REcoM_GloVar, only: tracers_info_type
+        use recom_ciso, only: ciso_init, ciso_14, ciso_organic_14, delta_dic_13_init, &
+                delta_dic_14_init, big_delta_dic_14_init, delta_co2_14, idic_13, iphyc_13, &
+                idetc_13, ihetc_13, idoc_13, idiac_13, iphycal_13, idetcal_13, idic_14, &
+                iphyc_14, idetc_14, ihetc_14, idoc_14, idiac_14, iphycal_14, idetcal_14
+
+        implicit none
+
+        type(tracers_info_type), intent(in) :: tracers_info
+        integer, intent(in) :: num_physical_tracers
+
+        if (.not. ciso) return
+
+        ! DIC_13: delta13C-DIC profile (GLODAP-based approximation for depths > 500 m) or 0
+        if (ciso_init) then
+            delta_dic_13_init = 2.3 &
+                    - 0.06 * tracers_info%data_pointers(idin + num_physical_tracers)%tracer_data
+        else
+            delta_dic_13_init = 0.
+        end if
+        tracers_info%data_pointers(idic_13 + num_physical_tracers)%tracer_data = &
+                (1. + 0.001 * delta_dic_13_init) &
+                * tracers_info%data_pointers(idic + num_physical_tracers)%tracer_data
+
+        ! POC_13: straight copies of the corresponding non-isotope pools
+        tracers_info%data_pointers(iphyc_13 + num_physical_tracers)%tracer_data = &
+                tracers_info%data_pointers(iphyc + num_physical_tracers)%tracer_data
+        tracers_info%data_pointers(idetc_13 + num_physical_tracers)%tracer_data = &
+                tracers_info%data_pointers(idetc + num_physical_tracers)%tracer_data
+        tracers_info%data_pointers(ihetc_13 + num_physical_tracers)%tracer_data = &
+                tracers_info%data_pointers(ihetc + num_physical_tracers)%tracer_data
+        tracers_info%data_pointers(idoc_13 + num_physical_tracers)%tracer_data = &
+                tracers_info%data_pointers(idoc + num_physical_tracers)%tracer_data
+        tracers_info%data_pointers(idiac_13 + num_physical_tracers)%tracer_data = &
+                tracers_info%data_pointers(idiac + num_physical_tracers)%tracer_data
+        tracers_info%data_pointers(iphycal_13 + num_physical_tracers)%tracer_data = &
+                tracers_info%data_pointers(iphycal + num_physical_tracers)%tracer_data
+        tracers_info%data_pointers(idetcal_13 + num_physical_tracers)%tracer_data = &
+                tracers_info%data_pointers(idetcal + num_physical_tracers)%tracer_data
+
+        if (.not. ciso_14) return
+
+        ! DIC_14: Delta14C-DIC profile (Broecker et al., 1995) or a global-mean fallback
+        if (ciso_init) then
+            big_delta_dic_14_init = -70. &
+                    - tracers_info%data_pointers(isi + num_physical_tracers)%tracer_data
+        else
+            big_delta_dic_14_init = -150.
+        end if
+
+        if (ciso_organic_14) then
+            ! Stuiver & Pollach (1977), eq. (2)
+            delta_dic_14_init = (big_delta_dic_14_init + 2. * (delta_dic_13_init + 25.)) &
+                    / (0.95 - 0.002 * delta_dic_13_init)
+        else
+            delta_dic_14_init = big_delta_dic_14_init
+        end if
+
+        tracers_info%data_pointers(idic_14 + num_physical_tracers)%tracer_data(1:16, :) = &
+                0.95 &
+                * tracers_info%data_pointers(idic + num_physical_tracers)%tracer_data(1:16, :)
+        tracers_info%data_pointers(idic_14 + num_physical_tracers)%tracer_data(17:, :) = &
+                (1. + 0.001 * delta_dic_14_init(17:, :)) &
+                * tracers_info%data_pointers(idic + num_physical_tracers)%tracer_data(17:, :)
+        ! Scale initial DIC_14 to the atmospheric Delta14C ratio (e.g., LGM ~400 permil)
+        tracers_info%data_pointers(idic_14 + num_physical_tracers)%tracer_data = &
+                (1. + 0.001 * delta_co2_14) &
+                * tracers_info%data_pointers(idic_14 + num_physical_tracers)%tracer_data
+
+        ! POC_14: straight copies, only when organic radiocarbon is tracked
+        if (ciso_organic_14) then
+            tracers_info%data_pointers(iphyc_14 + num_physical_tracers)%tracer_data = &
+                    tracers_info%data_pointers(iphyc + num_physical_tracers)%tracer_data
+            tracers_info%data_pointers(idetc_14 + num_physical_tracers)%tracer_data = &
+                    tracers_info%data_pointers(idetc + num_physical_tracers)%tracer_data
+            tracers_info%data_pointers(ihetc_14 + num_physical_tracers)%tracer_data = &
+                    tracers_info%data_pointers(ihetc + num_physical_tracers)%tracer_data
+            tracers_info%data_pointers(idoc_14 + num_physical_tracers)%tracer_data = &
+                    tracers_info%data_pointers(idoc + num_physical_tracers)%tracer_data
+            tracers_info%data_pointers(idiac_14 + num_physical_tracers)%tracer_data = &
+                    tracers_info%data_pointers(idiac + num_physical_tracers)%tracer_data
+            tracers_info%data_pointers(iphycal_14 + num_physical_tracers)%tracer_data = &
+                    tracers_info%data_pointers(iphycal + num_physical_tracers)%tracer_data
+            tracers_info%data_pointers(idetcal_14 + num_physical_tracers)%tracer_data = &
+                    tracers_info%data_pointers(idetcal + num_physical_tracers)%tracer_data
+        end if
+    end subroutine initialize_ciso_tracers
+
     subroutine initialize_tracer_ids
         use recom_declarations, only: tracer_ids
         use REcoM_config, only: enable_3zoo2det, enable_coccos
@@ -444,6 +709,12 @@ contains
 
         integer :: row, k, nzmin, nzmax
 
+        ! Iron tracer (ID=1019) is always BGC tracer #17 in the base block
+        ! (1004..1022 shifted by 1003), so with the fixed T,S | BGC | [age] |
+        ! [transit] layout it always sits at slot 21 (= 2 physical + 19th BGC
+        ! slot: 1019 - 1000 = 19 -> n_base_physical + 19 = 2 + 19 = 21).
+        integer, parameter :: iron_slot = 21
+
         ! Mask hydrothermal vent in Eastern Equatorial Pacific GO
         do row = 1, myDim_nod2D + eDim_nod2D
             !if (ulevels_nod2D(row)>1) cycle
@@ -456,15 +727,15 @@ contains
                         .and. ((geo_coord_nod2D(1, row) > -106.0 * rad) .and. (geo_coord_nod2D(1, &
                         row) < -72.0 * rad))) then
                     if (abs(Z_3d_n(k, row)) < 2000.0_WP) cycle
-                    tracers_info%data_pointers(21)%tracer_data(k, row) = min(0.3, tracers_info%&
-                            data_pointers(21)%tracer_data(k, row)) ! OG todo: try 0.6
+                    tracers_info%data_pointers(iron_slot)%tracer_data(k, row) = &
+                            min(0.3, tracers_info%data_pointers(iron_slot)%tracer_data(k, row)) ! OG todo: try 0.6
                 end if
             end do
         end do
 
         ! Mask negative values
-        tracers_info%data_pointers(21)%tracer_data(:, :) = &
-                max(tiny, tracers_info%data_pointers(21)%tracer_data(:, :))
+        tracers_info%data_pointers(iron_slot)%tracer_data(:, :) = &
+                max(tiny, tracers_info%data_pointers(iron_slot)%tracer_data(:, :))
     end subroutine mask_hydrothermal_vents
 
     subroutine initialization_diagnostics(tracers_info, myDim_nod2D, ulevels_nod2D, nlevels_nod2D, &
@@ -487,6 +758,21 @@ contains
         real(kind=WP) :: locAlkmin, locDSimax, locDSimin, locDFemax, locDFemin
         real(kind=WP) :: locO2max, locO2min
 
+        ! With the fixed T,S | BGC | [age] | [transit] layout, BGC tracers
+        ! always start at slot 3 (right after T,S) regardless of use_transit.
+        ! These fixed slot numbers are therefore now constant and correct:
+        !   DIN (1001) -> slot 3, DIC (1002) -> slot 4, Alk (1003) -> slot 5,
+        !   DSi (1018) -> slot 20, DFe (1019) -> slot 21, O2 (1022) -> slot 24
+        ! (previously these shifted whenever use_transit was active, which was
+        ! a bug: this fixed indexing is now always correct, independent of
+        ! use_transit.)
+        integer, parameter :: din_slot = 3
+        integer, parameter :: dic_slot = 4
+        integer, parameter :: alk_slot = 5
+        integer, parameter :: dsi_slot = 20
+        integer, parameter :: dfe_slot = 21
+        integer, parameter :: o2_slot  = 24
+
         if (mype == 0) write(*, *) 'Tracers have been initialized as spinup from WOA/glodap' // &
                 ' netcdf files'
         locDINmax = -66666
@@ -503,29 +789,29 @@ contains
         locO2min = locDINmin
 
         do n = 1, myDim_nod2d
-            locDINmax = max(locDINmax, maxval(tracers_info%data_pointers(3)%tracer_data(&
+            locDINmax = max(locDINmax, maxval(tracers_info%data_pointers(din_slot)%tracer_data(&
                     ulevels_nod2D(n):nlevels_nod2D(n) - 1, n)))
-            locDINmin = min(locDINmin, minval(tracers_info%data_pointers(3)%tracer_data(&
+            locDINmin = min(locDINmin, minval(tracers_info%data_pointers(din_slot)%tracer_data(&
                     ulevels_nod2D(n):nlevels_nod2D(n) - 1, n)))
-            locDICmax = max(locDICmax, maxval(tracers_info%data_pointers(4)%tracer_data(&
+            locDICmax = max(locDICmax, maxval(tracers_info%data_pointers(dic_slot)%tracer_data(&
                     ulevels_nod2D(n):nlevels_nod2D(n) - 1, n)))
-            locDICmin = min(locDICmin, minval(tracers_info%data_pointers(4)%tracer_data(&
+            locDICmin = min(locDICmin, minval(tracers_info%data_pointers(dic_slot)%tracer_data(&
                     ulevels_nod2D(n):nlevels_nod2D(n) - 1, n)))
-            locAlkmax = max(locAlkmax, maxval(tracers_info%data_pointers(5)%tracer_data(&
+            locAlkmax = max(locAlkmax, maxval(tracers_info%data_pointers(alk_slot)%tracer_data(&
                     ulevels_nod2D(n):nlevels_nod2D(n) - 1, n)))
-            locAlkmin = min(locAlkmin, minval(tracers_info%data_pointers(5)%tracer_data(&
+            locAlkmin = min(locAlkmin, minval(tracers_info%data_pointers(alk_slot)%tracer_data(&
                     ulevels_nod2D(n):nlevels_nod2D(n) - 1, n)))
-            locDSimax = max(locDSimax, maxval(tracers_info%data_pointers(20)%tracer_data(&
+            locDSimax = max(locDSimax, maxval(tracers_info%data_pointers(dsi_slot)%tracer_data(&
                     ulevels_nod2D(n):nlevels_nod2D(n) - 1, n)))
-            locDSimin = min(locDSimin, minval(tracers_info%data_pointers(20)%tracer_data(&
+            locDSimin = min(locDSimin, minval(tracers_info%data_pointers(dsi_slot)%tracer_data(&
                     ulevels_nod2D(n):nlevels_nod2D(n) - 1, n)))
-            locDFemax = max(locDFemax, maxval(tracers_info%data_pointers(21)%tracer_data(&
+            locDFemax = max(locDFemax, maxval(tracers_info%data_pointers(dfe_slot)%tracer_data(&
                     ulevels_nod2D(n):nlevels_nod2D(n) - 1, n)))
-            locDFemin = min(locDFemin, minval(tracers_info%data_pointers(21)%tracer_data(&
+            locDFemin = min(locDFemin, minval(tracers_info%data_pointers(dfe_slot)%tracer_data(&
                     ulevels_nod2D(n):nlevels_nod2D(n) - 1, n)))
-            locO2max = max(locO2max, maxval(tracers_info%data_pointers(24)%tracer_data(&
+            locO2max = max(locO2max, maxval(tracers_info%data_pointers(o2_slot)%tracer_data(&
                     ulevels_nod2D(n):nlevels_nod2D(n) - 1, n)))
-            locO2min = min(locO2min, minval(tracers_info%data_pointers(24)%tracer_data(&
+            locO2min = min(locO2min, minval(tracers_info%data_pointers(o2_slot)%tracer_data(&
                     ulevels_nod2D(n):nlevels_nod2D(n) - 1, n)))
         end do
 

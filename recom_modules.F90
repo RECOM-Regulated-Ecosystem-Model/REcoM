@@ -405,11 +405,9 @@ module REcoM_declarations
     type(recom_tracer_ids) :: tracer_ids
 
 end module REcoM_declarations
-
 !
 !===============================================================================
 !
-
 module recom_config
     use recom_declarations, only: wp
     implicit none
@@ -516,6 +514,8 @@ module recom_config
 
     ! Decides if grazing should have preference for phyN or DiaN
     logical :: REcoM_Grazing_Variable_Preference = .true.
+    logical :: REcoM_Grazing_Variable_Efficiency = .true. ! allows grazing efficiency to vary
+    ! with food availability
     logical :: Grazing_detritus = .false. ! Decides grazing on detritus
     logical :: het_resp_noredfield = .true. ! Decides respiratation of copepods
     logical :: diatom_mucus = .true. ! Effect of nutrient limitation on the aggregation
@@ -571,17 +571,13 @@ module recom_config
     integer :: bottflx_num = 4
     logical :: use_atbox = .false. ! switch for atmospheric box model for CO2
 
-    logical :: fe_2ligands = .false. ! consider Fe-ligand binding with two ligands
-    ! use Fe-ligand parameterisation dependent on DOC and pH (Ye2020)
-    logical :: fe_compl_nica = .false.
-
     namelist /pavariables/ use_REcoM, REcoM_restart, &
             bgc_num, diags3d_num, bgc_base_num, &
             VDet, VDet_zoo2, &
             VPhy, VDia, VCocco, &
             VPhaeo, &
             allow_var_sinking, biostep, REcoM_Geider_limiter, &
-            REcoM_Grazing_Variable_Preference, &
+            REcoM_Grazing_Variable_Preference, REcoM_Grazing_Variable_Efficiency, &
             Grazing_detritus, &
             het_resp_noredfield, &
             diatom_mucus, &
@@ -597,8 +593,7 @@ module recom_config
             currentCO2cycle, DIC_PI, Nmocsy, &
             recom_debug, ciso, benthos_num, &
             use_MEDUSA, sedflx_num, bottflx_num, &
-            add_loopback, lb_tscale, use_atbox, &
-            fe_2ligands, fe_compl_nica
+            add_loopback, lb_tscale, use_atbox
 
     !!------------------------------------------------------------------------------
     !! *** Sinking ***
@@ -723,7 +718,10 @@ module recom_config
     real(kind=wp) :: totalligand = 1.d0 ! [mumol/m3] order 1. Total free ligand
     ! [m3/mumol] order 100. Ligand-free iron stability constant
     real(kind=wp) :: ligandStabConst = 100.d0
-    namelist /pairon_chem/ totalligand, ligandStabConst
+    logical :: fe_2ligands = .false. ! consider Fe-ligand binding with two ligands
+    ! use Fe-ligand parameterisation dependent on DOC and pH (Ye2020)
+    logical :: fe_compl_nica = .false.
+    namelist /pairon_chem/ totalligand, ligandStabConst, fe_2ligands, fe_compl_nica
     !!------------------------------------------------------------------------------
     !! *** Zooplankton ***
     real(kind=wp) :: graz_max = 2.4d0 ! [mmol N/(m3 * day)] Maximum grazing loss parameter
@@ -1072,21 +1070,31 @@ contains
     ! ==============================================================================
     ! Purpose: Validate consistency between namelist tracer configuration and
     !          biogeochemical model setup (enable_3zoo2det, enable_coccos)
+    !
+    ! Tracer layout (fixed order):
+    !   T, S  |  BGC (bgc_num tracers)  |  age (optional, ID=100)  |  transit (optional)
+    !
+    ! BGC tracers always start immediately at slot 3 (right after T, S),
+    ! regardless of whether transit tracers are active. Transit tracers
+    ! (SF6, CFC-11, CFC-12, R14C, R39Ar) are appended at the very end,
+    ! after the optional age tracer.
     ! ==============================================================================
-    subroutine validate_recom_tracers(num_tracers, mype)
+    subroutine validate_recom_tracers(num_tracers, use_age_tracer, use_transit, l_sf6, l_f11, l_f12, l_r14c, l_r39ar, mype)
         use mpi, only: MPI_Abort, MPI_COMM_WORLD
 
         implicit none
 
         ! Arguments
         integer, intent(in) :: num_tracers ! Total number of tracers from namelist
+        logical, intent(in) :: use_age_tracer, use_transit, l_sf6, l_f11, l_f12, l_r14c, l_r39ar
         integer, intent(in) :: mype ! MPI rank
 
         ! Local variables
         integer :: expected_bgc_num
         integer :: actual_bgc_num
         integer :: expected_total_tracers
-        integer :: num_physical_tracers
+        integer :: bgc_offset              ! offset of last base-BGC slot (T,S + 22)
+        integer :: n_transit_tracers       ! number of active transit tracers
         integer :: MPIErr
         logical :: config_error
 
@@ -1096,12 +1104,27 @@ contains
         logical, dimension(:), allocatable :: tracer_found
         integer :: num_expected_tracers
         logical :: id_error
+        integer :: slot                   ! running slot index when building expected_ids
 
-        ! Physical tracers (temperature, salinity, etc.) - typically first 2
-        num_physical_tracers = 2
+        logical :: num_physical_tracers
+        integer, parameter :: n_base_physical = 2   ! T (id=1), S (id=2)
 
-        ! Calculate actual BGC tracer count from namelist
-        actual_bgc_num = num_tracers - num_physical_tracers
+        ! ---- count active transit tracers -----------------------------------------
+        n_transit_tracers = 0
+        if (use_transit) then
+            if (l_sf6)   n_transit_tracers = n_transit_tracers + 1
+            if (l_f11)   n_transit_tracers = n_transit_tracers + 1
+            if (l_f12)   n_transit_tracers = n_transit_tracers + 1
+            if (l_r14c)  n_transit_tracers = n_transit_tracers + 1
+            if (l_r39ar) n_transit_tracers = n_transit_tracers + 1
+        end if
+
+        ! ---- actual BGC count: strip non-BGC appended tracers --------------------
+        ! tracer_init now appends in this order:  T,S | BGC | [age] | [transit]
+        ! num_physical_tracers here is just T,S (=2) in the reordered layout.
+        actual_bgc_num = num_tracers - n_base_physical
+        if (use_age_tracer) actual_bgc_num = actual_bgc_num - 1
+        actual_bgc_num = actual_bgc_num - n_transit_tracers
 
         ! ===========================================================================
         ! Determine expected BGC tracer count based on configuration
@@ -1150,7 +1173,12 @@ contains
 
         end if
 
-        expected_total_tracers = num_physical_tracers + expected_bgc_num
+        !   T, S  +  BGC  +  age (opt)  +  transit (opt)
+        expected_total_tracers = n_base_physical + expected_bgc_num
+        if (use_age_tracer) expected_total_tracers = expected_total_tracers + 1
+        expected_total_tracers = expected_total_tracers + n_transit_tracers
+
+        num_physical_tracers = n_base_physical
 
         ! ===========================================================================
         ! Build expected tracer ID list for current configuration
@@ -1162,59 +1190,98 @@ contains
         allocate(tracer_found(num_expected_tracers))
         tracer_found = .false.
 
-        ! Physical tracers (always present)
+        ! Physical tracers (always present, always first)
         expected_tracer_ids(1) = 1 ! Temperature
         expected_tracer_ids(2) = 2 ! Salinity
 
-        ! Base BGC tracers (always present for all configurations)
+        ! Base BGC tracers (always present for all configurations) - start right after T,S
         do i = 1, 22
-            expected_tracer_ids(num_physical_tracers + i) = 1000 + i
+            expected_tracer_ids(n_base_physical + i) = 1000 + i
         end do
 
         ! Configuration-specific tracers
+        ! bgc_offset = last slot of the base BGC block; BGC always starts at slot 3
+        bgc_offset = n_base_physical + 22
+
         if (enable_3zoo2det .and. enable_coccos) then
-            ! Full model: 1001-1022 (base) + 1023-1024 (zoo2) + 1025-1028 (det2) + 1029-1036
+            ! Full model: base + 1023-1024 (zoo2) + 1025-1028 (det2) + 1029-1036
             ! (coccos+phaeo+zoo3)
-            expected_tracer_ids(25) = 1023 ! Zoo2N
-            expected_tracer_ids(26) = 1024 ! Zoo2C
-            expected_tracer_ids(27) = 1025 ! DetZ2N
-            expected_tracer_ids(28) = 1026 ! DetZ2C
-            expected_tracer_ids(29) = 1027 ! DetZ2Si
-            expected_tracer_ids(30) = 1028 ! DetZ2Calc
-            expected_tracer_ids(31) = 1029 ! CoccoN
-            expected_tracer_ids(32) = 1030 ! CoccoC
-            expected_tracer_ids(33) = 1031 ! CoccoChl
-            expected_tracer_ids(34) = 1032 ! PhaeoN
-            expected_tracer_ids(35) = 1033 ! PhaeoC
-            expected_tracer_ids(36) = 1034 ! PhaeoChl
-            expected_tracer_ids(37) = 1035 ! Zoo3N
-            expected_tracer_ids(38) = 1036 ! Zoo3C
+            expected_tracer_ids(bgc_offset + 1)  = 1023 ! Zoo2N
+            expected_tracer_ids(bgc_offset + 2)  = 1024 ! Zoo2C
+            expected_tracer_ids(bgc_offset + 3)  = 1025 ! DetZ2N
+            expected_tracer_ids(bgc_offset + 4)  = 1026 ! DetZ2C
+            expected_tracer_ids(bgc_offset + 5)  = 1027 ! DetZ2Si
+            expected_tracer_ids(bgc_offset + 6)  = 1028 ! DetZ2Calc
+            expected_tracer_ids(bgc_offset + 7)  = 1029 ! CoccoN
+            expected_tracer_ids(bgc_offset + 8)  = 1030 ! CoccoC
+            expected_tracer_ids(bgc_offset + 9)  = 1031 ! CoccoChl
+            expected_tracer_ids(bgc_offset + 10) = 1032 ! PhaeoN
+            expected_tracer_ids(bgc_offset + 11) = 1033 ! PhaeoC
+            expected_tracer_ids(bgc_offset + 12) = 1034 ! PhaeoChl
+            expected_tracer_ids(bgc_offset + 13) = 1035 ! Zoo3N
+            expected_tracer_ids(bgc_offset + 14) = 1036 ! Zoo3C
 
         else if (enable_coccos .and. .not.enable_3zoo2det) then
-            ! Coccos only: 1001-1022 (base) + 1023-1028 (coccos+phaeo)
-            expected_tracer_ids(25) = 1023 ! CoccoN
-            expected_tracer_ids(26) = 1024 ! CoccoC
-            expected_tracer_ids(27) = 1025 ! CoccoChl
-            expected_tracer_ids(28) = 1026 ! PhaeoN
-            expected_tracer_ids(29) = 1027 ! PhaeoC
-            expected_tracer_ids(30) = 1028 ! PhaeoChl
+            ! Coccos only: base + 1023-1028 (coccos+phaeo)
+            expected_tracer_ids(bgc_offset + 1) = 1023 ! CoccoN
+            expected_tracer_ids(bgc_offset + 2) = 1024 ! CoccoC
+            expected_tracer_ids(bgc_offset + 3) = 1025 ! CoccoChl
+            expected_tracer_ids(bgc_offset + 4) = 1026 ! PhaeoN
+            expected_tracer_ids(bgc_offset + 5) = 1027 ! PhaeoC
+            expected_tracer_ids(bgc_offset + 6) = 1028 ! PhaeoChl
 
         else if (enable_3zoo2det .and. .not.enable_coccos) then
-            ! 3Zoo2Det only: 1001-1022 (base) + 1023-1030 (zoo2+det2+zoo3)
-            expected_tracer_ids(25) = 1023 ! Zoo2N
-            expected_tracer_ids(26) = 1024 ! Zoo2C
-            expected_tracer_ids(27) = 1025 ! DetZ2N
-            expected_tracer_ids(28) = 1026 ! DetZ2C
-            expected_tracer_ids(29) = 1027 ! DetZ2Si
-            expected_tracer_ids(30) = 1028 ! DetZ2Calc
-            expected_tracer_ids(31) = 1029 ! Zoo3N
-            expected_tracer_ids(32) = 1030 ! Zoo3C
+            ! 3Zoo2Det only: base + 1023-1030 (zoo2+det2+zoo3)
+            expected_tracer_ids(bgc_offset + 1) = 1023 ! Zoo2N
+            expected_tracer_ids(bgc_offset + 2) = 1024 ! Zoo2C
+            expected_tracer_ids(bgc_offset + 3) = 1025 ! DetZ2N
+            expected_tracer_ids(bgc_offset + 4) = 1026 ! DetZ2C
+            expected_tracer_ids(bgc_offset + 5) = 1027 ! DetZ2Si
+            expected_tracer_ids(bgc_offset + 6) = 1028 ! DetZ2Calc
+            expected_tracer_ids(bgc_offset + 7) = 1029 ! Zoo3N
+            expected_tracer_ids(bgc_offset + 8) = 1030 ! Zoo3C
         end if
+
         ! else: base configuration only needs tracers 1, 2, 1001-1022
+
+        ! ---- Age tracer (ID=100): appended immediately after the last BGC slot -----
+        slot = n_base_physical + expected_bgc_num + 1
+        if (use_age_tracer) then
+            expected_tracer_ids(slot) = 100
+            slot = slot + 1
+        end if
+
+        ! ---- Transit tracers: appended at the very end, after age ------------------
+        if (use_transit) then
+            if (l_sf6) then
+                expected_tracer_ids(slot) = 6 ! SF6
+                slot = slot + 1
+            end if
+            if (l_f11) then
+                expected_tracer_ids(slot) = 11 ! CFC-11
+                slot = slot + 1
+            end if
+            if (l_f12) then
+                expected_tracer_ids(slot) = 12! CFC-12
+                slot = slot + 1
+            end if
+            if (l_r14c) then
+                expected_tracer_ids(slot) = 14 ! R14C (radiocarbon)
+                slot = slot + 1
+            end if
+            if (l_r39ar) then
+                expected_tracer_ids(slot) = 39 ! R39Ar
+                slot = slot + 1
+            end if
+        end if
 
         ! ===========================================================================
         ! Perform validation checks
         ! ===========================================================================
+
+        ! --------------------------------------------------------------------------
+        ! Print configuration summary
+        ! --------------------------------------------------------------------------
 
         if (mype == 0) then
             write(*, *) ''
@@ -1224,9 +1291,15 @@ contains
             write(*, *) 'Model configuration:'
             write(*, *) '  enable_3zoo2det = ', enable_3zoo2det
             write(*, *) '  enable_coccos   = ', enable_coccos
+            write(*,*)  '  use_age_tracer  = ', use_age_tracer
+            write(*,*)  '  use_transit     = ', use_transit
+            write(*, *) ''
+            write(*, *) 'Tracer layout: T, S | BGC | [age] | [transit]'
             write(*, *) ''
             write(*, *) 'Tracer counts:'
-            write(*, *) '  Physical tracers (T, S, ...)      = ', num_physical_tracers
+            write(*, *) '  Physical tracers (T, S)           = ', n_base_physical
+            write(*,*) '  Age tracer  (ID=100)               = ', merge(1, 0, use_age_tracer)
+            write(*,*) '  Transit tracers                    = ', n_transit_tracers
             write(*, *) '  Expected BGC tracers              = ', expected_bgc_num
             write(*, *) '  Expected TOTAL tracers            = ', expected_total_tracers
             write(*, *) '  Actual tracers from namelist      = ', num_tracers
@@ -1276,6 +1349,7 @@ contains
                 write(*, *) '  1. Check your namelist.config tracer_list section'
                 write(*, *) '  2. Ensure enable_3zoo2det and enable_coccos match your setup'
                 write(*, *) '  3. Add/remove tracers to match the expected configuration'
+                write(*, *) '  4. Ensure order is T, S | BGC | [age] | [transit]'
                 write(*, *) '======================================================================&
                         &===='
                 write(*, *) ''
@@ -1330,16 +1404,28 @@ contains
             write(*, *) ''
 
             ! Display expected IDs in a readable format
-            write(*, *) 'Physical tracers:'
-            write(*, *) '  ', expected_tracer_ids(1:num_physical_tracers)
+            write(*, *) 'Physical tracers (T, S):'
+            write(*, *) '  ', expected_tracer_ids(1:n_base_physical)
             write(*, *) ''
             write(*, *) 'Base BGC tracers (1001-1022):'
-            write(*, *) '  ', expected_tracer_ids(3:24)
+            write(*, *) '  ', expected_tracer_ids(n_base_physical+1:n_base_physical+22)
             write(*, *) ''
 
             if (expected_bgc_num > 22) then
                 write(*, *) 'Extended configuration tracers:'
-                write(*, *) '  ', expected_tracer_ids(25:num_expected_tracers)
+                write(*, *) '  ', expected_tracer_ids(n_base_physical+23:n_base_physical+expected_bgc_num)
+                write(*, *) ''
+            end if
+
+            if (use_age_tracer) then
+                write(*, *) 'Age tracer:'
+                write(*, *) '  ', expected_tracer_ids(n_base_physical+expected_bgc_num+1)
+                write(*, *) ''
+            end if
+
+            if (use_transit .and. n_transit_tracers > 0) then
+                write(*, *) 'Transit tracers (tail):'
+                write(*, *) '  ', expected_tracer_ids(num_expected_tracers-n_transit_tracers+1:num_expected_tracers)
                 write(*, *) ''
             end if
 
@@ -1351,12 +1437,12 @@ contains
             write(*, *) '  - Tracer ID clashes between configurations'
             write(*, *) '  - Incorrect order of tracer IDs in namelist'
             write(*, *) '  - Missing or duplicate tracer IDs'
+            write(*, *) '  - Placing transit tracers before BGC tracers (they now go at the end)'
             write(*, *) ''
 
             ! Configuration-specific warnings
             if (enable_3zoo2det .and. enable_coccos) then
                 write(*, *) 'IMPORTANT for FULL MODEL (3zoo2det + coccos):'
-                !  write(*,*) '  - Tracers 1023-1024 are NOT used (reserved for other configs)'
                 write(*, *) '  - Zoo2 uses:         1023-1024'
                 write(*, *) '  - Det2 pool uses:    1025-1028'
                 write(*, *) '  - Coccos uses:       1029-1031'
@@ -1398,8 +1484,6 @@ contains
             ! Warn about potential clashes between configurations
             if (enable_3zoo2det .and. enable_coccos) then
                 write(*, *) 'Full model configuration active.'
-                !  write(*,*) 'Ensure you are NOT using tracer IDs 1023-1024 in your namelist!'
-                !  write(*,*) 'These are reserved for configurations WITHOUT full model.'
             else if (enable_coccos) then
                 write(*, *) 'Coccos-only configuration active.'
                 write(*, *) 'Coccos MUST use IDs 1023-1025 (NOT 1029-1031).'
@@ -1410,7 +1494,6 @@ contains
             end if
 
             write(*, *) ''
-            ! write(*,*) 'No automated clash detection available without tracer array access.'
             write(*, *) 'Please manually verify your namelist tracer_list against the'
             write(*, *) 'expected sequence shown above.'
             write(*, *) '=========================================================================='
@@ -1445,8 +1528,11 @@ contains
     ! ==============================================================================
     ! Purpose: Validate that actual tracer IDs from namelist match expected sequence
     !          Call this after reading the tracer namelist
+    ! Builds the expected ID array as: T, S | BGC | [age] | [transit]
+    ! mirroring the append order in tracer_init.
     ! ==============================================================================
-    subroutine validate_tracer_id_sequence(tracer_ids, num_tracers, mype)
+    subroutine validate_tracer_id_sequence(tracer_ids, num_tracers, use_age_tracer, use_transit, &
+                                            l_sf6, l_f11, l_f12, l_r14c, l_r39ar, mype)
         use mpi, only: MPI_Abort, MPI_COMM_WORLD
 
         implicit none
@@ -1454,6 +1540,7 @@ contains
         ! Arguments
         integer, dimension(:), intent(in) :: tracer_ids ! Actual IDs from namelist
         integer, intent(in) :: num_tracers ! Number of tracers
+        logical, intent(in) :: use_age_tracer, use_transit, l_sf6, l_f11, l_f12, l_r14c, l_r39ar
         integer, intent(in) :: mype ! MPI rank
 
         ! Local variables
@@ -1462,34 +1549,94 @@ contains
         integer :: MPIErr
         logical :: error_found
         logical :: duplicate_found
-        integer :: num_physical_tracers
+        integer :: bgc_num_local           ! local BGC count derived from config flags
+        integer :: slot                    ! running slot for age + transit tail
+        integer :: n_transit_tracers       ! number of active transit tracers
+        integer, parameter :: n_base_physical = 2   ! T (id=1), S (id=2)
+        logical :: num_physical_tracers
 
         error_found = .false.
         duplicate_found = .false.
-        num_physical_tracers = 2
+
+        ! ---- derive local BGC count (same logic as validate_recom_tracers) --------
+        if (enable_3zoo2det .and. enable_coccos) then
+            bgc_num_local = 36
+        else if (enable_coccos .and. .not. enable_3zoo2det) then
+            bgc_num_local = 28
+        else if (enable_3zoo2det .and. .not. enable_coccos) then
+            bgc_num_local = 30
+        else
+            bgc_num_local = 22
+        end if
+
+        ! num_physical_tracers (global) is just T,S in the new layout
+        num_physical_tracers = n_base_physical
 
         ! Allocate expected IDs array
         allocate(expected_ids(num_tracers))
+        expected_ids = 0   ! zero-init; any unset slot is caught by the mismatch check
 
-        ! Build expected ID sequence
+        ! ---- physical tracers (slots 1-2) ----------------------------------------
         expected_ids(1) = 1
         expected_ids(2) = 2
 
+        ! ---- base BGC (IDs 1001-1022, always present, starts right after T,S) ----
         do i = 1, 22
-            expected_ids(num_physical_tracers + i) = 1000 + i
+            expected_ids(n_base_physical + i) = 1000 + i
         end do
 
+        ! ---- config-specific BGC (slots after base BGC block) ---------------------
         if (enable_3zoo2det .and. enable_coccos) then
             ! Full model configuration
-            expected_ids(25:30) = [1023, 1024, 1025, 1026, 1027, 1028]
-            expected_ids(31:36) = [1029, 1030, 1031, 1032, 1033, 1034]
-            expected_ids(37:38) = [1035, 1036]
+            expected_ids(n_base_physical+23:n_base_physical+28) = [1023, 1024, 1025, 1026, 1027, 1028]
+            expected_ids(n_base_physical+29:n_base_physical+34) = [1029, 1030, 1031, 1032, 1033, 1034]
+            expected_ids(n_base_physical+35:n_base_physical+36) = [1035, 1036]
 
         else if (enable_coccos .and. .not.enable_3zoo2det) then
-            expected_ids(25:30) = [1023, 1024, 1025, 1026, 1027, 1028]
+            expected_ids(n_base_physical+23:n_base_physical+28) = [1023, 1024, 1025, 1026, 1027, 1028]
 
         else if (enable_3zoo2det .and. .not.enable_coccos) then
-            expected_ids(25:32) = [1023, 1024, 1025, 1026, 1027, 1028, 1029, 1030]
+            expected_ids(n_base_physical+23:n_base_physical+30) = [1023, 1024, 1025, 1026, 1027, 1028, 1029, 1030]
+        end if
+
+        ! ---- age tracer (running slot, right after BGC) ----------------------------
+        slot = n_base_physical + bgc_num_local + 1
+
+        ! Age tracer (ID=100): appended immediately after the last BGC slot.
+        ! NOT a BGC tracer; not counted in bgc_num.
+        if (use_age_tracer) then
+            expected_ids(slot) = 100
+            slot = slot + 1
+        end if
+
+        ! ---- transit tracers (tail, after age) --------------------------------------
+        n_transit_tracers = 0
+        if (use_transit) then
+            if (l_sf6) then
+                expected_ids(slot) = 6 ! SF6
+                slot = slot + 1
+                n_transit_tracers = n_transit_tracers + 1
+            end if
+            if (l_f11) then
+                expected_ids(slot) = 11 ! CFC-11
+                slot = slot + 1
+                n_transit_tracers = n_transit_tracers + 1
+            end if
+            if (l_f12) then
+                expected_ids(slot) = 12 ! CFC-12
+                slot = slot + 1
+                n_transit_tracers = n_transit_tracers + 1
+            end if
+            if (l_r14c) then
+                expected_ids(slot) = 14 ! R14C (radiocarbon)
+                slot = slot + 1
+                n_transit_tracers = n_transit_tracers + 1
+            end if
+            if (l_r39ar) then
+                expected_ids(slot) = 39 ! R39Ar
+                slot = slot + 1
+                n_transit_tracers = n_transit_tracers + 1
+            end if
         end if
 
         ! ===========================================================================
@@ -1500,6 +1647,7 @@ contains
             write(*, *) '=========================================================================='
             write(*, *) 'VALIDATING TRACER ID SEQUENCE FROM NAMELIST'
             write(*, *) '=========================================================================='
+            write(*, *) 'Expected layout: T, S | BGC | [age] | [transit]'
         end if
 
         do i = 1, num_tracers
@@ -1509,6 +1657,12 @@ contains
                     write(*, *) 'ERROR at position ', i, ':'
                     write(*, *) '  Expected tracer ID: ', expected_ids(i)
                     write(*, *) '  Found tracer ID:    ', tracer_ids(i)
+                    ! position-specific hints
+                    if (use_age_tracer .and. &
+                        i == n_base_physical + bgc_num_local + 1) &
+                        write(*,*) '  HINT: this slot must be age tracer ID=100'
+                    if (use_transit .and. i > n_base_physical + bgc_num_local + merge(1,0,use_age_tracer)) &
+                        write(*,*) '  HINT: this slot is in the transit-tracer tail block'
                     write(*, *) ''
                 end if
             end if
@@ -1532,24 +1686,6 @@ contains
         end do
 
         ! ===========================================================================
-        ! Check 3: Detect forbidden tracer IDs for current configuration
-        ! ===========================================================================
-        !if (enable_3zoo2det .and. enable_coccos) then
-        ! Check for forbidden IDs 1023-1024 in full model
-        !do i = 1, num_tracers
-        !if (tracer_ids(i) == 1023 .or. tracer_ids(i) == 1024) then
-        !error_found = .true.
-        !if (mype == 0) then
-        !write(*,*) 'ERROR: Forbidden tracer ID in full model configuration!'
-        !write(*,*) '  Tracer ID ', tracer_ids(i), ' at position ', i
-        !write(*,*) '  IDs 1023-1024 are NOT used when both flags are enabled'
-        !write(*,*) ''
-        !end if
-        !end if
-        !end do
-        !end if
-
-        ! ===========================================================================
         ! Report results
         ! ===========================================================================
         if (error_found .or. duplicate_found) then
@@ -1566,6 +1702,11 @@ contains
                 write(*, *) 'Actual tracer ID sequence from namelist:'
                 write(*, *) tracer_ids
                 write(*, *) ''
+                write(*, *) '  1. Layout must be: T, S | BGC | [age] | [transit]'
+                if (use_age_tracer) &
+                    write(*,*) '  2. Age tracer          ID=100  (use_age_tracer = .true.), placed right after BGC'
+                if (use_transit) &
+                    write(*,*) '  3. Transit tracers placed at the END, after age (if any)'
                 write(*, *) 'ACTION REQUIRED:'
                 write(*, *) '  Correct the tracer IDs in your namelist.config file'
                 write(*, *) '  Ensure the sequence matches exactly as expected'
@@ -1588,6 +1729,11 @@ contains
                         &===='
                 write(*, *) 'TRACER ID VALIDATION PASSED!'
                 write(*, *) 'All tracer IDs match expected sequence - no clashes detected.'
+                if (use_age_tracer) &
+                    write(*,*) '  Age tracer   (ID=100) correctly placed at slot ', &
+                    n_base_physical + bgc_num_local + 1
+                if (use_transit) &
+                    write(*,*) '  Transit tracers (', n_transit_tracers, ') correctly placed at tail'
                 write(*, *) '======================================================================&
                         &===='
                 write(*, *) ''
@@ -1868,7 +2014,6 @@ module REcoM_GloVar
     end type tracers_info_type
 
 end module REcoM_GloVar
-
 !===============================================================================
 ! For variables saved locally for each column and then used in REcoM
 !-------------------------------------------------------------------------------
@@ -2523,6 +2668,14 @@ contains
         vertaggd = 0.d0
 
         ! --------------------------------------------------------------------------
+        ! Mesozooplankton (base heterotroph group, present in every configuration;
+        ! used unconditionally in REcoM_sms regardless of Grazing_detritus/
+        ! enable_3zoo2det, so it must be allocated unconditionally too)
+        ! --------------------------------------------------------------------------
+        allocate(vertrespmeso(nl - 1))
+        vertrespmeso = 0.d0
+
+        ! --------------------------------------------------------------------------
         ! Coccolithophores (if enabled)
         ! --------------------------------------------------------------------------
         if (enable_coccos) then
@@ -2581,7 +2734,6 @@ contains
                 allocate(vertgrazmeso_tot(nl - 1), vertgrazmeso_n(nl - 1), vertgrazmeso_d(nl - 1))
                 allocate(vertgrazmeso_det(nl - 1), vertgrazmeso_mic(nl - 1), vertgrazmeso_det2(nl &
                         &- 1))
-                allocate(vertrespmeso(nl - 1))
 
                 vertgrazmeso_tot = 0.d0
                 vertgrazmeso_n = 0.d0
@@ -2589,7 +2741,6 @@ contains
                 vertgrazmeso_det = 0.d0
                 vertgrazmeso_mic = 0.d0
                 vertgrazmeso_det2 = 0.d0
-                vertrespmeso = 0.d0
 
                 if (enable_coccos) then
                     allocate(vertgrazmicro_c(nl - 1), vertgrazmicro_p(nl - 1))
@@ -2939,6 +3090,12 @@ contains
         deallocate(vertaggd, vertdocexd, vertrespd)
         deallocate(VTDiaCO2, VTCphotLigLim_diatoms, VTCphot_diatoms)
 
+        ! --------------------------------------------------------------------------
+        ! Mesozooplankton (base heterotroph group; see matching unconditional
+        ! allocation above)
+        ! --------------------------------------------------------------------------
+        deallocate(vertrespmeso)
+
         if (enable_coccos) then
             deallocate(VTTemp_phyto, VTqlimitFac_phyto)
             deallocate(VTTemp_diatoms, VTqlimitFac_diatoms)
@@ -2966,7 +3123,7 @@ contains
         ! --------------------------------------------------------------------------
         if (Grazing_detritus) then
             deallocate(vertgrazmeso_tot, vertgrazmeso_n, vertgrazmeso_d)
-            deallocate(vertgrazmeso_det, vertrespmeso)
+            deallocate(vertgrazmeso_det)
 
             if (enable_coccos) then
                 deallocate(vertgrazmeso_c, vertgrazmeso_p)
