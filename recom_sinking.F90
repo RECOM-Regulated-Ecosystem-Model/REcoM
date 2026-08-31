@@ -593,7 +593,8 @@ contains
                         (tracer_id == tracer_ids%macrozooplankton_detrital_nitrogen .or. & !idetz2n
                          tracer_id == tracer_ids%macrozooplankton_detrital_carbon .or. & !idetz2c
                          tracer_id == tracer_ids%macrozooplankton_detrital_silica .or. & !idetz2si
-                         tracer_id == tracer_ids%macrozooplankton_detrital_calcite)) then !idetz2calc
+                         tracer_id == tracer_ids%macrozooplankton_detrital_calcite)) &  !idetz2calc
+                        then
                         Wvel_flux(nz) = -VDet_zoo2 / SecondsPerDay
 
                         if (use_ballasting) then

@@ -212,11 +212,10 @@ contains
         real(kind=wp), allocatable :: rhoSW_watercolumn(:)
         real(kind=WP) :: ttf_rhs_bak(nl - 1, num_tracers) ! local variable
 
-        integer                    :: actual_bgc_num
-        integer                    :: num_physical_tracers
-        integer                    :: n_transit_tracers   ! number of active transit tracers
-        integer                    :: bgc_start, bgc_end  ! first/last slot of the BGC-only block
- 
+        integer :: actual_bgc_num
+        integer :: num_physical_tracers
+        integer :: n_transit_tracers ! number of active transit tracers
+        integer :: bgc_start, bgc_end ! first/last slot of the BGC-only block
 
         allocate(Temp(nl - 1), Sali_depth(nl - 1), zr(nl - 1), PAR(nl - 1))
         allocate(C(nl - 1, bgc_num))
@@ -264,10 +263,10 @@ contains
 
         n_transit_tracers = 0
         if (use_transit) then
-            if (l_sf6)   n_transit_tracers = n_transit_tracers + 1
-            if (l_f11)   n_transit_tracers = n_transit_tracers + 1
-            if (l_f12)   n_transit_tracers = n_transit_tracers + 1
-            if (l_r14c)  n_transit_tracers = n_transit_tracers + 1
+            if (l_sf6) n_transit_tracers = n_transit_tracers + 1
+            if (l_f11) n_transit_tracers = n_transit_tracers + 1
+            if (l_f12) n_transit_tracers = n_transit_tracers + 1
+            if (l_r14c) n_transit_tracers = n_transit_tracers + 1
             if (l_r39ar) n_transit_tracers = n_transit_tracers + 1
         end if
 
@@ -276,7 +275,7 @@ contains
         if (use_transit) actual_bgc_num = actual_bgc_num - n_transit_tracers
 
         bgc_start = num_physical_tracers + 1
-        bgc_end   = num_physical_tracers + actual_bgc_num
+        bgc_end = num_physical_tracers + actual_bgc_num
 
         ! ======================================================================================
         !********************************* LOOP STARTS *****************************************
@@ -337,7 +336,7 @@ contains
                         LocAtmCO2_14 = AtmCO2_14(lat_zone(lat_val), month)
                     end if
                 end if
-                LocAtmCO2                   = x_co2atm(n) ! ppm; from oifs
+                LocAtmCO2 = x_co2atm(n) ! ppm; from oifs
             end if ! use_atbox
 
             if (ciso) then
@@ -371,7 +370,8 @@ contains
 
             !!---- Biogeochemical tracers
             do tr_num = bgc_start, bgc_end
-                C(1:nzmax, tr_num-num_physical_tracers) = tracers_info%data_pointers(tr_num)%tracer_data(1:nzmax, n)
+                C(1:nzmax, tr_num - num_physical_tracers) = tracers_info%data_pointers(tr_num)%&
+                        tracer_data(1:nzmax, n)
             end do
 
             ttf_rhs_bak = 0.0
@@ -412,14 +412,15 @@ contains
                     HCO3_watercolumn, & ! NEW MOCSY HCO3 for the whole watercolumn
                     CO3_watercolumn, & ! NEW DISS CO3 for the whole watercolumn
                     OmegaC_watercolumn, & ! NEW DISS OmegaC for the whole watercolumn
-                    kspc_watercolumn, & ! NEW DISS stoichiometric solubility product for calcite [mol^2/kg^2]
+                    kspc_watercolumn, & ! NEW DISS calcite solubility product [mol^2/kg^2]
                     rhoSW_watercolumn, & ! NEW DISS in-situ density of seawater [mol/m^3]
                     PAR, MPI_COMM_FESOM, mype, myDim_nod2D, &
                     eDim_nod2D, nl, hnode, zbar_3d_n, &
                     geo_coord_nod2D, daynew, ndpyr, dt, kappa, mstep, rad)
 
             do tr_num = bgc_start, bgc_end
-                tracers_info%data_pointers(tr_num)%tracer_data(1:nzmax, n) = C(1:nzmax, tr_num-num_physical_tracers)
+                tracers_info%data_pointers(tr_num)%tracer_data(1:nzmax, n) = C(1:nzmax, tr_num &
+                        - num_physical_tracers)
             end do
 
             ! recom_sms

@@ -3455,8 +3455,8 @@ contains
                     ! DIC_14
                     !===================================================================
                     sms(k, idic_14) = ( &
-                            ! corr fix eb707e35: r_phyc_14/r_diac_14 * bulk C, not
-                            ! Cphot * PhyC_14
+                    ! corr fix eb707e35: r_phyc_14/r_diac_14 * bulk C, not
+                    ! Cphot * PhyC_14
                             -Cphot * r_phyc_14 * PhyC &
                             + phyRespRate * PhyC_14 &
                             - Cphot_Dia * r_diac_14 * DiaC &
@@ -3472,7 +3472,7 @@ contains
                     ! PhyC_14
                     !===================================================================
                     sms(k, iphyc_14) = ( &
-                            ! corr fix eb707e35: r_phyc_14 * PhyC (source-pool ratio)
+                    ! corr fix eb707e35: r_phyc_14 * PhyC (source-pool ratio)
                             +Cphot * r_phyc_14 * PhyC &
                             - lossC * limitFacN * PhyC_14 &
                             - phyRespRate * PhyC_14 &
@@ -3521,7 +3521,7 @@ contains
                     ! DiaC_14
                     !===================================================================
                     sms(k, idiac_14) = ( &
-                            ! corr fix eb707e35: r_diac_14 * DiaC (source-pool ratio)
+                    ! corr fix eb707e35: r_diac_14 * DiaC (source-pool ratio)
                             +Cphot_dia * r_diac_14 * DiaC &
                             - lossC_d * limitFacN_dia * DiaC_14 &
                             - phyRespRate_dia * DiaC_14 &
