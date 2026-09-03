@@ -8,7 +8,7 @@ module recom_sms_module
 
 contains
 
-    subroutine REcoM_sms(n, Nn, state, thick, SurfSR, sms, Temp, Sali_depth, CO2_watercolumn, &
+    subroutine REcoM_sms(n, nzmin, Nn, state, thick, SurfSR, sms, Temp, Sali_depth, CO2_watercolumn, &
             pH_watercolumn, pCO2_watercolumn, HCO3_watercolumn, CO3_watercolumn, &
             OmegaC_watercolumn, kspc_watercolumn, rhoSW_watercolumn, Loc_slp, &
             zF, PAR, Latd, daynew, dt, kappa, mstep, MPI_COMM_FESOM, mype, &
@@ -127,6 +127,7 @@ contains
         integer, intent(in) :: n, daynew, mype, myDim_nod2D, eDim_nod2D, nl, mstep
         integer, intent(in) :: MPI_COMM_FESOM
         integer, intent(in) :: Nn !< Total number of nodes in the vertical
+        integer, intent(in) :: nzmin
 
         real(kind=wp), intent(in) :: SurfSR, dt !< [W/m2] ShortWave radiation at surface
         real(kind=wp), intent(in) :: Loc_slp ![Pa] sea-level pressure
@@ -207,7 +208,8 @@ contains
                 PhyCalc, & ! [mmol/m3] Phytoplankton calcite
                 DetCalc, & ! [mmol/m3] Detrital calcite
                 FreeFe, & ! [mmol/m3] Free iron
-                O2 ! [mmol/m3] Dissolved oxygen
+                O2, & ! [mmol/m3] Dissolved oxygen
+                DICremin ! [mmol/m3] Dissolved inorganic carbon remineralization
 
         ! Coccolithophore variables (conditionally used based on namelist)
         real(kind=wp) :: &
@@ -469,17 +471,17 @@ contains
             !   - myDim_nod2D: Horizontal dimension (for 3D unstructured grids)
             !---------------------------------------------------------------------------
 
-            do k = one, nn
+            do k = nzmin, nn
                 ! Alternative loop structures (commented out):
                 ! do n = 1, myDim_nod2D
                 !     Nn = nlevels_nod2D(n) - 1
                 !     nzmin = ulevels_nod2D(row)
                 !     nzmax = nlevels_nod2D(row)
 
-                call sms_initialize_variables(n, k, state, sms, thick, Temp, Sali_depth, SurfSR, &
+                call sms_initialize_variables(n, nzmin, k, state, sms, thick, Temp, Sali_depth, SurfSR, &
                         PAR, kappa, DIN, DIC, Alk, PhyN, PhyC, PhyChl, DetN, DetC, HetN, HetC, &
                         DON, EOC, DiaN, DiaC, DiaChl, DiaSi, DetSi, Si, Fe, PhyCalc, DetCalc, &
-                        FreeFe, O2, CoccoN, CoccoC, CoccoChl, PhaeoN, PhaeoC, PhaeoChl, Zoo2N, &
+                        FreeFe, O2, DICremin, CoccoN, CoccoC, CoccoChl, PhaeoN, PhaeoC, PhaeoChl, Zoo2N, &
                         Zoo2C, DetZ2N, DetZ2C, DetZ2Si, DetZ2Calc, MicZooN, MicZooC, &
                         recip_hetN_plus, REcoM_T_depth, REcoM_S_depth, REcoM_DIC_depth, &
                         REcoM_Alk_depth, REcoM_Si_depth, REcoM_Phos_depth)
@@ -584,6 +586,7 @@ contains
                 ! depth-dependence of calcite dissolution can be tuned independently of the
                 ! detritus sinking parameterisation.
 
+                !Sink_Vel = Vdet_a * abs(zF(k)) + Vdet
                 Sink_Vel = Vcalc * abs(zF(k)) + Vdet
 
                 if (OmegaC_diss) then
@@ -1420,10 +1423,10 @@ contains
                 !   C_flux = Σ(grazingFlux_i × C:N_ratio_i × grazEff)
                 !-------------------------------------------------------------------------------
 
-                ! Calculate grazing efficiency: food-dependent (increases with food availability,
-                ! representing improved assimilation at higher rations) unless overridden to a
+                ! Calculate food-dependent grazing efficiency
+                ! Increases with food availability, representing improved assimilation at higher
                 ! constant efficiency by REcoM_Grazing_Variable_Efficiency (ported from old
-                ! int_recom).
+                ! recom).
                 if (REcoM_Grazing_Variable_Efficiency) then
                     grazEff = gfin + 1.0 / (0.2 * food + 2.0)
                 else
@@ -3813,6 +3816,7 @@ contains
         !       with species-specific parameters reflecting different sensitivities
         !-------------------------------------------------------------------------------
 
+        ! OG Why do we keep h_depth ? Do we use proton concentration somewhere in the code?
         ! Convert pH to proton concentration for calculations
         ! pH = -log10[H+], therefore [H+] = 10^(-pH)
         h_depth(1) = 10.d0 ** (-ph_depth(1))

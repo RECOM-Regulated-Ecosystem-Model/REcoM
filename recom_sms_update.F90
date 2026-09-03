@@ -7,9 +7,9 @@ module recom_sms_update
 
 contains
 
-    subroutine sms_update_tracer_scalars(n, k, state, sms, thick, Temp, Sali_depth, SurfSR, PAR, &
+    subroutine sms_update_tracer_scalars(n, nzmin, k, state, sms, thick, Temp, Sali_depth, SurfSR, PAR, &
             kappa, DIN, DIC, Alk, PhyN, PhyC, PhyChl, DetN, DetC, HetN, HetC, DON, EOC, DiaN, &
-            DiaC, DiaChl, DiaSi, DetSi, Si, Fe, PhyCalc, DetCalc, FreeFe, O2, CoccoN, CoccoC, &
+            DiaC, DiaChl, DiaSi, DetSi, Si, Fe, PhyCalc, DetCalc, FreeFe, O2, DICremin, CoccoN, CoccoC, &
             CoccoChl, PhaeoN, PhaeoC, PhaeoChl, Zoo2N, Zoo2C, DetZ2N, DetZ2C, DetZ2Si, DetZ2Calc, &
             MicZooN, MicZooC, recip_hetN_plus, REcoM_T_depth, REcoM_S_depth, REcoM_DIC_depth, &
             REcoM_Alk_depth, REcoM_Si_depth, REcoM_Phos_depth)
@@ -29,7 +29,7 @@ contains
                 chl2n_max_p, enable_3zoo2det, enable_coccos, expon_cocco, expon_d, expon_phy, &
                 grazing_detritus, ialk, icchl, icocc, icocn, idchl, idetc, idetcal, idetn, &
                 idetz2c, idetz2calc, idetz2n, idetz2si, idiac, idian, idiasi, idic, idin, idoc, &
-                idon, ife, ihetc, ihetn, imiczooc, imiczoon, ioxy, ipchl, iphac, iphachl, iphan, &
+                idon, ife, ihetc, ihetn, imiczooc, imiczoon, ioxy, idicremin, ipchl, iphac, iphachl, iphan, &
                 iphyc, iphyn, isi, izoo2c, izoo2n, k_o2_remin, k_w, ncmax, ncmax_c, ncmax_d, &
                 ncmax_p, ncmin, ncmin_c, ncmin_d, ncmin_p, o2dep_remin, one, ord_cocco, ord_d, &
                 ord_phy, recom_tref, res_het, sicmax, t1_zoo2, t2_zoo2, t3_zoo2, t4_zoo2, tiny, &
@@ -49,7 +49,7 @@ contains
 
         implicit none
 
-        integer, intent(in) :: n, k
+        integer, intent(in) :: n, nzmin, k
 
         real(kind=wp), intent(in) :: SurfSR
         real(kind=wp), intent(in), dimension(:) :: thick, Temp, Sali_depth
@@ -60,8 +60,8 @@ contains
 
         real(kind=wp), intent(inout) :: DIN, DIC, Alk, PhyN, PhyC, PhyChl, DetN, DetC, HetN, HetC, &
                 DON, EOC, DiaN, DiaC, DiaChl, DiaSi, DetSi, Si, Fe, PhyCalc, DetCalc, FreeFe, O2, &
-                CoccoN, CoccoC, CoccoChl, PhaeoN, PhaeoC, PhaeoChl, Zoo2N, Zoo2C, DetZ2N, DetZ2C, &
-                DetZ2Si, DetZ2Calc, MicZooN, MicZooC, recip_hetN_plus
+                DICremin, CoccoN, CoccoC, CoccoChl, PhaeoN, PhaeoC, PhaeoChl, Zoo2N, Zoo2C, DetZ2N, &
+                DetZ2C, DetZ2Si, DetZ2Calc, MicZooN, MicZooC, recip_hetN_plus
 
         real(kind=wp), intent(inout), dimension(1) :: REcoM_T_depth, REcoM_S_depth, REcoM_DIC_depth&
                 , &
@@ -97,6 +97,7 @@ contains
         DIC = max(tiny, state(k, idic) + sms(k, idic))
         ALK = max(tiny, state(k, ialk) + sms(k, ialk))
         O2 = max(tiny, state(k, ioxy) + sms(k, ioxy))
+        DICremin = max(tiny, state(k, idicremin) + sms(k, idicremin))
 
         !-----------------------------------------------------------------------
         ! DISSOLVED ORGANIC MATTER
@@ -960,8 +961,7 @@ contains
         !   - Self-shading is key negative feedback on bloom magnitude
         !-------------------------------------------------------------------------------
 
-        if (k == 1) then
-
+        if (k == nzmin) then
             !===========================================================================
             ! SURFACE LAYER INITIALIZATION
             !===========================================================================
@@ -1085,14 +1085,14 @@ contains
                 ihetn, ihetc, izoo2n, izoo2c, imiczoon, imiczooc, &
                 idetn, idetc, idetsi, idetcal, &
                 idetz2n, idetz2c, idetz2si, idetz2calc, &
-                idon, idoc, isi, ife, ioxy, &
+                idon, idoc, isi, ife, ioxy, idicremin, &
                 grazing_detritus, enable_3zoo2det, enable_coccos, &
                 lossn, lossn_d, lossn_c, lossn_p, &
                 lossn_z, lossn_z2, lossn_z3, &
                 lossc, lossc_d, lossc_c, lossc_p, &
                 lossc_z, lossc_z2, lossc_z3, &
                 reminn, reminc, rho_n, rho_c1, &
-                fe2n, kscavfe, redo2c, calc_diss_guts, &
+                fe2n, kscavfe, kscavfe2, redo2c, calc_diss_guts, &
                 grazeff2, grazeff3, ciso, tiny
 
         use recom_locvar, only: locriverdoc
@@ -1185,7 +1185,7 @@ contains
         ! SINKS: Nitrogen Uptake (decreases DIN)
         !---------------------------------------------------------------------------
         ! Phytoplankton assimilation of NO3- and NH4+
-                -N_assim * PhyC & ! Small phytoplankton
+                - N_assim * PhyC & ! Small phytoplankton
                 - N_assim_Dia * DiaC & ! Diatoms
                 - N_assim_Cocco * CoccoC * is_coccos & ! Coccolithophores
                 - N_assim_Phaeo * PhaeoC * is_coccos & ! Phaeocystis
@@ -2822,7 +2822,9 @@ contains
         !   lossN, lossN_d, etc.        : N excretion rates [day-1]
         !   limitFacN, etc.             : Nutrient limitation factors [-]
         !   reminN                      : Temperature-dependent remineralization [day-1]
-        !   kScavFe                     : Iron scavenging rate [m3 mmol C-1 day-1]
+        !   kScavFe                     : Iron scavenging rate onto particles [m3 mmol C-1 day-1]
+        !   kScavFe2                    : Background iron scavenging rate, independent of
+        !                                 particle concentration [day-1]
         !   FreeFe                      : Free dissolved iron [μmol Fe m-3]
         !-------------------------------------------------------------------------------
 
@@ -2858,10 +2860,11 @@ contains
                 + lossN_z3 * MicZooN * is_3zoo2det & ! Microzooplankton
                 ) &
         !---------------------------------------------------------------------------
-        ! SINKS: Abiotic Iron Scavenging onto Particles
+        ! SINKS: Iron Scavenging onto Particles
         !---------------------------------------------------------------------------
                 - kScavFe * DetC * FreeFe & ! Slow-sinking detritus
                 - kScavFe * DetZ2C * FreeFe * is_3zoo2det & ! Fast-sinking detritus
+                - kScavFe2 * FreeFe &
                 ) * dt_b + sms(k, ife)
 
         !===============================================================================
@@ -3050,6 +3053,14 @@ contains
                 ) * redO2C * dt_b + sms(k, ioxy)
         ! Note: redO2C converts carbon-based rates to oxygen equivalents
         !       using the Redfield ratio (typically ~170/122 = 1.39 mol O2/mol C)
+
+        !===============================================================================
+        ! 37. DIC remineralzation tracer to track remineralization as an diagnostics
+        !===============================================================================
+        !   idicremin       : Tracer for remineralization diagnostics (added by Sina)
+        sms(k, idicremin) = (                 &
+            + rho_c1 * arrFunc * O2Func * EOC &
+            ) * dt_b + sms(k,idicremin)
 
         if (ciso) then
 
@@ -3455,8 +3466,8 @@ contains
                     ! DIC_14
                     !===================================================================
                     sms(k, idic_14) = ( &
-                    ! corr fix eb707e35: r_phyc_14/r_diac_14 * bulk C, not
-                    ! Cphot * PhyC_14
+                            ! corr fix eb707e35: r_phyc_14/r_diac_14 * bulk C, not
+                            ! Cphot * PhyC_14
                             -Cphot * r_phyc_14 * PhyC &
                             + phyRespRate * PhyC_14 &
                             - Cphot_Dia * r_diac_14 * DiaC &
@@ -3472,7 +3483,7 @@ contains
                     ! PhyC_14
                     !===================================================================
                     sms(k, iphyc_14) = ( &
-                    ! corr fix eb707e35: r_phyc_14 * PhyC (source-pool ratio)
+                            ! corr fix eb707e35: r_phyc_14 * PhyC (source-pool ratio)
                             +Cphot * r_phyc_14 * PhyC &
                             - lossC * limitFacN * PhyC_14 &
                             - phyRespRate * PhyC_14 &
@@ -3521,7 +3532,7 @@ contains
                     ! DiaC_14
                     !===================================================================
                     sms(k, idiac_14) = ( &
-                    ! corr fix eb707e35: r_diac_14 * DiaC (source-pool ratio)
+                            ! corr fix eb707e35: r_diac_14 * DiaC (source-pool ratio)
                             +Cphot_dia * r_diac_14 * DiaC &
                             - lossC_d * limitFacN_dia * DiaC_14 &
                             - phyRespRate_dia * DiaC_14 &

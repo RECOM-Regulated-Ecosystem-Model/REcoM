@@ -32,8 +32,7 @@ contains
 
         ! Globally integrated air-sea CO2 flux (mol / s)
         total_co2flux = 0.0_WP
-        call integrate_nod_2d_recom(0.001_WP * GloCO2flux_seaicemask, total_CO2flux, MPI_COMM_FESOM&
-                , &
+        call integrate_nod_2d_recom(0.001_WP * GloCO2flux_seaicemask, total_CO2flux, MPI_COMM_FESOM, &
                 myDim_nod2D, ulevels_nod2D, areasvol)
 
         ! Atmospheric carbon budget (mol)

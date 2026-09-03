@@ -6,8 +6,18 @@ find_package(MPI REQUIRED)
 # Get the list of Fortran sources in the folder
 file(GLOB_RECURSE SOURCES "*.?90")
 
-# This is currently required because recom_sinking relies on this definition
-add_compile_definitions(__recom)
+# __recom is required because recom_sinking relies on this definition.
+# __usetp must match the definition fesom's own src/CMakeLists.txt adds to the
+# fesom target whenever RECOM_COUPLED is on (this subdirectory is only ever
+# added under that same condition, see src/CMakeLists.txt). Without it, the
+# __usetp-guarded Benthos_tr buffering in recom_sinking.F90 compiles out here
+# even though oce_ale_tracer.F90 (built into the fesom target) still expects
+# it: the sinking code silently falls back to writing straight into Benthos
+# instead, which is only actually correct when num_fesom_groups==1 (with more
+# than one group, each group's tr_num range only covers a subset of the
+# sinking tracers, and the Benthos_tr cross-group merge that was supposed to
+# fill in the rest never receives anything to merge).
+add_compile_definitions(__recom __usetp)
 
 # Create the target library for REcoM and add its dependencies
 add_library(recom STATIC ${SOURCES})
