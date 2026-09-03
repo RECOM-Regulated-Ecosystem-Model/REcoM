@@ -1,0 +1,7 @@
+REcoM
+Copyright 2026 Alfred Wegener Institute Helmholtz Centre for Polar and Marine Research
+
+This product includes software developed by James Orr:
+Mocsy — routines to model ocean carbonate system thermodynamics.
+Mocsy is licensed under the MIT License.
+See mocsy/LICENSE for the full license text.
