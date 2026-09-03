@@ -583,11 +583,18 @@ contains
                     end if
 
                     !! ---- We assume constant sinking for second detritus
+                    ! Parenthesized explicitly: .and. binds tighter than .or. in Fortran, so
+                    ! without these parens this read as (enable_3zoo2det .and. ...nitrogen) .or.
+                    ! ...carbon .or. ...silica .or. ...calcite instead of the intended
+                    ! enable_3zoo2det .and. (...nitrogen .or. ...carbon .or. ...silica .or.
+                    ! ...calcite). Harmless today only because disabled tracer_ids default to a
+                    ! -1 sentinel that a real tracer_id never matches.
                     if (enable_3zoo2det .and. &
-                        tracer_id == tracer_ids%macrozooplankton_detrital_nitrogen .or. & !idetz2n
-                        tracer_id == tracer_ids%macrozooplankton_detrital_carbon .or. & !idetz2c
-                        tracer_id == tracer_ids%macrozooplankton_detrital_silica .or. & !idetz2si
-                        tracer_id == tracer_ids%macrozooplankton_detrital_calcite) then !idetz2calc
+                        (tracer_id == tracer_ids%macrozooplankton_detrital_nitrogen .or. & !idetz2n
+                         tracer_id == tracer_ids%macrozooplankton_detrital_carbon .or. & !idetz2c
+                         tracer_id == tracer_ids%macrozooplankton_detrital_silica .or. & !idetz2si
+                         tracer_id == tracer_ids%macrozooplankton_detrital_calcite)) &  !idetz2calc
+                        then
                         Wvel_flux(nz) = -VDet_zoo2 / SecondsPerDay
 
                         if (use_ballasting) then
@@ -778,6 +785,16 @@ contains
                 scaling_density1_3D(k, row) = 1.0
                 scaling_density2_3D(k, row) = 1.0
 
+                ! MERGE-REVIEW: int_recom's ballast only recomputed scaling_density1_3D/
+                ! scaling_density2_3D from their 1.0 default when the detrital-carbon tracer's
+                ! own concentration exceeded a 0.001 guard (tracers%data(tr_num)%values(k,row)
+                ! > 0.001), avoiding wild scaling ratios from near-zero detrital carbon -- see
+                ! the commented-out remnants of that guard directly below. This subroutine no
+                ! longer receives per-tracer identity/concentration (it's now called once per
+                ! timestep with T/S, from oce_ale_tracer.F90, not per-tracer with a tr_num as
+                ! in int_recom), so restoring the guard's intent would mean threading DetC/
+                ! DetZ2C concentration into this subroutine's argument list -- left unresolved
+                ! rather than guessing at that redesign.
                 if (use_density_scaling) then
                     !if (tracers%data(tr_num)%ID ==1008)then !idetc
                     !if (tracers%data(tr_num)%values(k,row)>0.001) then ! only apply ballasting
