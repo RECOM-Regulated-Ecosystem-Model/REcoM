@@ -500,6 +500,7 @@ contains
             ! Store updated benthic state and decay rates
             !-----------------------------------------------------------------------
             Benthos(n, 1:benthos_num) = LocBenthos(1:benthos_num)
+
             ! Convert decay rate from [mmol/m2/d] to [mmol/m2/s]
             GlodecayBenthos(n, 1:benthos_num) = &
                 decayBenthos(1:benthos_num) / SecondsPerDay

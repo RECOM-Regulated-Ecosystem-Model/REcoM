@@ -933,9 +933,12 @@ module recom_config
     ! will have to be tuned. [umol/m2/day]
     real(kind=wp) :: Fe2N_benthos = 0.15d0
     real(kind=wp) :: kScavFe = 0.07d0
+    ! Background scavenging loss, independent of detrital particle concentration
+    ! (i.e. not multiplied by DetC/DetZ2C) [day-1]
+    real(kind=wp) :: kScavFe2 = 0.d0
     real(kind=wp) :: dust_sol = 0.02d0 !Dissolution of Dust for bioavaliable
     real(kind=wp) :: RiverFeConc = 100d0 ! mean DFe concentration in rivers
-    namelist /pairon/ Fe2N, Fe2N_benthos, kScavFe, dust_sol, RiverFeConc
+    namelist /pairon/ Fe2N, Fe2N_benthos, kScavFe, kScavFe2, dust_sol, RiverFeConc
     !!------------------------------------------------------------------------------
     !! *** Calcification ***
     real(kind=wp) :: calc_prod_ratio = 0.02d0

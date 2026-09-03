@@ -94,7 +94,7 @@ contains
                 calc_diss_exp, gfin, idetsi, idon, k_fe_c, lossc_z3, pzcocco2, simaxslope, &
                 siminslope, t1_zoo2, t2_zoo2, t3_zoo2, t4_zoo2, tiny, tiny_chl, tiny_het, &
                 topt_phaeo, totalligand, uopt_phaeo, use_medusa, use_photodamage, v_cm_fact, &
-                v_cm_fact_c, v_cm_fact_d, v_cm_fact_p, vdet, vdet_a, zero, tmax_phaeo, &
+                v_cm_fact_c, v_cm_fact_d, v_cm_fact_p, vdet, vdet_a, vcalc, zero, tmax_phaeo, &
                 fe_2ligands, fe_compl_nica, &
                 calc_diss_guts, calc_diss_omegac, calc_diss_rate, calc_diss_rate2, &
                 calc_prod_ratio, chl2n_max, chl2n_max_c, chl2n_max_d, chl2n_max_p, ciso, co2lim, &
@@ -569,8 +569,9 @@ contains
                 ! Variables (Depth-dependent mode):
                 !   calc_diss_rate      : Primary dissolution rate constant [day-1]
                 !   calc_diss_rate2     : Secondary dissolution rate constant [day-1]
-                !   Sink_Vel            : Particle sinking velocity [m day-1]
-                !   Vdet_a              : Depth-dependent sinking coefficient [day-1]
+                !   Sink_Vel            : Particle sinking velocity used for calc_diss [m day-1]
+                !   Vcalc               : Depth-dependence coefficient for calcite dissolution
+                !                         sinking velocity [day-1]
                 !   Vdet                : Base sinking velocity [m day-1]
                 !   zF(k)               : Depth at layer k [m]
                 !
