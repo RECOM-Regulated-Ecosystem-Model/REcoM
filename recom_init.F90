@@ -60,7 +60,7 @@ contains
         integer, intent(in) :: mpi_comm_fesom, mydim_elem2d, edim_elem2d
         real(kind=WP), intent(in) :: rad
         ! [m2] Total ocean surface area; only used to convert the initial cosmogenic 14C
-        ! production rate into a flux (see initialize_ciso). Ported from int_recom, where this
+        ! production rate into a flux (see initialize_ciso). Ported from recom, where this
         ! was pulled in implicitly via unrestricted `use MOD_MESH` instead of being passed in --
         ! this decoupled build has no such module to draw it from, so it must be an argument.
         real(kind=WP), intent(in) :: ocean_area
@@ -72,8 +72,8 @@ contains
         integer :: i, tracer_id
         integer :: actual_bgc_num
         integer :: num_physical_tracers
-        integer :: n_transit_tracers   ! number of active transit tracers
-        integer :: bgc_start, bgc_end  ! first/last slot of the BGC-only block
+        integer :: n_transit_tracers ! number of active transit tracers
+        integer :: bgc_start, bgc_end ! first/last slot of the BGC-only block
 
         call initialize_memory(myDim_nod2D + eDim_nod2D, nl, num_tracers)
 
@@ -85,11 +85,13 @@ contains
         call initialize_tracer_indices
 
         ! Validation check here
-        call validate_recom_tracers(num_tracers, use_age_tracer, use_transit, l_sf6, l_f11, l_f12, l_r14c, l_r39ar, mype)
+        call validate_recom_tracers(num_tracers, use_age_tracer, use_transit, l_sf6, l_f11, l_f12, &
+                l_r14c, l_r39ar, mype)
 
         ! After reading tracer namelist - validate actual IDs
-        call validate_tracer_id_sequence(tracers_info%ids(1:num_tracers), num_tracers, use_age_tracer, use_transit, &
-                                            l_sf6, l_f11, l_f12, l_r14c, l_r39ar, mype)
+        call validate_tracer_id_sequence(tracers_info%ids(1:num_tracers), num_tracers, &
+                use_age_tracer, use_transit, &
+                l_sf6, l_f11, l_f12, l_r14c, l_r39ar, mype)
 
         ! T,S | BGC | [age] | [transit] num_physical_tracers
         ! is always just T,S (=2): BGC tracers start right after them, regardless
@@ -99,10 +101,10 @@ contains
 
         n_transit_tracers = 0
         if (use_transit) then
-            if (l_sf6)   n_transit_tracers = n_transit_tracers + 1
-            if (l_f11)   n_transit_tracers = n_transit_tracers + 1
-            if (l_f12)   n_transit_tracers = n_transit_tracers + 1
-            if (l_r14c)  n_transit_tracers = n_transit_tracers + 1
+            if (l_sf6) n_transit_tracers = n_transit_tracers + 1
+            if (l_f11) n_transit_tracers = n_transit_tracers + 1
+            if (l_f12) n_transit_tracers = n_transit_tracers + 1
+            if (l_r14c) n_transit_tracers = n_transit_tracers + 1
             if (l_r39ar) n_transit_tracers = n_transit_tracers + 1
         end if
 
@@ -111,7 +113,7 @@ contains
         if (use_transit) actual_bgc_num = actual_bgc_num - n_transit_tracers
 
         bgc_start = num_physical_tracers + 1
-        bgc_end   = num_physical_tracers + actual_bgc_num
+        bgc_end = num_physical_tracers + actual_bgc_num
 
         do i = bgc_start, bgc_end
             tracer_id = tracers_info%ids(i)
@@ -122,8 +124,9 @@ contains
                 tracers_info%data_pointers(i)%tracer_data(:, :) = &
                         tracers_info%data_pointers(i)%tracer_data(:, :) * 1.e9
 
-                ! Avoids tracers 1001, 1002, 1003, 1018 and 1022, age tracer 100
-            else if (tracer_id > 1003 .and. tracer_id /= 1018 .and. tracer_id /= 1022) then
+                ! Avoids tracers 1001, 1002, 1003, 1018, 1022 and DICremin (read from gen_ic3d)
+            else if (tracer_id > 1003 .and. tracer_id /= 1018 .and. tracer_id /= 1022 .and. &
+                    tracer_id /= tracer_ids%dic_remineralization) then  ! allowed since call initialize_tracer_ids happens earlier
                 tracers_info%data_pointers(i)%tracer_data(:, :) = get_tracer_init_value(tracer_id)
             end if
         end do
@@ -162,10 +165,10 @@ contains
                 CO33D, OmegaC3D, kspc3D, rhoSW3D, rho_particle1, rho_particle2, &
                 scaling_density1_3D, scaling_density2_3D, scaling_visc_3D, seawater_visc_3D, &
                 Sinkingvel1, Sinkingvel2, Sinkvel1_tr, Sinkvel2_tr, GloSed, SinkFlx, &
-                SinkFlx_tr, lb_flux
+                SinkFlx_tr, lb_flux, x_co2atm
 
         use recom_locvar, only: LocBenthos
-        use recom_config, only: Diags, benthos_num, use_MEDUSA, bottflx_num, sedflx_num
+        use recom_config, only: Diags, benthos_num, use_MEDUSA, bottflx_num, sedflx_num, use_atbox
 
         implicit none
 
@@ -219,6 +222,12 @@ contains
         ! [1/day] Decay rate of detritus in the benthic layer
         allocate(decayBenthos(benthos_num), source=0.d0)
         allocate(PAR3D(nl - 1, node_size), source=0.d0)
+
+        if (use_atbox) then
+            allocate(x_co2atm(1), source=0.d0)
+        else
+            allocate(x_co2atm(node_size), source=0.d0)
+        end if
 
         if (Diags) then
             !! *** Allocate 2D diagnostics ***
@@ -573,6 +582,9 @@ contains
 
         integer :: current_tracer_id, total_tracers
 
+        tracer_ids%dissolved_inorganic_nitrogen = 1001
+        tracer_ids%dissolved_inorganic_carbon = 1002
+        tracer_ids%alkalinity = 1003
         tracer_ids%phytoplankton_nitrogen = 1004
         tracer_ids%phytoplankton_carbon = 1005
         tracer_ids%phytoplankton_chlorophyll = 1006
@@ -592,6 +604,9 @@ contains
         tracer_ids%phytoplankton_calcite = 1020
         tracer_ids%detrital_calcite = 1021
         tracer_ids%oxygen = 1022
+
+        ! DIC remineralization diagnostic tracer (added by Sina) -- always present, always last
+        tracer_ids%dic_remineralization = 1037
 
         current_tracer_id = 1023
 
@@ -620,6 +635,7 @@ contains
         if (enable_3zoo2det) then
             tracer_ids%microzooplankton_nitrogen = current_tracer_id
             tracer_ids%microzooplankton_carbon = current_tracer_id + 1
+            current_tracer_id = current_tracer_id + 2   ! << required so DOCt doesn't overwrite microzoo_carbon's slot
         end if
 
     end subroutine initialize_tracer_ids
@@ -722,7 +738,8 @@ contains
                         row) < -72.0 * rad))) then
                     if (abs(Z_3d_n(k, row)) < 2000.0_WP) cycle
                     tracers_info%data_pointers(iron_slot)%tracer_data(k, row) = &
-                            min(0.3, tracers_info%data_pointers(iron_slot)%tracer_data(k, row)) ! OG todo: try 0.6
+                    ! OG todo: try 0.6 instead of 0.3
+                            min(0.3, tracers_info%data_pointers(iron_slot)%tracer_data(k, row))
                 end if
             end do
         end do
@@ -765,7 +782,7 @@ contains
         integer, parameter :: alk_slot = 5
         integer, parameter :: dsi_slot = 20
         integer, parameter :: dfe_slot = 21
-        integer, parameter :: o2_slot  = 24
+        integer, parameter :: o2_slot = 24
 
         if (mype == 0) write(*, *) 'Tracers have been initialized as spinup from WOA/glodap' // &
                 ' netcdf files'

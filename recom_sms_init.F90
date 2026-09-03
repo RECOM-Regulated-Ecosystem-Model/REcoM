@@ -5,9 +5,9 @@ module recom_sms_init
 
 contains
 
-    subroutine sms_initialize_variables(n, k, state, sms, thick, Temp, Sali_depth, SurfSR, PAR, &
+    subroutine sms_initialize_variables(n, nzmin, k, state, sms, thick, Temp, Sali_depth, SurfSR, PAR, &
             kappa, DIN, DIC, Alk, PhyN, PhyC, PhyChl, DetN, DetC, HetN, HetC, DON, EOC, DiaN, &
-            DiaC, DiaChl, DiaSi, DetSi, Si, Fe, PhyCalc, DetCalc, FreeFe, O2, CoccoN, CoccoC, &
+            DiaC, DiaChl, DiaSi, DetSi, Si, Fe, PhyCalc, DetCalc, FreeFe, O2, DICremin, CoccoN, CoccoC, &
             CoccoChl, PhaeoN, PhaeoC, PhaeoChl, Zoo2N, Zoo2C, DetZ2N, DetZ2C, DetZ2Si, DetZ2Calc, &
             MicZooN, MicZooC, recip_hetN_plus, REcoM_T_depth, REcoM_S_depth, REcoM_DIC_depth, &
             REcoM_Alk_depth, REcoM_Si_depth, REcoM_Phos_depth)
@@ -27,7 +27,7 @@ contains
                 chl2n_max_p, enable_3zoo2det, enable_coccos, expon_cocco, expon_d, expon_phy, &
                 grazing_detritus, ialk, icchl, icocc, icocn, idchl, idetc, idetcal, idetn, &
                 idetz2c, idetz2calc, idetz2n, idetz2si, idiac, idian, idiasi, idic, idin, &
-                idoc, idon, ife, ihetc, ihetn, imiczooc, imiczoon, ioxy, ipchl, iphac, iphachl, &
+                idoc, idon, ife, ihetc, ihetn, imiczooc, imiczoon, ioxy, idicremin, ipchl, iphac, iphachl, &
                 iphan, iphyc, iphyn, isi, izoo2c, izoo2n, k_o2_remin, k_w, ncmax, ncmax_c, &
                 ncmax_d, ncmax_p, ncmin, ncmin_c, ncmin_d, ncmin_p, o2dep_remin, one, ord_cocco, &
                 recom_tref, res_het, sicmax, t1_zoo2, t2_zoo2, t3_zoo2, t4_zoo2, tiny, tiny_chl, &
@@ -47,7 +47,7 @@ contains
 
         implicit none
 
-        integer, intent(in) :: n, k
+        integer, intent(in) :: n, nzmin, k
 
         real(kind=wp), intent(in) :: SurfSR
         real(kind=wp), intent(in), dimension(:) :: thick, Temp, Sali_depth
@@ -58,8 +58,8 @@ contains
 
         real(kind=wp), intent(inout) :: DIN, DIC, Alk, PhyN, PhyC, PhyChl, DetN, DetC, HetN, HetC, &
                 DON, EOC, DiaN, DiaC, DiaChl, DiaSi, DetSi, Si, Fe, PhyCalc, DetCalc, FreeFe, O2, &
-                CoccoN, CoccoC, CoccoChl, PhaeoN, PhaeoC, PhaeoChl, Zoo2N, Zoo2C, DetZ2N, DetZ2C, &
-                DetZ2Si, DetZ2Calc, MicZooN, MicZooC, recip_hetN_plus
+                DICremin, CoccoN, CoccoC, CoccoChl, PhaeoN, PhaeoC, PhaeoChl, Zoo2N, Zoo2C, DetZ2N, &
+                DetZ2C, DetZ2Si, DetZ2Calc, MicZooN, MicZooC, recip_hetN_plus
 
         real(kind=wp), intent(inout), dimension(1) :: REcoM_T_depth, REcoM_S_depth, REcoM_DIC_depth&
                 , &
@@ -90,11 +90,13 @@ contains
         !   DIC : Dissolved inorganic carbon (CO2 + HCO3- + CO3--) [mmolC m-3]
         !   ALK : Total alkalinity [meq m-3]
         !   O2  : Dissolved oxygen [mmolO2 m-3]
+        !   DICremin : Dissolved inorganic carbon remineralization [mmolC m-3]
         !-----------------------------------------------------------------------
 
         DIC = max(tiny, state(k, idic) + sms(k, idic))
         ALK = max(tiny, state(k, ialk) + sms(k, ialk))
         O2 = max(tiny, state(k, ioxy) + sms(k, ioxy))
+        DICremin = max(tiny, state(k, idicremin) + sms(k, idicremin))
 
         !-----------------------------------------------------------------------
         ! DISSOLVED ORGANIC MATTER
@@ -958,7 +960,7 @@ contains
         !   - Self-shading is key negative feedback on bloom magnitude
         !-------------------------------------------------------------------------------
 
-        if (k == 1) then
+        if (k == nzmin) then
 
             !===========================================================================
             ! SURFACE LAYER INITIALIZATION

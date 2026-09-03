@@ -12,9 +12,26 @@ module recom_extra
 contains
 
     !===============================================================================
-    ! Subroutine for calculating flux-depth and thickness of control volumes
+    ! Depth_calculations
+    !   Computes layer thicknesses, reciprocal thicknesses, flux-point depths, and
+    !   background sinking-velocity profiles for a single water column at node n.
+    !
+    !   Arguments:
+    !     n      - node index
+    !     nzmin  - top active level (1 for open ocean, >1 for ice-shelf cavity)
+    !     nzmax  - bottom active level (= nlevels_nod2D(n) - 1)
+    !     wf     - sinking velocity at flux interfaces [m/d], dimension (nl, 6)
+    !     zf     - depth at flux interfaces [m, negative], dimension (nl)
+    !     thick  - layer thickness [m], dimension (nl-1)
+    !     recipthick - 1/thick [1/m], dimension (nl-1)
+    !
+    !   Cavity convention (nzmin > 1):
+    !     - wF, thick, recipthick, and zf are only filled for the active range
+    !       [nzmin, nzmax]; values outside are left at zero.
+    !     - Surface boundary wF(nzmin, :) = 0 replaces wF(1, :) = 0.
+    !     - Bottom boundary wF(nzmax+1, :) = 0.
     !===============================================================================
-    subroutine Depth_calculations(n, nn, wf, zf, thick, recipthick, nl, hnode, zbar_3d_n)
+    subroutine Depth_calculations(n, nzmin, nn, wf, zf, thick, recipthick, nl, hnode, zbar_3d_n)
 
         use recom_config, only: ivcoc, ivdia, ivdet, ivdetsc, ivpha, ivphy, VCalc, VDet, &
                 VDet_zoo2, VCocco, VPhaeo, VDia, VPhy
@@ -24,51 +41,49 @@ contains
         implicit none
 
         ! Input parameters
-        integer, intent(in) :: n ! Current node
-        integer, intent(in) :: nn ! Total number of vertical nodes
+        integer, intent(in) :: n       ! Node index
+        integer, intent(in) :: nzmin   ! Top active level (1 = open ocean, >1 = cavity)
+        integer, intent(in) :: nn      ! Bottom active level (= nlevels_nod2D(n) - 1)
         integer, intent(in) :: nl
         real(kind=WP), intent(in), dimension(:, :) :: hnode, zbar_3d_n
 
         ! Output arrays
-        ! [m/day] Flux velocities at the border of the control volumes
+        ! Sinking velocities at flux interfaces [m/d]; index 1 = ivphy..ivpha
         real(kind=wp), dimension(nl, 6), intent(out) :: wf
 
-        ! [m] Depth of vertical fluxes
+        ! Depths at flux interfaces [m, negative]
         real(kind=wp), dimension(nl), intent(out) :: zf
 
-        ! [m] Distance between two nodes = layer thickness
+        ! Layer thicknesses [m] and their reciprocals [1/m]
         real(kind=wp), dimension(nl - 1), intent(out) :: thick
-
-        ! [1/m] Reciprocal thickness
         real(kind=wp), dimension(nl - 1), intent(out) :: recipthick
 
         ! Local variables
-        integer :: k ! Layer index
+        integer :: k
 
-        ! ======================================================================================
-        !! zbar(nl) allocate the array for storing the standard depths (depth of layers)
-        !! zbar is negative
-        !! Z(nl-1)  mid-depths of layers
+        !---------------------------------------------------------------------------
+        ! Initialise all output arrays to zero so unused levels stay clean
+        !---------------------------------------------------------------------------
+        wf         = 0.0d0
+        zf         = 0.0d0
+        thick      = 0.0_WP
+        recipthick = 0.0_WP
 
-        ! zbar_n: depth of layers due to ale thinkness variations at every node n
-        !    allocate(zbar_n(nl))
-        !    allocate(zbar_3d_n(nl,myDim_nod2D+eDim_nod2D))
-
-        ! Z_n: mid depth of layers due to ale thinkness variations at every node n
-        !    allocate(Z_n(nl-1))
-        !    allocate(Z_3d_n(nl-1,myDim_nod2D+eDim_nod2D))
-        ! ============================================================================== modular
-
-        !! Background sinking speed
-        wF(2:Nn, ivphy) = VPhy ! Phytoplankton sinking velocity
-        wF(2:Nn, ivdia) = VDia ! Diatoms sinking velocity
-        wF(2:Nn, ivdet) = VDet ! Detritus sinking velocity
-        wF(2:Nn, ivdetsc) = VDet_zoo2 ! Second detritus sinking velocity
-        wF(2:Nn, ivcoc) = VCocco ! Coccolithophores sinking velocity
-        wF(2:Nn, ivpha) = VPhaeo ! Phaeocystis sinking velocity
+        !---------------------------------------------------------------------------
+        ! Background sinking velocities at interior flux interfaces
+        !   Range nzmin+1:nzmax covers interfaces between active layers.
+        !   The top (nzmin) and bottom (nzmax+1) interfaces remain zero -
+        !   no flux enters from above the top active level or exits below the bottom.
+        !---------------------------------------------------------------------------
+        wf(nzmin+1:Nn, ivphy)   = VPhy      ! Small phytoplankton
+        wf(nzmin+1:Nn, ivdia)   = VDia      ! Diatoms
+        wf(nzmin+1:Nn, ivdet)   = VDet      ! Detritus class 1
+        wf(nzmin+1:Nn, ivdetsc) = VDet_zoo2 ! Detritus class 2
+        wf(nzmin+1:Nn, ivcoc)   = VCocco    ! Coccolithophores
+        wf(nzmin+1:Nn, ivpha)   = VPhaeo    ! Phaeocystis
 
         !! Boundary conditions (surface and bottom)
-        wF(1, :) = 0.d0
+        wF(nzmin, :) = 0.d0
         wF(Nn + 1, :) = 0.d0
 
         !if (allow_var_sinking) then
@@ -77,23 +92,22 @@ contains
         !    wF(2:Nn+1,ivdet) = Vcalc * abs(zbar_3d_n(2:Nn+1, n)) + VDet
         !end if
 
-        !! Calculate layer thickness and reciprocal of it
-        thick = 0.0_WP
-        recipthick = 0.0_WP
-        zf = 0.0_WP
-
-        do k = 1, nn
+        !---------------------------------------------------------------------------
+        ! Layer thickness and its reciprocal over the active column
+        !---------------------------------------------------------------------------
+        do k = nzmin, nn
             thick(k) = hnode(k, n)
             if (hnode(k, n) > 0.0_WP) then
-                !        if thick(k) > 0.0_WP) then        ! alternative
                 recipthick(k) = 1.0 / hnode(k, n)
             else
                 recipthick(k) = 0.0_WP
             end if
         end do
 
-        !! set layer depth (negative)
-        do k = 1, nn + 1
+        !---------------------------------------------------------------------------
+        ! Flux-interface depths over the active column (including bottom face)
+        !---------------------------------------------------------------------------
+        do k = nzmin, nn + 1
             zf(k) = zbar_3d_n(k, n)
         end do
 
@@ -150,7 +164,19 @@ contains
     end function solar_incidence_cosine
 
     !===============================================================================
-    ! Subroutine for calculating cos(AngleOfIncidence)
+    ! Cobeta
+    !   Computes cosAI(n): cosine of the angle of incidence of sunlight at the
+    !   sea surface after refraction at the air-water interface, for each node.
+    !
+    !   Uses the solar declination formula of Paltridge & Platt (1976) and
+    !   Snell's law with refractive index nWater = 1.33.
+    !
+    !   This routine is geometry-only and is cavity-safe <E2><80><94> it does not access
+    !   vertical levels.
+    !
+    !   Reference:
+    !     Paltridge & Platt (1976), Radiative Processes in Meteorology and
+    !     Climatology, Elsevier, ISBN 0-444-41444-4.
     !===============================================================================
     subroutine Cobeta(daynew, ndpyr, myDim_nod2D, geo_coord_nod2D)
 

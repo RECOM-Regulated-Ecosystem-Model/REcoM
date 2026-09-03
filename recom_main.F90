@@ -58,12 +58,15 @@ contains
         !     end do
         !  end if
 
-        !___________________________________________________________________________
-        ! Balance alkalinity restoring to climatology
+        !---------------------------------------------------------------------------
+        ! Compute local relaxation flux at the open-ocean surface layer.
+        ! Cavity nodes (ulevels_nod2D > 1) are skipped - no surface exchange.
+        !---------------------------------------------------------------------------
+
         do n = 1, myDim_nod2D + eDim_nod2D
-            !        relax_alk(n)=surf_relax_Alk * (Alk_surf(n) - tracers%data(2+ialk)%values(1, n))
-            !        relax_alk(n)=surf_relax_Alk * (Alk_surf(n) - alkalinity(ulevels_nod2d(n),n)
-            relax_alk(n) = surf_relax_Alk * (Alk_surf(n) - alkalinity(1, n))
+            if (ulevels_nod2d(n) == 1) then
+                relax_alk(n) = surf_relax_Alk * (Alk_surf(n) - alkalinity(1, n))
+            end if
         end do
 
         ! 2. virtual alkalinity flux
@@ -72,11 +75,13 @@ contains
         !     virtual_alk=virtual_alk-net/ocean_area
         !  end if
 
-        ! 3. restoring to Alkalinity climatology
+        !---------------------------------------------------------------------------
+        ! Remove global mean to conserve total ocean alkalinity
+        !---------------------------------------------------------------------------
         call integrate_nod_2D_recom(relax_alk, net, MPI_COMM_FESOM, myDim_nod2D, &
                 ulevels_nod2D, areasvol)
 
-        relax_alk = relax_alk - net / ocean_area ! at ocean surface layer
+        relax_alk = relax_alk - net / ocean_area
 
     end subroutine bio_fluxes
 end module bio_fluxes_interface
@@ -113,7 +118,7 @@ contains
 
         use recom_g_comm_auto, only: recom_exchange_nod
 
-        use recom_declarations, only: wp, decaybenthos
+        use recom_declarations, only: wp, decaybenthos, tracer_ids
         use bio_fluxes_interface, only: bio_fluxes
 
         use recom_config, only: benthos_num, bgc_num, ciso, diags, dust_sol, enable_3zoo2det, &
@@ -141,7 +146,7 @@ contains
                 glofedust, glondust, atmfeinput, atmninput, glohplus, pistonvelocity, alphaco2, &
                 glopco2surf, glodpco2surf, gloco2flux, gloco2flux_seaicemask, &
                 gloo2flux, glopco2surf, glodpco2surf, gloco2flux, gloco2flux_seaicemask, &
-                gloo2flux_seaicemask, glohplus, atmfeinput, atmninput, chldegp, x_co2atm
+                gloo2flux_seaicemask, glohplus, atmfeinput, atmninput, chldegp
 
         use recom_diags_management, only: allocate_and_init_diags, update_2d_diags, &
                 update_3d_diags, deallocate_diags
@@ -189,23 +194,33 @@ contains
         !! u_wind and v_wind are always at nodes
         ! ======================================================================================
 
-        real(kind=wp) :: SW, Loc_slp
-        integer :: tr_num
-        integer :: n, nzmax
+        ! Loop indices and node-level counters
+        integer :: tr_num, tracer_id
+        integer :: n, nzmin, nzmax
 
-        real(kind=wp) :: Sali
+        ! Scalar local state
+        real(kind=wp) :: SW           ! Photosynthetically active shortwave [W/m2]
+        real(kind=wp) :: Loc_slp      ! Local sea-level pressure [atm]
+        real(kind=wp) :: Sali         ! Surface salinity
+
+
+        ! Flag for annual-event output of isotopic CO2 (has SAVE semantics via initializer)
         logical :: do_update
 
-        real(kind=wp), allocatable :: Temp(:), Sali_depth(:), zr(:), PAR(:)
-        real(kind=wp), allocatable :: C(:, :)
+        ! Vertical profile temporaries (size nl-1, allocated per node-count nl)
+        real(kind=8), allocatable :: Temp(:)          ! Potential temperature [deg C]
+        real(kind=8), allocatable :: Sali_depth(:)    ! Salinity profile
+        real(kind=8), allocatable :: zr(:)            ! Mid-layer depths [m, negative]
+        real(kind=8), allocatable :: PAR(:)           ! PAR profile [W/m2]
+        real(kind=8), allocatable :: C(:,:)           ! BGC tracer concentrations
 
-        !! * Mocsy *
+        ! Carbonate chemistry - mocsy output
         real(kind=wp), allocatable :: CO2_watercolumn(:)
         real(kind=wp), allocatable :: pH_watercolumn(:)
         real(kind=wp), allocatable :: pCO2_watercolumn(:)
         real(kind=wp), allocatable :: HCO3_watercolumn(:)
 
-        !! * Diss *
+        ! Carbonate chemistry - DISS output
         real(kind=wp), allocatable :: CO3_watercolumn(:)
         real(kind=wp), allocatable :: OmegaC_watercolumn(:)
         real(kind=wp), allocatable :: kspc_watercolumn(:)
@@ -217,48 +232,15 @@ contains
         integer                    :: n_transit_tracers   ! number of active transit tracers
         integer                    :: bgc_start, bgc_end  ! first/last slot of the BGC-only block
  
-
+        !---------------------------------------------------------------------------
+        ! Allocate per-column work arrays (full depth nl-1)
+        !---------------------------------------------------------------------------
         allocate(Temp(nl - 1), Sali_depth(nl - 1), zr(nl - 1), PAR(nl - 1))
         allocate(C(nl - 1, bgc_num))
         allocate(CO2_watercolumn(nl - 1), pH_watercolumn(nl - 1), pCO2_watercolumn(nl - 1), &
                 HCO3_watercolumn(nl - 1))
         allocate(CO3_watercolumn(nl - 1), OmegaC_watercolumn(nl - 1), kspc_watercolumn(nl - 1), &
                 rhoSW_watercolumn(nl - 1))
-
-        do_update = .false.
-
-        ! ice concentration [0 to 1]
-
-        ! alkalinity restoring to climatology
-        ! virtual flux is possible
-
-        if (restore_alkalinity) then
-            call bio_fluxes(tracers_info%data_pointers(2 + ialk)%tracer_data(:, :), &
-                    MPI_COMM_FESOM, myDim_nod2D, eDim_nod2D, ocean_area, ulevels_nod2D, areasvol)
-        end if
-
-        if (recom_debug .and. mype == 0) then
-            print *, achar(27) // '[36m' // '     --> bio_fluxes' // achar(27) // '[0m'
-        end if
-
-        if (use_atbox) then ! MERGE
-            ! Prognostic atmospheric isoCO2
-            call recom_atbox(MPI_COMM_FESOM, myDim_nod2D, ulevels_nod2D, areasvol, dt)
-            ! optional I/O of isoCO2 and inferred cosmogenic 14C production; this may cost some
-            ! CPU time
-            if (ciso .and. ciso_14) then
-                if ((daynew == ndpyr) .and. abs(timenew - 86400.) < tiny) then
-                    do_update = .true.
-                else
-                    do_update = .false.
-                end if
-
-                if (do_update .and. mype == 0) write(*, fmt = '(a50,2x,i6,4(2x,f6.2))') &
-                        'Year, xCO2 (ppm), cosmic 14C flux (at / cm² / s):', &
-                        yearold, x_co2atm(1), x_co2atm_13(1), x_co2atm_14(1), cosmic_14(1) * &
-                        production_rate_to_flux_14
-            end if
-        end if
 
         num_physical_tracers = 2
 
@@ -278,17 +260,66 @@ contains
         bgc_start = num_physical_tracers + 1
         bgc_end   = num_physical_tracers + actual_bgc_num
 
+        do_update = .false.
+
+        !---------------------------------------------------------------------------
+        ! Optional alkalinity restoring to climatology (surface virtual flux)
+        !---------------------------------------------------------------------------
+        if (restore_alkalinity) then
+            !call bio_fluxes(tracers_info%data_pointers(2 + ialk)%tracer_data(:, :), &
+            call bio_fluxes(tracers_info%data_pointers(bgc_start - 1 + ialk)%tracer_data(:, :), &
+                    MPI_COMM_FESOM, myDim_nod2D, eDim_nod2D, ocean_area, ulevels_nod2D, areasvol)
+        end if
+
+        if (recom_debug .and. mype == 0) then
+            print *, achar(27) // '[36m' // '     --> bio_fluxes' // achar(27) // '[0m'
+        end if
+
+        !---------------------------------------------------------------------------
+        ! Prognostic atmospheric CO2 box (use_atbox)
+        !---------------------------------------------------------------------------
+        if (use_atbox) then
+            call recom_atbox(MPI_COMM_FESOM, myDim_nod2D, ulevels_nod2D, areasvol, dt)
+            ! Optional isotope / cosmogenic-14C annual output
+            if (ciso .and. ciso_14) then
+                if ((daynew == ndpyr) .and. abs(timenew - 86400.) < tiny) then
+                    do_update = .true.
+                else
+                    do_update = .false.
+                end if
+                ! OG: Alternative
+                !call annual_event(do_update)
+
+                if (do_update .and. mype == 0) write(*, fmt = '(a50,2x,i6,4(2x,f6.2))') &
+                        'Year, xCO2 (ppm), cosmic 14C flux (at / cm² / s):', &
+                        yearold, x_co2atm(1), x_co2atm_13(1), x_co2atm_14(1), cosmic_14(1) * &
+                        production_rate_to_flux_14
+            end if
+        end if
+
+        ! Resetting DICremin tracer to zero when reaching surface (added by Sina)   !!!!! Check
+        do tr_num = 1,num_tracers
+            tracer_id = tracers_info%ids(tr_num)
+            if (tracer_id == tracer_ids%dic_remineralization) then
+                do n = 1, myDim_nod2D
+                    ! Under a cavity, level 1 is inactive/masked, so the "true" surface DICremin never gets reset 
+                    ! and can accumulate indefinitely if we ise (1,:) We need an explicit solution. Loop over n.
+                    tracers_info%data_pointers(tr_num)%tracer_data(ulevels_nod2D(n), n) = 0.0_WP
+                end do
+            end if
+        end do
+
         ! ======================================================================================
         !********************************* LOOP STARTS *****************************************
 
         do n = 1, myDim_nod2D ! needs exchange_nod in the end
-            !     if (ulevels_nod2D(n)>1) cycle
-            !       nzmin = ulevels_nod2D(n)
 
-            !!---- Number of vertical layers
-            nzmax = nlevels_nod2D(n) - 1
+            nzmin = ulevels_nod2D(n)     ! top active level (>1 means ice-shelf cavity)
+            nzmax = nlevels_nod2D(n) - 1 ! bottom active level
 
-            !!---- This is needed for piston velocity
+            !-----------------------------------------------------------------------
+            ! Sea-ice concentration and sea-level pressure
+            !-----------------------------------------------------------------------
             Loc_ice_conc = ice_data_values(n)
 
             !!---- Mean sea level pressure
@@ -300,14 +331,21 @@ contains
             Loc_slp = press_air(n)
 #endif
 
-            !!---- Benthic layers
+            !-----------------------------------------------------------------------
+            ! Benthic layer state for this column
+            !-----------------------------------------------------------------------
             LocBenthos(1:benthos_num) = Benthos(n, 1:benthos_num)
 
-            !!---- Local conc of [H+]-ions from last time step. Decleared and saved in LocVar.
-            !!---- used as first guess for H+ conc. in subroutine CO2flux (provided by recom_init)
+            !-----------------------------------------------------------------------
+            ! H+ first guess from previous time step (used in CO2flux Newton solver)
+            !-----------------------------------------------------------------------
             Hplus = GloHplus(n)
 
-            !!---- Interpolated wind from atmospheric forcing
+            !-----------------------------------------------------------------------
+            ! 10-m wind speed
+            !   Cavity nodes: wind is excluded from surface forcing inside
+            !   REcoM_Forcing, but ULoc is still set here for code simplicity.
+            !-----------------------------------------------------------------------
 #if defined(__oasis)
             !! Derive 10m-wind speed from wind stress fields, see module recom_ciso.
             !! This is an ad-hoc solution as long as 10m-winds are not handled from OASIS.
@@ -337,6 +375,7 @@ contains
                         LocAtmCO2_14 = AtmCO2_14(lat_zone(lat_val), month)
                     end if
                 end if
+                LocAtmCO2 = x_co2atm(n) ! ppm; from oifs
             end if ! use_atbox
 
             if (ciso) then
@@ -344,38 +383,49 @@ contains
                 if (ciso_14) r_atm_14 = LocAtmCO2_14(1) / LocAtmCO2(1)
             end if
 
-            !!---- Shortwave penetration
-            SW = parFrac * shortwave(n)
-            SW = SW * (1.d0 - ice_data_values(n))
+            !-----------------------------------------------------------------------
+            ! Shortwave (PAR fraction), scaled by open-water fraction
+            !   Cavity nodes: no light penetration from above.
+            !-----------------------------------------------------------------------
+            if (nzmin > 1) then
+                SW = 0.d0            ! ice-shelf cavity - no shortwave
+            else
+                SW = parFrac * shortwave(n)
+                SW = SW * (1.d0 - ice_data_values(n))
+            end if
 
             !!---- Temperature in water column
-            Temp(1:nzmax) = tracers_info%data_pointers(1)%tracer_data(1:nzmax, n)
+            Temp(nzmin:nzmax) = tracers_info%data_pointers(1)%tracer_data(nzmin:nzmax, n)
 
             !!---- Surface salinity
             Sali = tracers_info%data_pointers(2)%tracer_data(1, n)
-            Sali_depth(1:nzmax) = tracers_info%data_pointers(2)%tracer_data(1:nzmax, n)
+            Sali_depth(nzmin:nzmax) = tracers_info%data_pointers(2)%tracer_data(nzmin:nzmax, n)
 
-            !!---- CO2 in the watercolumn
+            !-----------------------------------------------------------------------
+            ! Carbonate chemistry profiles (mocsy + DISS) from previous time step
+            !-----------------------------------------------------------------------
+            CO2_watercolumn(nzmin:nzmax)    = CO23D(nzmin:nzmax, n)
+            pH_watercolumn(nzmin:nzmax)     = pH3D(nzmin:nzmax, n)
+            pCO2_watercolumn(nzmin:nzmax)   = pCO23D(nzmin:nzmax, n)
+            HCO3_watercolumn(nzmin:nzmax)   = HCO33D(nzmin:nzmax, n)
+            CO3_watercolumn(nzmin:nzmax)    = CO33D(nzmin:nzmax, n)
+            OmegaC_watercolumn(nzmin:nzmax) = OmegaC3D(nzmin:nzmax, n)
+            kspc_watercolumn(nzmin:nzmax)   = kspc3D(nzmin:nzmax, n)
+            rhoSW_watercolumn(nzmin:nzmax)  = rhoSW3D(nzmin:nzmax, n)
 
-            !! * Mocsy *
-            CO2_watercolumn(1:nzmax) = CO23D(1:nzmax, n)
-            pH_watercolumn(1:nzmax) = pH3D(1:nzmax, n)
-            pCO2_watercolumn(1:nzmax) = pCO23D(1:nzmax, n)
-            HCO3_watercolumn(1:nzmax) = HCO33D(1:nzmax, n)
-            !! * Diss *
-            CO3_watercolumn(1:nzmax) = CO33D(1:nzmax, n)
-            OmegaC_watercolumn(1:nzmax) = OmegaC3D(1:nzmax, n)
-            kspc_watercolumn(1:nzmax) = kspc3D(1:nzmax, n)
-            rhoSW_watercolumn(1:nzmax) = rhoSW3D(1:nzmax, n)
-
-            !!---- Biogeochemical tracers
+            !-----------------------------------------------------------------------
+            ! BGC tracer concentrations (offset by 2 for T and S at front)
+            !-----------------------------------------------------------------------
             do tr_num = bgc_start, bgc_end
-                C(1:nzmax, tr_num-num_physical_tracers) = tracers_info%data_pointers(tr_num)%tracer_data(1:nzmax, n)
+                C(nzmin:nzmax, tr_num-num_physical_tracers) = tracers_info%data_pointers(tr_num)%tracer_data(nzmin:nzmax, n)
             end do
 
+            !-----------------------------------------------------------------------
+            ! Backup tracer state for SMS (sources minus sinks) diagnostics
+            !-----------------------------------------------------------------------
             ttf_rhs_bak = 0.0
 
-            do tr_num = 1, num_tracers
+            do tr_num = 1, num_tracers   !!!!! Check OG
                 if (tracers_info%ltra_diag(tr_num)) then
                     ttf_rhs_bak(1:nzmax, tr_num) = &
                             tracers_info%data_pointers(tr_num)%tracer_data(1:nzmax, n)
@@ -385,12 +435,22 @@ contains
             !!---- Depth of the nodes in the water column
             zr(1:nzmax) = Z_3d_n(1:nzmax, n)
 
-            !!---- The PAR in the local water column is initialized
+            !-----------------------------------------------------------------------
+            ! Mid-layer depths and PAR initialisation
+            !-----------------------------------------------------------------------
             PAR(1:nzmax) = 0.d0
 
-            !!---- ice_data_values(row): Ice concentration in the local node
-            FeDust = GloFeDust(n) * (1.d0 - ice_data_values(n)) * dust_sol
-            NDust = GloNDust(n) * (1.d0 - ice_data_values(n))
+            !-----------------------------------------------------------------------
+            ! Atmospheric dust / nitrogen deposition
+            !   Cavity nodes: no atmospheric input reaching the ocean surface.
+            !-----------------------------------------------------------------------
+            if (nzmin > 1) then
+                FeDust = 0.0_WP
+                NDust  = 0.0_WP
+            else
+                FeDust = GloFeDust(n) * (1.d0 - ice_data_values(n)) * dust_sol
+                NDust  = GloNDust(n)  * (1.d0 - ice_data_values(n))
+            end if
 
             if (Diags) then
                 ! Allocate and initialize all diagnostic arrays for a water column
@@ -404,25 +464,29 @@ contains
 
             ! ======================================================================================
             !******************************** RECOM FORCING ****************************************
-            call REcoM_Forcing(n, nzmax, C, SW, Loc_slp, Temp, Sali, Sali_depth, &
+            !-----------------------------------------------------------------------
+            ! BGC time step <E2><80><94> updates C, PAR, carbonate chemistry, and surface fluxes
+            !-----------------------------------------------------------------------
+            call REcoM_Forcing(n, nzmin, nzmax, C, SW, Loc_slp, Temp, Sali, Sali_depth, &
                     CO2_watercolumn, & ! NEW MOCSY CO2 for the whole watercolumn
                     pH_watercolumn, & ! NEW MOCSY pH for the whole watercolumn
                     pCO2_watercolumn, & ! NEW MOCSY pCO2 for the whole watercolumn
                     HCO3_watercolumn, & ! NEW MOCSY HCO3 for the whole watercolumn
                     CO3_watercolumn, & ! NEW DISS CO3 for the whole watercolumn
                     OmegaC_watercolumn, & ! NEW DISS OmegaC for the whole watercolumn
-                    kspc_watercolumn, & ! NEW DISS stoichiometric solubility product for calcite [mol^2/kg^2]
+                    kspc_watercolumn, & ! NEW DISS calcite solubility product [mol^2/kg^2]
                     rhoSW_watercolumn, & ! NEW DISS in-situ density of seawater [mol/m^3]
                     PAR, MPI_COMM_FESOM, mype, myDim_nod2D, &
                     eDim_nod2D, nl, hnode, zbar_3d_n, &
                     geo_coord_nod2D, daynew, ndpyr, dt, kappa, mstep, rad)
 
             do tr_num = bgc_start, bgc_end
-                tracers_info%data_pointers(tr_num)%tracer_data(1:nzmax, n) = C(1:nzmax, tr_num-num_physical_tracers)
+                tracers_info%data_pointers(tr_num)%tracer_data(nzmin:nzmax, n) = C(nzmin:nzmax, tr_num-num_physical_tracers)
             end do
 
-            ! recom_sms
-
+            !-----------------------------------------------------------------------
+            ! Sources-minus-sinks (SMS) tendency for diagnostic tracers
+            !-----------------------------------------------------------------------
             do tr_num = 1, num_tracers
                 if (tracers_info%ltra_diag(tr_num)) then
                     tra_recom_sms(1:nzmax, n, tr_num) = &
@@ -433,16 +497,22 @@ contains
 
             end do
 
-            !!---- Local variables that have been changed during the time-step are stored so they
-            !!can be saved
+            !-----------------------------------------------------------------------
+            ! Store updated benthic state and decay rates
+            !-----------------------------------------------------------------------
             Benthos(n, 1:benthos_num) = LocBenthos(1:benthos_num)
 
-            ! convert from [mmol/m2/d] to [mmol/m2/s]
-            GlodecayBenthos(n, 1:benthos_num) = decayBenthos(1:benthos_num) / SecondsPerDay
+            ! Convert decay rate from [mmol/m2/d] to [mmol/m2/s]
+            GlodecayBenthos(n, 1:benthos_num) = &
+                decayBenthos(1:benthos_num) / SecondsPerDay
+
 
             if (recom_debug .and. mype == 0) print *, achar(27) // '[36m' // '     --> ciso' // &
                     ' after REcoM_Forcing' // achar(27) // '[0m'
 
+            !-----------------------------------------------------------------------
+            ! Accumulate 2D/3D diagnostics and deallocate column arrays
+            !-----------------------------------------------------------------------
             if (Diags) then
                 call update_2d_diags(n)
                 call update_3d_diags(n, nzmax)
@@ -458,8 +528,8 @@ contains
 
             GloPCO2surf(n) = pco2surf(1)
             GlodPCO2surf(n) = dpco2surf(1)
-            GloCO2flux(n) = dflux(1) !  [mmol/m2/d]
-            GloCO2flux_seaicemask(n) = co2flux_seaicemask(1) !  [mmol/m2/s]
+            GloCO2flux(n) = dflux(1) !  [mmolCO2/m2/d]
+            GloCO2flux_seaicemask(n) = co2flux_seaicemask(1) !  [mmolCO2/m2/s]
             GloO2flux_seaicemask(n) = o2flux_seaicemask(1) !  [mmol/m2/s]
             if (ciso) then
                 GloCO2flux_seaicemask_13(n) = co2flux_seaicemask_13(1) !  [mmol/m2/s]
@@ -472,16 +542,16 @@ contains
             PAR3D(1:nzmax, n) = PAR(1:nzmax)
 
             !! * Mocsy *
-            CO23D(1:nzmax, n) = CO2_watercolumn(1:nzmax)
-            pH3D(1:nzmax, n) = pH_watercolumn(1:nzmax)
-            pCO23D(1:nzmax, n) = pCO2_watercolumn(1:nzmax)
-            HCO33D(1:nzmax, n) = HCO3_watercolumn(1:nzmax)
+            CO23D(nzmin:nzmax, n) = CO2_watercolumn(nzmin:nzmax)
+            pH3D(nzmin:nzmax, n) = pH_watercolumn(nzmin:nzmax)
+            pCO23D(nzmin:nzmax, n) = pCO2_watercolumn(nzmin:nzmax)
+            HCO33D(nzmin:nzmax, n) = HCO3_watercolumn(nzmin:nzmax)
 
             !! * Diss *
-            CO33D(1:nzmax, n) = CO3_watercolumn(1:nzmax)
-            OmegaC3D(1:nzmax, n) = OmegaC_watercolumn(1:nzmax)
-            kspc3D(1:nzmax, n) = kspc_watercolumn(1:nzmax)
-            rhoSW3D(1:nzmax, n) = rhoSW_watercolumn(1:nzmax)
+            CO33D(nzmin:nzmax, n) = CO3_watercolumn(nzmin:nzmax)
+            OmegaC3D(nzmin:nzmax, n) = OmegaC_watercolumn(nzmin:nzmax)
+            kspc3D(nzmin:nzmax, n) = kspc_watercolumn(nzmin:nzmax)
+            rhoSW3D(nzmin:nzmax, n) = rhoSW_watercolumn(nzmin:nzmax)
         end do
 
         ! ======================================================================================

@@ -343,6 +343,10 @@ module REcoM_declarations
 
     type :: recom_tracer_ids
 
+        integer :: dissolved_inorganic_nitrogen
+        integer :: dissolved_inorganic_carbon
+        integer :: alkalinity
+
         ! --- Small Phytoplankton
         integer :: phytoplankton_nitrogen
         integer :: phytoplankton_carbon
@@ -379,6 +383,9 @@ module REcoM_declarations
 
         integer :: oxygen
 
+        ! --- DIC remineralization ---
+        integer :: dic_remineralization
+
         ! --- 3zoo2det extra tracers ---
         ! Default -1 sentinel: these are only assigned in initialize_tracer_ids when the
         ! corresponding &parecomsetup flag is on. -1 never matches a real tracer id, so
@@ -392,7 +399,7 @@ module REcoM_declarations
         integer :: microzooplankton_nitrogen = -1
         integer :: microzooplankton_carbon = -1
 
-        ! --- coccos extra tracers ---
+        ! --- coccos and phaeos tracers ---
         integer :: coccolithophore_nitrogen = -1
         integer :: coccolithophore_carbon = -1
         integer :: coccolithophore_chlorophyll = -1
@@ -432,6 +439,8 @@ module recom_config
     integer :: izoo2n = 23, izoo2c = 24, idetz2n = 25, &
             idetz2c = 26, idetz2si = 27, idetz2calc = 28
 
+    integer :: idicremin = 0
+
     ! Microzooplankton (third zooplankton group)
     integer :: imiczoon = 0 ! Microzooplankton Nitrogen (set below)
     integer :: imiczooc = 0 ! Microzooplankton Carbon (set below)
@@ -458,8 +467,9 @@ module recom_config
     integer, dimension(8) :: recom_remin_tracer_id = [1001, 1002, 1003, 1018, 1019, 1022, 1302, &
             1402]
 
-    ! OG
-    ! Todo:  Make recom_sinking_tracer_id case sensitive
+! The static declaration integer, dimension(32) :: recom_sinking_tracer_id 
+! must remain size 32 (the full-model case uses all 32 slots), and the = 0 
+! reset before partial fills ensures unused slots are inert.
     integer, dimension(32) :: recom_sinking_tracer_id = [1007, 1008, 1017, 1021, 1004, 1005, 1020, &
             1006, 1013, 1014, 1016, 1015, 1025, 1026, 1027, 1028, 1029, 1030, 1031, 1032, 1033, &
             1034, 1308, 1321, 1305, 1320, 1314, 1408, 1421, 1405, 1420, 1414]
@@ -997,6 +1007,13 @@ contains
     subroutine initialize_tracer_indices()
         implicit none
 
+        ! ---------------------------------------------------------------------------
+        ! Base sinking tracers (always present in all configurations):
+        !   Det1:  DetN(1007), DetC(1008), DetSi(1017), DetCalc(1021)
+        !   Phy:   PhyN(1004), PhyC(1005), PhyCalc(1020), PhyChl(1006)
+        !   Dia:   DiaN(1013), DiaC(1014), DiaSi(1016), DiaChl(1015)
+        ! ---------------------------------------------------------------------------
+
         if (enable_3zoo2det .and. enable_coccos) then
             ! =======================================================================
             ! CASE: 4 phytoplankton + 3 zooplankton + 2 detritus
@@ -1014,14 +1031,42 @@ contains
             imiczoon = 35
             imiczooc = 36
 
-            !        allocate(recom_cocco_tracer_id(3))
+            ! Terrestrial DOC input (when enable_R2OMIP is enabled)
+            idicremin = 37       ! <- DICremin always gets the lower slot
+
+
             recom_cocco_tracer_id = [1029, 1030, 1031]
-
-            !        allocate(recom_phaeo_tracer_id(3))
             recom_phaeo_tracer_id = [1032, 1033, 1034]
-
-            !        allocate(recom_det2_tracer_id(4))
             recom_det2_tracer_id = [1025, 1026, 1027, 1028]
+
+            ! Base(12) + Det2(4) + Zoo2Det2(4) + Cocco(3) + Phaeo(3) + CoccoCalc(2)
+            ! Det1 sinking: 1007,1008,1017,1021
+            ! Phy  sinking: 1004,1005,1020,1006
+            ! Dia  sinking: 1013,1014,1016,1015
+            ! Det2 sinking: 1025,1026,1027,1028  (DetZ2N,DetZ2C,DetZ2Si,DetZ2Calc)
+            ! Zoo2 det:     1308,1321            (via zoo2 sinking tracer IDs)
+            ! Phy  cal:     1305,1320
+            ! Dia  cal:     1314
+            ! Cocco sinking:1029,1030,1031 -> mapped as 1308..? 
+            ! 
+            ! Reconstructing from original array for full model:
+            ! Original: 1007,1008,1017,1021, 1004,1005,1020,1006,
+            !           1013,1014,1016,1015, 1025,1026,1027,1028,
+            !           1029,1030,1031,
+            !           1032,1033,1034,
+            !           1308,1321,1305,1320,
+            !           1314,1408,1421,1405,1420,1414
+
+            recom_sinking_tracer_id      = 0
+            recom_sinking_tracer_id(1:22) = &
+                (/1007, 1008, 1017, 1021, 1004, 1005, 1020, 1006, &
+                  1013, 1014, 1016, 1015, 1025, 1026, 1027, 1028, &
+                  1029, 1030, 1031, 1032, 1033, 1034/)
+            if (ciso) then
+                recom_sinking_tracer_id(23:32) = &
+                    (/1308, 1321, 1305, 1320, &
+                      1314, 1408, 1421, 1405, 1420, 1414/)
+            end if
 
         else if (enable_coccos .and. .not.enable_3zoo2det) then
             ! =======================================================================
@@ -1038,11 +1083,28 @@ contains
             iphac = 27
             iphachl = 28
 
-            !        allocate(recom_cocco_tracer_id(3))
-            recom_cocco_tracer_id = [1023, 1024, 1025]
+            idicremin = 29       ! <- DICremin always gets the lower slot
 
-            !        allocate(recom_phaeo_tracer_id(3))
+            recom_cocco_tracer_id = [1023, 1024, 1025]
             recom_phaeo_tracer_id = [1026, 1027, 1028]
+
+            ! Det1 sinking: 1007,1008,1017,1021
+            ! Phy  sinking: 1004,1005,1020,1006
+            ! Dia  sinking: 1013,1014,1016,1015
+            ! Cocco sinking:1023,1024,1025
+            ! Phaeo sinking:1026,1027,1028
+            ! Ciso-style:   1308,1321,1305,1320,1314,1408,1421,1405,1420,1414
+            ! No Det2, no Zoo2 sinking
+            recom_sinking_tracer_id      = 0
+            recom_sinking_tracer_id(1:18) = &
+                (/1007, 1008, 1017, 1021, 1004, 1005, 1020, 1006, &
+                  1013, 1014, 1016, 1015, 1023, 1024, 1025,        &
+                  1026, 1027, 1028/)
+            if (ciso) then
+                recom_sinking_tracer_id(19:28) = &
+                    (/1308, 1321, 1305, 1320, &
+                      1314, 1408, 1421, 1405, 1420, 1414/)
+            end if
 
         else if (enable_3zoo2det .and. .not.enable_coccos) then
             ! =======================================================================
@@ -1055,8 +1117,26 @@ contains
             imiczoon = 29
             imiczooc = 30
 
-            !        allocate(recom_det2_tracer_id(4))
+            idicremin = 31       ! <- DICremin always gets the lower slot
+
             recom_det2_tracer_id = [1025, 1026, 1027, 1028]
+
+            ! Det1 sinking: 1007,1008,1017,1021
+            ! Phy  sinking: 1004,1005,1020,1006
+            ! Dia  sinking: 1013,1014,1016,1015
+            ! Det2 sinking: 1025,1026,1027,1028
+            ! Ciso-style:   1308,1321,1305,1320,1314,1408,1421,1405,1420,1414
+            ! No Cocco/Phaeo sinking
+            recom_sinking_tracer_id      = 0
+            recom_sinking_tracer_id(1:16) = &
+                (/1007, 1008, 1017, 1021, 1004, 1005, 1020, 1006, &
+                  1013, 1014, 1016, 1015, 1025, 1026, 1027, 1028/)
+            if (ciso) then
+                recom_sinking_tracer_id(17:26) = &
+                    (/1308, 1321, 1305, 1320, &
+                      1314, 1408, 1421, 1405, 1420, 1414/)
+            end if
+
         else
             ! =======================================================================
             ! CASE: 2 phytoplankton + 1 zooplankton + 1 detritus (BASE CONFIGURATION)
@@ -1065,6 +1145,24 @@ contains
             ! Zooplankton: mesozoo only
             ! Detritus: det1 only
             ! (All indices already set to default values)
+
+            idicremin = 23       ! <- DICremin always gets the lower slot
+
+            ! Det1 sinking: 1007,1008,1017,1021
+            ! Phy  sinking: 1004,1005,1020,1006
+            ! Dia  sinking: 1013,1014,1016,1015
+            ! Ciso-style:   1308,1321,1305,1320,1314,1408,1421,1405,1420,1414
+            ! No Det2, no Cocco/Phaeo sinking
+            recom_sinking_tracer_id      = 0
+            recom_sinking_tracer_id(1:12) = &
+                (/1007, 1008, 1017, 1021, 1004, 1005, 1020, 1006, &
+                 1013, 1014, 1016, 1015/)
+            if (ciso) then
+                recom_sinking_tracer_id(13:22) = &
+                    (/1308, 1321, 1305, 1320, &
+                      1314, 1408, 1421, 1405, 1420, 1414/)
+            end if
+
         end if
     end subroutine initialize_tracer_indices
 
@@ -1082,7 +1180,8 @@ contains
     ! (SF6, CFC-11, CFC-12, R14C, R39Ar) are appended at the very end,
     ! after the optional age tracer.
     ! ==============================================================================
-    subroutine validate_recom_tracers(num_tracers, use_age_tracer, use_transit, l_sf6, l_f11, l_f12, l_r14c, l_r39ar, mype)
+    subroutine validate_recom_tracers(num_tracers, use_age_tracer, use_transit, l_sf6, l_f11, l_f12&
+            , l_r14c, l_r39ar, mype)
         use mpi, only: MPI_Abort, MPI_COMM_WORLD
 
         implicit none
@@ -1096,8 +1195,8 @@ contains
         integer :: expected_bgc_num
         integer :: actual_bgc_num
         integer :: expected_total_tracers
-        integer :: bgc_offset              ! offset of last base-BGC slot (T,S + 22)
-        integer :: n_transit_tracers       ! number of active transit tracers
+        integer :: bgc_offset ! offset of last base-BGC slot (T,S + 22)
+        integer :: n_transit_tracers ! number of active transit tracers
         integer :: MPIErr
         logical :: config_error
 
@@ -1107,24 +1206,23 @@ contains
         logical, dimension(:), allocatable :: tracer_found
         integer :: num_expected_tracers
         logical :: id_error
-        integer :: slot                   ! running slot index when building expected_ids
+        integer :: slot ! running slot index when building expected_ids
 
-        logical :: num_physical_tracers
         integer, parameter :: n_base_physical = 2   ! T (id=1), S (id=2)
 
         ! ---- count active transit tracers -----------------------------------------
         n_transit_tracers = 0
         if (use_transit) then
-            if (l_sf6)   n_transit_tracers = n_transit_tracers + 1
-            if (l_f11)   n_transit_tracers = n_transit_tracers + 1
-            if (l_f12)   n_transit_tracers = n_transit_tracers + 1
-            if (l_r14c)  n_transit_tracers = n_transit_tracers + 1
+            if (l_sf6) n_transit_tracers = n_transit_tracers + 1
+            if (l_f11) n_transit_tracers = n_transit_tracers + 1
+            if (l_f12) n_transit_tracers = n_transit_tracers + 1
+            if (l_r14c) n_transit_tracers = n_transit_tracers + 1
             if (l_r39ar) n_transit_tracers = n_transit_tracers + 1
         end if
 
         ! ---- actual BGC count: strip non-BGC appended tracers --------------------
         ! tracer_init now appends in this order:  T,S | BGC | [age] | [transit]
-        ! num_physical_tracers here is just T,S (=2) in the reordered layout.
+        ! n_base_physical here is just T,S (=2) in the reordered layout.
         actual_bgc_num = num_tracers - n_base_physical
         if (use_age_tracer) actual_bgc_num = actual_bgc_num - 1
         actual_bgc_num = actual_bgc_num - n_transit_tracers
@@ -1144,7 +1242,8 @@ contains
             ! Additional phaeocystis: 3 tracers (1032-1034)
             ! Additional microzoo: 2 tracers (1035-1036)
             ! Total: 22 + 4 + 6 + 3 + 2 = 36 (actually 22 + 14 = 36)
-            expected_bgc_num = 36
+            ! Additional DICremin: 1 tracer (1037)
+            expected_bgc_num = 37
 
         else if (enable_coccos .and. .not.enable_3zoo2det) then
             ! ---------------------------------------------------------------------------
@@ -1154,7 +1253,8 @@ contains
             ! Additional coccos: 3 tracers (1023-1025)
             ! Additional phaeocystis: 3 tracers (1026-1028)
             ! Total: 22 + 6 = 28
-            expected_bgc_num = 28
+            ! Additional DICremin: 1 tracer (1037)
+            expected_bgc_num = 29
 
         else if (enable_3zoo2det .and. .not.enable_coccos) then
             ! ---------------------------------------------------------------------------
@@ -1165,14 +1265,16 @@ contains
             ! Additional det2: 4 tracers (1025-1028)
             ! Additional microzoo: 2 tracers (1029-1030)
             ! Total: 22 + 8 = 30
-            expected_bgc_num = 30
+            ! Additional DICremin: 1 tracer (1037)
+            expected_bgc_num = 31
 
         else
             ! ---------------------------------------------------------------------------
             ! Configuration 1: Base model (2 phyto + 1 zoo + 1 detritus)
             ! ---------------------------------------------------------------------------
             ! Base: 22 tracers (1001-1022)
-            expected_bgc_num = 22
+            ! Additional DICremin: 1 tracer (1037)
+            expected_bgc_num = 23
 
         end if
 
@@ -1180,8 +1282,6 @@ contains
         expected_total_tracers = n_base_physical + expected_bgc_num
         if (use_age_tracer) expected_total_tracers = expected_total_tracers + 1
         expected_total_tracers = expected_total_tracers + n_transit_tracers
-
-        num_physical_tracers = n_base_physical
 
         ! ===========================================================================
         ! Build expected tracer ID list for current configuration
@@ -1209,20 +1309,21 @@ contains
         if (enable_3zoo2det .and. enable_coccos) then
             ! Full model: base + 1023-1024 (zoo2) + 1025-1028 (det2) + 1029-1036
             ! (coccos+phaeo+zoo3)
-            expected_tracer_ids(bgc_offset + 1)  = 1023 ! Zoo2N
-            expected_tracer_ids(bgc_offset + 2)  = 1024 ! Zoo2C
-            expected_tracer_ids(bgc_offset + 3)  = 1025 ! DetZ2N
-            expected_tracer_ids(bgc_offset + 4)  = 1026 ! DetZ2C
-            expected_tracer_ids(bgc_offset + 5)  = 1027 ! DetZ2Si
-            expected_tracer_ids(bgc_offset + 6)  = 1028 ! DetZ2Calc
-            expected_tracer_ids(bgc_offset + 7)  = 1029 ! CoccoN
-            expected_tracer_ids(bgc_offset + 8)  = 1030 ! CoccoC
-            expected_tracer_ids(bgc_offset + 9)  = 1031 ! CoccoChl
+            expected_tracer_ids(bgc_offset + 1) = 1023 ! Zoo2N
+            expected_tracer_ids(bgc_offset + 2) = 1024 ! Zoo2C
+            expected_tracer_ids(bgc_offset + 3) = 1025 ! DetZ2N
+            expected_tracer_ids(bgc_offset + 4) = 1026 ! DetZ2C
+            expected_tracer_ids(bgc_offset + 5) = 1027 ! DetZ2Si
+            expected_tracer_ids(bgc_offset + 6) = 1028 ! DetZ2Calc
+            expected_tracer_ids(bgc_offset + 7) = 1029 ! CoccoN
+            expected_tracer_ids(bgc_offset + 8) = 1030 ! CoccoC
+            expected_tracer_ids(bgc_offset + 9) = 1031 ! CoccoChl
             expected_tracer_ids(bgc_offset + 10) = 1032 ! PhaeoN
             expected_tracer_ids(bgc_offset + 11) = 1033 ! PhaeoC
             expected_tracer_ids(bgc_offset + 12) = 1034 ! PhaeoChl
             expected_tracer_ids(bgc_offset + 13) = 1035 ! Zoo3N
             expected_tracer_ids(bgc_offset + 14) = 1036 ! Zoo3C
+            expected_tracer_ids(bgc_offset + 15) = 1037 ! DIC remin
 
         else if (enable_coccos .and. .not.enable_3zoo2det) then
             ! Coccos only: base + 1023-1028 (coccos+phaeo)
@@ -1232,6 +1333,7 @@ contains
             expected_tracer_ids(bgc_offset + 4) = 1026 ! PhaeoN
             expected_tracer_ids(bgc_offset + 5) = 1027 ! PhaeoC
             expected_tracer_ids(bgc_offset + 6) = 1028 ! PhaeoChl
+            expected_tracer_ids(bgc_offset + 7) = 1037 ! DIC remin
 
         else if (enable_3zoo2det .and. .not.enable_coccos) then
             ! 3Zoo2Det only: base + 1023-1030 (zoo2+det2+zoo3)
@@ -1243,9 +1345,14 @@ contains
             expected_tracer_ids(bgc_offset + 6) = 1028 ! DetZ2Calc
             expected_tracer_ids(bgc_offset + 7) = 1029 ! Zoo3N
             expected_tracer_ids(bgc_offset + 8) = 1030 ! Zoo3C
-        end if
+            expected_tracer_ids(bgc_offset + 9) = 1037 ! DIC remin
 
-        ! else: base configuration only needs tracers 1, 2, 1001-1022
+        else
+
+            ! else: base configuration only needs tracers 1, 2, 1001-1022
+            expected_tracer_ids(bgc_offset + 1) = 1037 ! add DIC remin tracer to base BGC tracers
+
+        end if
 
         ! ---- Age tracer (ID=100): appended immediately after the last BGC slot -----
         slot = n_base_physical + expected_bgc_num + 1
@@ -1294,15 +1401,15 @@ contains
             write(*, *) 'Model configuration:'
             write(*, *) '  enable_3zoo2det = ', enable_3zoo2det
             write(*, *) '  enable_coccos   = ', enable_coccos
-            write(*,*)  '  use_age_tracer  = ', use_age_tracer
-            write(*,*)  '  use_transit     = ', use_transit
+            write(*, *) '  use_age_tracer  = ', use_age_tracer
+            write(*, *) '  use_transit     = ', use_transit
             write(*, *) ''
             write(*, *) 'Tracer layout: T, S | BGC | [age] | [transit]'
             write(*, *) ''
             write(*, *) 'Tracer counts:'
             write(*, *) '  Physical tracers (T, S)           = ', n_base_physical
-            write(*,*) '  Age tracer  (ID=100)               = ', merge(1, 0, use_age_tracer)
-            write(*,*) '  Transit tracers                    = ', n_transit_tracers
+            write(*, *) '  Age tracer  (ID=100)               = ', merge(1, 0, use_age_tracer)
+            write(*, *) '  Transit tracers                    = ', n_transit_tracers
             write(*, *) '  Expected BGC tracers              = ', expected_bgc_num
             write(*, *) '  Expected TOTAL tracers            = ', expected_total_tracers
             write(*, *) '  Actual tracers from namelist      = ', num_tracers
@@ -1327,17 +1434,19 @@ contains
                 write(*, *) '  Difference:           ', actual_bgc_num - expected_bgc_num
                 write(*, *) ''
                 write(*, *) 'Required tracer IDs for current configuration:'
-                write(*, *) '  Base tracers (always):  1001-1022 (22 tracers)'
+                write(*, *) '  Base tracers (always):  1001-1022 (22 tracers) + 1037 (DICremin)'
 
                 if (enable_3zoo2det .and. .not.enable_coccos) then
                     write(*, *) '  3Zoo2Det extension:     1023-1030 (8 tracers)'
                     write(*, *) '    - Zoo2N, Zoo2C:       1023-1024'
                     write(*, *) '    - DetZ2 pool:         1025-1028'
                     write(*, *) '    - MicZooN, MicZooC:   1029-1030'
+                    write(*, *) '  DICremin:               1037     '
                 else if (enable_coccos .and. .not.enable_3zoo2det) then
                     write(*, *) '  Coccos extension:       1023-1028 (6 tracers)'
                     write(*, *) '    - CoccoN, C, Chl:     1023-1025'
                     write(*, *) '    - PhaeoN, C, Chl:     1026-1028'
+                    write(*, *) '  DICremin:               1037     '
                 else if (enable_3zoo2det .and. enable_coccos) then
                     write(*, *) '    - Zoo2N, Zoo2C:       1023-1024'
                     write(*, *) '  3Zoo2Det extension:     1025-1028 (4 tracers for det2)'
@@ -1345,6 +1454,7 @@ contains
                     write(*, *) '    - CoccoN, C, Chl:     1029-1031'
                     write(*, *) '    - PhaeoN, C, Chl:     1032-1034'
                     write(*, *) '  MicroZoo extension:     1035-1036 (2 tracers)'
+                    write(*, *) '  DICremin:               1037     '
                 end if
 
                 write(*, *) ''
@@ -1411,24 +1521,26 @@ contains
             write(*, *) '  ', expected_tracer_ids(1:n_base_physical)
             write(*, *) ''
             write(*, *) 'Base BGC tracers (1001-1022):'
-            write(*, *) '  ', expected_tracer_ids(n_base_physical+1:n_base_physical+22)
+            write(*, *) '  ', expected_tracer_ids(n_base_physical + 1:n_base_physical + 22)
             write(*, *) ''
 
             if (expected_bgc_num > 22) then
                 write(*, *) 'Extended configuration tracers:'
-                write(*, *) '  ', expected_tracer_ids(n_base_physical+23:n_base_physical+expected_bgc_num)
+                write(*, *) '  ', expected_tracer_ids(n_base_physical + 23:n_base_physical + &
+                        expected_bgc_num)
                 write(*, *) ''
             end if
 
             if (use_age_tracer) then
                 write(*, *) 'Age tracer:'
-                write(*, *) '  ', expected_tracer_ids(n_base_physical+expected_bgc_num+1)
+                write(*, *) '  ', expected_tracer_ids(n_base_physical + expected_bgc_num + 1)
                 write(*, *) ''
             end if
 
             if (use_transit .and. n_transit_tracers > 0) then
                 write(*, *) 'Transit tracers (tail):'
-                write(*, *) '  ', expected_tracer_ids(num_expected_tracers-n_transit_tracers+1:num_expected_tracers)
+                write(*, *) '  ', expected_tracer_ids(num_expected_tracers - n_transit_tracers + 1:&
+                        num_expected_tracers)
                 write(*, *) ''
             end if
 
@@ -1451,11 +1563,13 @@ contains
                 write(*, *) '  - Coccos uses:       1029-1031'
                 write(*, *) '  - Phaeocystis uses:  1032-1034'
                 write(*, *) '  - Microzooplankton:  1035-1036'
+                write(*, *) '  - DIC remin:         1037     '
                 write(*, *) ''
             else if (enable_coccos .and. .not.enable_3zoo2det) then
                 write(*, *) 'IMPORTANT for COCCOS-ONLY configuration:'
                 write(*, *) '  - Coccos uses:       1023-1025 (NOT 1029-1031)'
                 write(*, *) '  - Phaeocystis uses:  1026-1028 (NOT 1032-1034)'
+                write(*, *) '  - DIC remin:         1037     '
                 write(*, *) '  - Tracers 1029+ are NOT used in this configuration'
                 write(*, *) ''
             else if (enable_3zoo2det .and. .not.enable_coccos) then
@@ -1463,11 +1577,12 @@ contains
                 write(*, *) '  - Zoo2 uses:         1023-1024'
                 write(*, *) '  - Det2 pool uses:    1025-1028'
                 write(*, *) '  - Microzoo uses:     1029-1030 (NOT 1035-1036)'
+                write(*, *) '  - DIC remin:         1037     '
                 write(*, *) '  - Tracers 1031+ are NOT used in this configuration'
                 write(*, *) ''
             else
                 write(*, *) 'IMPORTANT for BASE configuration:'
-                write(*, *) '  - Only tracers 1-2, 1001-1022 should be present'
+                write(*, *) '  - Only tracers 1-2, 1001-1022 and 1037 should be present'
                 write(*, *) '  - Tracers 1023+ are NOT used in base configuration'
                 write(*, *) ''
             end if
@@ -1535,7 +1650,7 @@ contains
     ! mirroring the append order in tracer_init.
     ! ==============================================================================
     subroutine validate_tracer_id_sequence(tracer_ids, num_tracers, use_age_tracer, use_transit, &
-                                            l_sf6, l_f11, l_f12, l_r14c, l_r39ar, mype)
+            l_sf6, l_f11, l_f12, l_r14c, l_r39ar, mype)
         use mpi, only: MPI_Abort, MPI_COMM_WORLD
 
         implicit none
@@ -1556,28 +1671,28 @@ contains
         integer :: slot                    ! running slot for age + transit tail
         integer :: n_transit_tracers       ! number of active transit tracers
         integer, parameter :: n_base_physical = 2   ! T (id=1), S (id=2)
-        logical :: num_physical_tracers
 
         error_found = .false.
         duplicate_found = .false.
 
         ! ---- derive local BGC count (same logic as validate_recom_tracers) --------
         if (enable_3zoo2det .and. enable_coccos) then
-            bgc_num_local = 36
+            ! Additional DICremin: 1 tracer (1037)
+            bgc_num_local = 37
         else if (enable_coccos .and. .not. enable_3zoo2det) then
-            bgc_num_local = 28
+            ! Additional DICremin: 1 tracer (1037)
+            bgc_num_local = 29
         else if (enable_3zoo2det .and. .not. enable_coccos) then
-            bgc_num_local = 30
+            ! Additional DICremin: 1 tracer (1037)
+            bgc_num_local = 31
         else
-            bgc_num_local = 22
+            ! Additional DICremin: 1 tracer (1037)
+            bgc_num_local = 23
         end if
-
-        ! num_physical_tracers (global) is just T,S in the new layout
-        num_physical_tracers = n_base_physical
 
         ! Allocate expected IDs array
         allocate(expected_ids(num_tracers))
-        expected_ids = 0   ! zero-init; any unset slot is caught by the mismatch check
+        expected_ids = 0 ! zero-init; any unset slot is caught by the mismatch check
 
         ! ---- physical tracers (slots 1-2) ----------------------------------------
         expected_ids(1) = 1
@@ -1594,12 +1709,19 @@ contains
             expected_ids(n_base_physical+23:n_base_physical+28) = [1023, 1024, 1025, 1026, 1027, 1028]
             expected_ids(n_base_physical+29:n_base_physical+34) = [1029, 1030, 1031, 1032, 1033, 1034]
             expected_ids(n_base_physical+35:n_base_physical+36) = [1035, 1036]
+            expected_ids(n_base_physical+37)    = 1037 ! DICremin
 
         else if (enable_coccos .and. .not.enable_3zoo2det) then
             expected_ids(n_base_physical+23:n_base_physical+28) = [1023, 1024, 1025, 1026, 1027, 1028]
+            expected_ids(n_base_physical+29)    = 1037 ! DICremin
 
         else if (enable_3zoo2det .and. .not.enable_coccos) then
             expected_ids(n_base_physical+23:n_base_physical+30) = [1023, 1024, 1025, 1026, 1027, 1028, 1029, 1030]
+            expected_ids(n_base_physical+31)    = 1037 ! DICremin
+
+        else
+            ! Base configuration
+            expected_ids(n_base_physical+23)    = 1037 ! DICremin
         end if
 
         ! ---- age tracer (running slot, right after BGC) ----------------------------
@@ -1662,10 +1784,11 @@ contains
                     write(*, *) '  Found tracer ID:    ', tracer_ids(i)
                     ! position-specific hints
                     if (use_age_tracer .and. &
-                        i == n_base_physical + bgc_num_local + 1) &
-                        write(*,*) '  HINT: this slot must be age tracer ID=100'
-                    if (use_transit .and. i > n_base_physical + bgc_num_local + merge(1,0,use_age_tracer)) &
-                        write(*,*) '  HINT: this slot is in the transit-tracer tail block'
+                            i == n_base_physical + bgc_num_local + 1) &
+                            write(*, *) '  HINT: this slot must be age tracer ID=100'
+                    if (use_transit .and. i > n_base_physical + bgc_num_local + merge(1, 0, &
+                            use_age_tracer)) &
+                            write(*, *) '  HINT: this slot is in the transit-tracer tail block'
                     write(*, *) ''
                 end if
             end if
@@ -1707,9 +1830,10 @@ contains
                 write(*, *) ''
                 write(*, *) '  1. Layout must be: T, S | BGC | [age] | [transit]'
                 if (use_age_tracer) &
-                    write(*,*) '  2. Age tracer          ID=100  (use_age_tracer = .true.), placed right after BGC'
+                        write(*, *) '  2. Age tracer          ID=100  (use_age_tracer =' // &
+                        ' .true.), placed right after BGC'
                 if (use_transit) &
-                    write(*,*) '  3. Transit tracers placed at the END, after age (if any)'
+                        write(*, *) '  3. Transit tracers placed at the END, after age (if any)'
                 write(*, *) 'ACTION REQUIRED:'
                 write(*, *) '  Correct the tracer IDs in your namelist.config file'
                 write(*, *) '  Ensure the sequence matches exactly as expected'
@@ -1733,10 +1857,11 @@ contains
                 write(*, *) 'TRACER ID VALIDATION PASSED!'
                 write(*, *) 'All tracer IDs match expected sequence - no clashes detected.'
                 if (use_age_tracer) &
-                    write(*,*) '  Age tracer   (ID=100) correctly placed at slot ', &
-                    n_base_physical + bgc_num_local + 1
+                        write(*, *) '  Age tracer   (ID=100) correctly placed at slot ', &
+                        n_base_physical + bgc_num_local + 1
                 if (use_transit) &
-                    write(*,*) '  Transit tracers (', n_transit_tracers, ') correctly placed at tail'
+                        write(*, *) '  Transit tracers (', n_transit_tracers, ') correctly' // &
+                        ' placed at tail'
                 write(*, *) '======================================================================&
                         &===='
                 write(*, *) ''
@@ -2601,6 +2726,11 @@ contains
 
 end module REcoM_ciso
 
+! ==============================================================================
+! MODULE: recom_diags_management
+! Purpose: Allocation, initialization, update, and deallocation of all REcoM
+!          diagnostic arrays (per-node water column and global 2D/3D fields).
+! ==============================================================================
 module recom_diags_management
     use recom_config, only: enable_3zoo2det, enable_coccos, grazing_detritus
 
@@ -2617,30 +2747,52 @@ contains
 
     ! ==============================================================================
     ! SUBROUTINE: allocate_and_init_diags
-    ! Purpose: Allocate and initialize all diagnostic arrays for a water column
+    ! Purpose: Allocate and initialize all local (per-column) diagnostic arrays
     ! ==============================================================================
     subroutine allocate_and_init_diags(nl)
 
-        use REcoM_declarations, only: vertaggc, vertaggd, vertaggn, vertaggp, vertcalcdiss, &
-                vertcalcif, vertchldegc, vertchldegd, vertchldegn, vertchldegp, vertdocexc, &
-                vertdocexd, vertdocexn, vertdocexp, vertgppc, vertgppd, vertgppn, vertgppp, &
-                vertgrazmacro_c, vertgrazmacro_d, vertgrazmacro_det, vertgrazmacro_det2, &
-                vertgrazmacro_mes, vertgrazmacro_mic, vertgrazmacro_n, vertgrazmacro_p, &
-                vertgrazmacro_tot, vertgrazmeso_c, vertgrazmeso_d, vertgrazmeso_det, &
-                vertgrazmeso_det2, vertgrazmeso_mic, vertgrazmeso_n, vertgrazmeso_p, &
-                vertgrazmicro_c, vertgrazmicro_d, vertgrazmicro_n, vertgrazmicro_p, &
-                vertnnac, vertnnad, vertnnan, vertnnap, vertnppc, vertnppd, vertnppn, vertnppp, &
-                vertrespc, vertrespd, vertrespmacro, vertrespmeso, vertrespmicro, vertrespn, &
-                vertrespp, vtcoccoco2, vtcphot_cocco, vtcphot_diatoms, vtcphot_phaeo, &
-                vtcphotliglim_cocco, vtcphotliglim_diatoms, vtcphotliglim_phaeo, &
-                vtdiaco2, vtphaeoco2, vtphyco2, vtqlimitfac_cocco, vtqlimitfac_diatoms, &
-                vtqlimitfac_phaeo, vtqlimitfac_phyto, vtsi_assimdia, vttemp_cocco, vttemp_diatoms, &
-                vertgrazmeso_tot, vertgrazmicro_tot, vttemp_phaeo, vttemp_phyto, &
-                vtcphot_phyto, vtcphotliglim_phyto
+        use REcoM_declarations, only: vertcalcdiss, vertcalcif
 
         implicit none
 
         integer, intent(in) :: nl ! Number of vertical levels
+
+        ! --------------------------------------------------------------------------
+        ! Small Phytoplankton & Diatoms (always active)
+        ! --------------------------------------------------------------------------
+
+        call alloc_init_phyto_diags(nl)
+        ! --------------------------------------------------------------------------
+        ! Coccolithophores and Phaeocystis (optional)
+        ! --------------------------------------------------------------------------
+        if (enable_coccos) call alloc_init_cocco_diags(nl)
+
+        ! Calcification arrays (always needed)
+        allocate(vertcalcdiss(nl - 1), vertcalcif(nl - 1))
+        vertcalcdiss = 0.d0
+        vertcalcif = 0.d0
+
+        ! --------------------------------------------------------------------------
+        ! Zooplankton grazing (optional)
+        ! --------------------------------------------------------------------------
+        if (Grazing_detritus) call alloc_init_zoo_diags(nl)
+
+    end subroutine allocate_and_init_diags
+
+    ! ==============================================================================
+    ! SUBROUTINE: alloc_init_phyto_diags
+    ! Purpose: Allocate and initialize small phytoplankton and diatom diagnostics
+    ! ==============================================================================
+    subroutine alloc_init_phyto_diags(nl)
+
+        use REcoM_declarations, only: vertNPPn, vertGPPn, vertNNAn, vertChldegn, vertrespn, &
+                vertdocexn, vertaggn, vertNPPd, vertGPPd, vertNNAd, vertChldegd, vertrespd, &
+                vertdocexd, vertaggd, VTPhyCO2, VTDiaCO2, VTCphotLigLim_phyto, &
+                VTCphotLigLim_diatoms, VTCphot_phyto, VTCphot_diatoms
+
+        implicit none
+
+        integer, intent(in) :: nl
 
         ! --------------------------------------------------------------------------
         ! Small Phytoplankton
@@ -2671,117 +2823,8 @@ contains
         vertaggd = 0.d0
 
         ! --------------------------------------------------------------------------
-        ! Mesozooplankton (base heterotroph group, present in every configuration;
-        ! used unconditionally in REcoM_sms regardless of Grazing_detritus/
-        ! enable_3zoo2det, so it must be allocated unconditionally too)
-        ! --------------------------------------------------------------------------
-        allocate(vertrespmeso(nl - 1))
-        vertrespmeso = 0.d0
-
-        ! --------------------------------------------------------------------------
-        ! Coccolithophores (if enabled)
-        ! --------------------------------------------------------------------------
-        if (enable_coccos) then
-            allocate(vertNPPc(nl - 1), vertGPPc(nl - 1), vertNNAc(nl - 1), vertChldegc(nl - 1))
-            allocate(vertrespc(nl - 1), vertdocexc(nl - 1), vertaggc(nl - 1))
-            allocate(vertcalcdiss(nl - 1), vertcalcif(nl - 1))
-
-            vertNPPc = 0.d0
-            vertGPPc = 0.d0
-            vertNNAc = 0.d0
-            vertChldegc = 0.d0
-            vertrespc = 0.d0
-            vertdocexc = 0.d0
-            vertaggc = 0.d0
-            vertcalcdiss = 0.d0
-            vertcalcif = 0.d0
-
-            ! ----------------------------------------------------------------------
-            ! Phaeocystis
-            ! ----------------------------------------------------------------------
-            allocate(vertNPPp(nl - 1), vertGPPp(nl - 1), vertNNAp(nl - 1), vertChldegp(nl - 1))
-            allocate(vertrespp(nl - 1), vertdocexp(nl - 1), vertaggp(nl - 1))
-
-            vertNPPp = 0.d0
-            vertGPPp = 0.d0
-            vertNNAp = 0.d0
-            vertChldegp = 0.d0
-            vertrespp = 0.d0
-            vertdocexp = 0.d0
-            vertaggp = 0.d0
-        else
-            ! Allocate calcification arrays even if coccos are disabled
-            allocate(vertcalcdiss(nl - 1), vertcalcif(nl - 1))
-            vertcalcdiss = 0.d0
-            vertcalcif = 0.d0
-        end if
-
-        ! --------------------------------------------------------------------------
-        ! Zooplankton Grazing (if enabled)
-        ! --------------------------------------------------------------------------
-        if (Grazing_detritus) then
-
-            if (enable_3zoo2det) then
-                ! Microzooplankton
-                allocate(vertgrazmicro_tot(nl - 1), &
-                        vertgrazmicro_n(nl - 1), &
-                        vertgrazmicro_d(nl - 1))
-                allocate(vertrespmicro(nl - 1))
-
-                vertgrazmicro_tot = 0.d0
-                vertgrazmicro_n = 0.d0
-                vertgrazmicro_d = 0.d0
-                vertrespmicro = 0.d0
-
-                ! Mesozooplankton
-                allocate(vertgrazmeso_tot(nl - 1), vertgrazmeso_n(nl - 1), vertgrazmeso_d(nl - 1))
-                allocate(vertgrazmeso_det(nl - 1), vertgrazmeso_mic(nl - 1), vertgrazmeso_det2(nl &
-                        &- 1))
-
-                vertgrazmeso_tot = 0.d0
-                vertgrazmeso_n = 0.d0
-                vertgrazmeso_d = 0.d0
-                vertgrazmeso_det = 0.d0
-                vertgrazmeso_mic = 0.d0
-                vertgrazmeso_det2 = 0.d0
-
-                if (enable_coccos) then
-                    allocate(vertgrazmicro_c(nl - 1), vertgrazmicro_p(nl - 1))
-                    allocate(vertgrazmeso_c(nl - 1), vertgrazmeso_p(nl - 1))
-
-                    vertgrazmicro_c = 0.d0
-                    vertgrazmicro_p = 0.d0
-                    vertgrazmeso_c = 0.d0
-                    vertgrazmeso_p = 0.d0
-                end if
-            end if
-
-            ! Macrozooplankton
-            allocate(vertgrazmacro_tot(nl - 1), vertgrazmacro_n(nl - 1), vertgrazmacro_d(nl - 1))
-            allocate(vertgrazmacro_mes(nl - 1), vertgrazmacro_det(nl - 1))
-            allocate(vertgrazmacro_mic(nl - 1), vertgrazmacro_det2(nl - 1))
-            allocate(vertrespmacro(nl - 1))
-
-            vertgrazmacro_tot = 0.d0
-            vertgrazmacro_n = 0.d0
-            vertgrazmacro_d = 0.d0
-            vertgrazmacro_mes = 0.d0
-            vertgrazmacro_det = 0.d0
-            vertgrazmacro_mic = 0.d0
-            vertgrazmacro_det2 = 0.d0
-            vertrespmacro = 0.d0
-
-            if (enable_coccos) then
-                allocate(vertgrazmacro_c(nl - 1), vertgrazmacro_p(nl - 1))
-                vertgrazmacro_c = 0.d0
-                vertgrazmacro_p = 0.d0
-            end if
-        end if
-
-        ! --------------------------------------------------------------------------
         ! Temperature and Photosynthesis Tracking Variables
         ! --------------------------------------------------------------------------
-
         allocate(VTPhyCO2(nl - 1), VTDiaCO2(nl - 1))
         VTPhyCO2 = 0.d0
         VTDiaCO2 = 0.d0
@@ -2794,46 +2837,172 @@ contains
         VTCphot_phyto = 0.d0
         VTCphot_diatoms = 0.d0
 
-        if (enable_coccos) then
+    end subroutine alloc_init_phyto_diags
 
-            allocate(VTTemp_diatoms(nl - 1), VTTemp_phyto(nl - 1))
-            VTTemp_diatoms = 0.d0
-            VTTemp_phyto = 0.d0
+    ! ==============================================================================
+    ! SUBROUTINE: alloc_init_cocco_diags
+    ! Purpose: Allocate and initialize coccolithophore and Phaeocystis diagnostics
+    ! ==============================================================================
+    subroutine alloc_init_cocco_diags(nl)
 
-            allocate(VTqlimitFac_phyto(nl - 1), VTqlimitFac_diatoms(nl - 1))
-            VTqlimitFac_phyto = 0.d0
-            VTqlimitFac_diatoms = 0.d0
+        use REcoM_declarations, only: vertNPPc, vertGPPc, vertNNAc, vertChldegc, vertrespc, &
+                vertdocexc, vertaggc, vertNPPp, vertGPPp, vertNNAp, vertChldegp, vertrespp, &
+                vertdocexp, vertaggp, VTTemp_diatoms, VTTemp_phyto, VTqlimitFac_phyto, &
+                VTqlimitFac_diatoms, VTSi_assimDia, VTTemp_cocco, VTTemp_phaeo, VTCoccoCO2, &
+                VTPhaeoCO2, VTqlimitFac_cocco, VTqlimitFac_phaeo, VTCphotLigLim_cocco, &
+                VTCphotLigLim_phaeo, VTCphot_cocco, VTCphot_phaeo
 
-            allocate(VTSi_assimDia(nl - 1))
-            VTSi_assimDia = 0.d0
+        implicit none
 
-            ! --------------------------------------------------------------------------
-            ! Coccolithophores and Phaeocystis Tracking (if enabled)
-            ! --------------------------------------------------------------------------
+        integer, intent(in) :: nl
 
-            allocate(VTTemp_cocco(nl - 1), VTTemp_phaeo(nl - 1))
-            VTTemp_cocco = 0.d0
-            VTTemp_phaeo = 0.d0
+        ! ----------------------------------------------------------------------
+        ! Coccolithophores
+        ! ----------------------------------------------------------------------
+        allocate(vertNPPc(nl - 1), vertGPPc(nl - 1), vertNNAc(nl - 1), vertChldegc(nl - 1))
+        allocate(vertrespc(nl - 1), vertdocexc(nl - 1), vertaggc(nl - 1))
 
-            allocate(VTCoccoCO2(nl - 1), VTPhaeoCO2(nl - 1))
-            VTCoccoCO2 = 0.d0
-            VTPhaeoCO2 = 0.d0
+        vertNPPc = 0.d0
+        vertGPPc = 0.d0
+        vertNNAc = 0.d0
+        vertChldegc = 0.d0
+        vertrespc = 0.d0
+        vertdocexc = 0.d0
+        vertaggc = 0.d0
 
-            allocate(VTqlimitFac_cocco(nl - 1), VTqlimitFac_phaeo(nl - 1))
-            VTqlimitFac_cocco = 0.d0
-            VTqlimitFac_phaeo = 0.d0
+        ! ----------------------------------------------------------------------
+        ! Phaeocystis
+        ! ----------------------------------------------------------------------
+        allocate(vertNPPp(nl - 1), vertGPPp(nl - 1), vertNNAp(nl - 1), vertChldegp(nl - 1))
+        allocate(vertrespp(nl - 1), vertdocexp(nl - 1), vertaggp(nl - 1))
 
-            allocate(VTCphotLigLim_cocco(nl - 1), VTCphotLigLim_phaeo(nl - 1))
-            VTCphotLigLim_cocco = 0.d0
-            VTCphotLigLim_phaeo = 0.d0
+        vertNPPp = 0.d0
+        vertGPPp = 0.d0
+        vertNNAp = 0.d0
+        vertChldegp = 0.d0
+        vertrespp = 0.d0
+        vertdocexp = 0.d0
+        vertaggp = 0.d0
 
-            allocate(VTCphot_cocco(nl - 1), VTCphot_phaeo(nl - 1))
-            VTCphot_cocco = 0.d0
-            VTCphot_phaeo = 0.d0
+        ! --------------------------------------------------------------------------
+        ! Temperature / nutrient / light tracking - Phytoplankton and Diatoms
+        ! (only allocated when coccos are enabled, matching original file1 logic)
+        ! --------------------------------------------------------------------------
+        allocate(VTTemp_diatoms(nl - 1), VTTemp_phyto(nl - 1))
+        VTTemp_diatoms = 0.d0
+        VTTemp_phyto = 0.d0
 
+        allocate(VTqlimitFac_phyto(nl - 1), VTqlimitFac_diatoms(nl - 1))
+        VTqlimitFac_phyto = 0.d0
+        VTqlimitFac_diatoms = 0.d0
+
+        allocate(VTSi_assimDia(nl - 1))
+        VTSi_assimDia = 0.d0
+
+        ! --------------------------------------------------------------------------
+        ! Temperature / photosynthesis tracking - Coccos and Phaeocystis
+        ! --------------------------------------------------------------------------
+        allocate(VTTemp_cocco(nl - 1), VTTemp_phaeo(nl - 1))
+        VTTemp_cocco = 0.d0
+        VTTemp_phaeo = 0.d0
+
+        allocate(VTCoccoCO2(nl - 1), VTPhaeoCO2(nl - 1))
+        VTCoccoCO2 = 0.d0
+        VTPhaeoCO2 = 0.d0
+
+        allocate(VTqlimitFac_cocco(nl - 1), VTqlimitFac_phaeo(nl - 1))
+        VTqlimitFac_cocco = 0.d0
+        VTqlimitFac_phaeo = 0.d0
+
+        allocate(VTCphotLigLim_cocco(nl - 1), VTCphotLigLim_phaeo(nl - 1))
+        VTCphotLigLim_cocco = 0.d0
+        VTCphotLigLim_phaeo = 0.d0
+
+        allocate(VTCphot_cocco(nl - 1), VTCphot_phaeo(nl - 1))
+        VTCphot_cocco = 0.d0
+        VTCphot_phaeo = 0.d0
+
+    end subroutine alloc_init_cocco_diags
+
+    ! ==============================================================================
+    ! SUBROUTINE: alloc_init_zoo_diags
+    ! Purpose: Allocate and initialize zooplankton grazing diagnostics
+    ! ==============================================================================
+    subroutine alloc_init_zoo_diags(nl)
+
+        use REcoM_declarations, only: vertgrazmicro_tot, vertgrazmicro_n, vertgrazmicro_d, &
+                vertgrazmicro_c, vertgrazmicro_p, vertrespmicro, vertgrazmeso_tot, &
+                vertgrazmeso_n, vertgrazmeso_d, vertgrazmeso_det, vertgrazmeso_mic, &
+                vertgrazmeso_det2, vertrespmeso, vertgrazmeso_c, vertgrazmeso_p, &
+                vertgrazmacro_tot, vertgrazmacro_n, vertgrazmacro_d, vertgrazmacro_mes, &
+                vertgrazmacro_det, vertgrazmacro_mic, vertgrazmacro_det2, vertrespmacro, &
+                vertgrazmacro_c, vertgrazmacro_p
+
+        implicit none
+
+        integer, intent(in) :: nl
+
+        ! --------------------------------------------------------------------------
+        ! Microzooplankton and Mesozooplankton (3-zoo configuration only)
+        ! --------------------------------------------------------------------------
+        if (enable_3zoo2det) then
+            ! Microzooplankton
+            allocate(vertgrazmicro_tot(nl - 1), vertgrazmicro_n(nl - 1), vertgrazmicro_d(nl - 1))
+            allocate(vertrespmicro(nl - 1))
+
+            vertgrazmicro_tot = 0.d0
+            vertgrazmicro_n = 0.d0
+            vertgrazmicro_d = 0.d0
+            vertrespmicro = 0.d0
+
+            ! Mesozooplankton
+            allocate(vertgrazmeso_tot(nl - 1), vertgrazmeso_n(nl - 1), vertgrazmeso_d(nl - 1))
+            allocate(vertgrazmeso_det(nl - 1), vertgrazmeso_mic(nl - 1), vertgrazmeso_det2(nl - 1))
+            allocate(vertrespmeso(nl - 1))
+
+            vertgrazmeso_tot = 0.d0
+            vertgrazmeso_n = 0.d0
+            vertgrazmeso_d = 0.d0
+            vertgrazmeso_det = 0.d0
+            vertgrazmeso_mic = 0.d0
+            vertgrazmeso_det2 = 0.d0
+            vertrespmeso = 0.d0
+
+            if (enable_coccos) then
+                allocate(vertgrazmicro_c(nl - 1), vertgrazmicro_p(nl - 1))
+                allocate(vertgrazmeso_c(nl - 1), vertgrazmeso_p(nl - 1))
+
+                vertgrazmicro_c = 0.d0
+                vertgrazmicro_p = 0.d0
+                vertgrazmeso_c = 0.d0
+                vertgrazmeso_p = 0.d0
+            end if
         end if
 
-    end subroutine allocate_and_init_diags
+        ! --------------------------------------------------------------------------
+        ! Macrozooplankton (always allocated when Grazing_detritus is on)
+        ! --------------------------------------------------------------------------
+        allocate(vertgrazmacro_tot(nl - 1), vertgrazmacro_n(nl - 1), vertgrazmacro_d(nl - 1))
+        allocate(vertgrazmacro_mes(nl - 1), vertgrazmacro_det(nl - 1))
+        allocate(vertgrazmacro_mic(nl - 1), vertgrazmacro_det2(nl - 1))
+        allocate(vertrespmacro(nl - 1))
+
+        vertgrazmacro_tot = 0.d0
+        vertgrazmacro_n = 0.d0
+        vertgrazmacro_d = 0.d0
+        vertgrazmacro_mes = 0.d0
+        vertgrazmacro_det = 0.d0
+        vertgrazmacro_mic = 0.d0
+        vertgrazmacro_det2 = 0.d0
+        vertrespmacro = 0.d0
+
+        if (enable_coccos) then
+            allocate(vertgrazmacro_c(nl - 1), vertgrazmacro_p(nl - 1))
+            vertgrazmacro_c = 0.d0
+            vertgrazmacro_p = 0.d0
+        end if
+
+    end subroutine alloc_init_zoo_diags
 
     ! ==============================================================================
     ! SUBROUTINE: update_2d_diags
