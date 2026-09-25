@@ -132,6 +132,19 @@ contains
         real(kind=wp), intent(in) :: SurfSR, dt !< [W/m2] ShortWave radiation at surface
         real(kind=wp), intent(in) :: Loc_slp ![Pa] sea-level pressure
         real(kind=wp), intent(in) :: Latd(1) ! latitude in degree
+        ! radians -> degrees for the diagnostics below
+        real(kind=wp), parameter :: rad2deg_diag = 57.29577951308232_wp
+        ! Print caps per MPI rank for the diagnostics below
+        integer, parameter :: n_agg_diag_prints_max = 20
+        integer, save :: n_agg_diag_prints = 0
+        ! LocBenthos(1) diagnostic (cavity/open ocean separately)
+        integer, parameter :: n_locbenthos_diag_prints_max = 20
+        integer, save :: n_locbenthos_diag_prints_cav = 0
+        integer, save :: n_locbenthos_diag_prints_open = 0
+        ! LocBenthos(3) (Si) diagnostic, same
+        integer, parameter :: n_locbenthos_si_diag_prints_max = 20
+        integer, save :: n_locbenthos_si_diag_prints_cav = 0
+        integer, save :: n_locbenthos_si_diag_prints_open = 0
 
         !< [m] Vertical distance between two nodes = Thickness
         real(kind=wp), intent(in), dimension(nl - 1) :: thick
@@ -950,6 +963,19 @@ contains
                     print*, '  CHL2C_plast =', CHL2C_plast
                     print*, '  PARave =', PARave
                     print*, '  pMax =', pMax
+                    print*, '  n =', n, ' nzmin =', nzmin
+                    print*, '  qlimitFac =', qlimitFac
+                    print*, '  feLimitFac =', feLimitFac
+                    print*, '  quota =', quota
+                    print*, '  Fe =', Fe
+                    print*, '  k_Fe =', k_Fe
+                    print*, '  P_cm =', P_cm
+                    print*, '  enable_coccos =', enable_coccos
+                    if (enable_coccos) then
+                        print*, '  Temp_phyto =', Temp_phyto
+                    else
+                        print*, '  arrFunc =', arrFunc
+                    end if
                     stop
                 end if
 
@@ -2277,6 +2303,19 @@ contains
                     aggregationrate = aggregationrate + agg_PP * CoccoN + agg_PP * PhaeoN
                 end if
 
+                ! ----------------------------------------------------------------
+                ! Diagnostic: aggregationrate > 5/d (DetN runaway)
+                if (aggregationrate > 5.0_wp .and. n_agg_diag_prints < n_agg_diag_prints_max) then
+                    n_agg_diag_prints = n_agg_diag_prints + 1
+                    print *, 'warning: aggregationrate runaway at n=', n, ' k=', k, ' mstep=', mstep
+                    print *, '  lat, lon        =', Latd(1), geo_coord_nod2D(1, n) * rad2deg_diag
+                    print *, '  aggregationrate [1/d] =', aggregationrate
+                    print *, '  DetN  [mmolN/m3] =', DetN
+                    print *, '  PhyC  [mmolC/m3] =', PhyC
+                    print *, '  DiaN  [mmolN/m3] =', DiaN
+                    print *, '  DiaC  [mmolC/m3] =', DiaC
+                end if
+
                 !===============================================================================
                 ! MARINE CALCIFICATION
                 !===============================================================================
@@ -3555,6 +3594,25 @@ contains
                 ! Calculate N remineralization flux [mmolN m-2 day-1]
                 decayBenthos(1) = decayRateBenN * LocBenthos(1)
 
+                ! ----------------------------------------------------------------
+                ! Diagnostic: benthic N remineralization > 10 mmolN/m2/d
+                ! ----------------------------------------------------------------
+                if (abs(decayBenthos(1)) > 10.0_wp .and. &
+                        ((nzmin > 1 .and. n_locbenthos_diag_prints_cav < n_locbenthos_diag_prints_max) .or. &
+                         (nzmin == 1 .and. n_locbenthos_diag_prints_open < n_locbenthos_diag_prints_max))) then
+                    if (nzmin > 1) then
+                        n_locbenthos_diag_prints_cav = n_locbenthos_diag_prints_cav + 1
+                    else
+                        n_locbenthos_diag_prints_open = n_locbenthos_diag_prints_open + 1
+                    end if
+                    print *, 'diag: LocBenthos runaway at n=', n, ' nzmin=', nzmin, &
+                            ' (cavity=', (nzmin > 1), ')  mstep=', mstep
+                    print *, '  lat, lon              =', Latd(1), geo_coord_nod2D(1, n) * rad2deg_diag
+                    print *, '  LocBenthos(1) [assumed mmolN/m2] =', LocBenthos(1)
+                    print *, '  decayRateBenN [1/d]    =', decayRateBenN
+                    print *, '  decayBenthos(1) [assumed mmolN/m2/d] =', decayBenthos(1)
+                end if
+
                 ! Update benthic N pool (remove remineralized N)
                 LocBenthos(1) = LocBenthos(1) - decayBenthos(1) * dt_b
 
@@ -3616,6 +3674,25 @@ contains
 
                 ! Calculate Si dissolution flux [mmolSi m-2 day-1]
                 decayBenthos(3) = decayRateBenSi * LocBenthos(3)
+
+                ! ----------------------------------------------------------------
+                ! Diagnostic: same for benthic Si
+                ! ----------------------------------------------------------------
+                if (abs(decayBenthos(3)) > 10.0_wp .and. &
+                        ((nzmin > 1 .and. n_locbenthos_si_diag_prints_cav < n_locbenthos_si_diag_prints_max) .or. &
+                         (nzmin == 1 .and. n_locbenthos_si_diag_prints_open < n_locbenthos_si_diag_prints_max))) then
+                    if (nzmin > 1) then
+                        n_locbenthos_si_diag_prints_cav = n_locbenthos_si_diag_prints_cav + 1
+                    else
+                        n_locbenthos_si_diag_prints_open = n_locbenthos_si_diag_prints_open + 1
+                    end if
+                    print *, 'diag: LocBenthos(Si) runaway at n=', n, ' nzmin=', nzmin, &
+                            ' (cavity=', (nzmin > 1), ')  mstep=', mstep
+                    print *, '  lat, lon               =', Latd(1), geo_coord_nod2D(1, n) * rad2deg_diag
+                    print *, '  LocBenthos(3) [assumed mmolSi/m2] =', LocBenthos(3)
+                    print *, '  decayRateBenSi [1/d]    =', decayRateBenSi
+                    print *, '  decayBenthos(3) [assumed mmolSi/m2/d] =', decayBenthos(3)
+                end if
 
                 ! Update benthic Si pool
                 LocBenthos(3) = LocBenthos(3) - decayBenthos(3) * dt_b

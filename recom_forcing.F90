@@ -209,7 +209,8 @@ contains
 
         ! Guard against unphysical DIC (indicates upstream tracer corruption)
         if (REcoM_DIC(1) > 10.d0) then  ! > 10 mol/m3 = 10000 mmol/m3
-            print *, 'FATAL: DIC out of range at n=', n
+            print *, 'error: DIC out of range at n=', n
+            print *, '  nzmin, depth   =', nzmin, zF(nzmin)
             print *, '  DIC   [mol/m3] =', REcoM_DIC
             print *, '  Alk   [mol/m3] =', REcoM_Alk
             print *, '  T     [deg C]  =', REcoM_T
@@ -240,7 +241,8 @@ contains
             ! Sanity check on computed flux magnitude
 
             if (abs(co2flux(1)) > 1.e10) then
-                print *, 'FATAL: CO2 flux out of range at n=', n
+                print *, 'error: CO2 flux out of range at n=', n
+                print *, '  nzmin, depth   =', nzmin, zF(nzmin)
                 print *, '  co2flux        =', co2flux
                 print *, '  pco2surf       =', pco2surf
                 print *, '  co2            =', co2
