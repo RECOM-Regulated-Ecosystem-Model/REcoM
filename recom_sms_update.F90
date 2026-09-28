@@ -1529,7 +1529,7 @@ contains
                 ! SOURCES: Direct Transfer from Grazing
                 !-----------------------------------------------------------------------
                 ! All grazed material enters detritus (no detritus grazing)
-                        +grazingFlux_phy3 & ! Microzooplankton->small phyto
+                        + grazingFlux_phy3 & ! Microzooplankton->small phyto
                         + grazingFlux_dia3 & ! Microzooplankton->diatoms
                         + grazingFlux_Cocco3 * is_coccos & ! Microzooplankton->coccoliths
                         + grazingFlux_Phaeo3 * is_coccos & ! Microzooplankton->Phaeocystis
@@ -1547,7 +1547,7 @@ contains
                 !-----------------------------------------------------------------------
                 ! SINKS: Generic Zooplankton Consumption
                 !-----------------------------------------------------------------------
-                        - grazingFlux * grazEff3 &
+                        - grazingFlux3 * grazEff3 &
                 !-----------------------------------------------------------------------
                 ! SINKS: Remineralization
                 !-----------------------------------------------------------------------
