@@ -145,6 +145,8 @@ contains
         integer, parameter :: n_locbenthos_si_diag_prints_max = 20
         integer, save :: n_locbenthos_si_diag_prints_cav = 0
         integer, save :: n_locbenthos_si_diag_prints_open = 0
+        ! MEDUSA note is informational; print it once per run
+        logical, save :: medusa_msg_printed = .false.
 
         !< [m] Vertical distance between two nodes = Thickness
         real(kind=wp), intent(in), dimension(nl - 1) :: thick
@@ -3561,9 +3563,10 @@ contains
                 ! This overrides all internal benthic calculations
                 !---------------------------------------------------------------------------
 
-                if (mype == 0) then
+                if (mype == 0 .and. .not. medusa_msg_printed) then
                     ! Print message only on master processor (parallel computing)
                     write(*, *) ' --> Sedimentary input of nutrients through MEDUSA'
+                    medusa_msg_printed = .true.
                 end if
 
                 ! Note: MEDUSA fluxes are applied elsewhere in the code

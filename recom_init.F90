@@ -652,12 +652,13 @@ contains
 
     end subroutine initialize_tracer_ids
 
-    function get_tracer_init_value(tracer_id) result(init_value)
+    function get_tracer_init_value(tracer_id, mype) result(init_value)
         use recom_declarations, only: tracer_ids, wp
         use REcoM_config, only: tiny, tiny_chl, chl2N_max, NCmax, chl2N_max_d, NCmax_d, SiCmax, &
                 Redfield
 
         integer, intent(in) :: tracer_id
+        integer, intent(in), optional :: mype   ! if present, warn on rank 0 only
         real(kind=wp) :: init_value
 
         if (tracer_id == tracer_ids%phytoplankton_nitrogen .or. &
@@ -710,8 +711,13 @@ contains
 
         else
             init_value = 0.0_wp
-            write(*, *) 'Warning: No initial value defined for tracer ID ', tracer_id, '.' // &
-                    ' Setting to 0'
+            if (.not. present(mype)) then
+                write(*, *) 'Warning: No initial value defined for tracer ID ', tracer_id, '.' // &
+                        '. Setting to 0'
+            else if (mype == 0) then
+                write(*, *) 'Warning: No initial value defined for tracer ID ', tracer_id, &
+                        '. Setting to 0'
+            end if
         end if
     end function get_tracer_init_value
 
@@ -839,41 +845,30 @@ contains
         end do
 
         if (mype == 0) write(*, *) "Sanity check for REcoM variables after recom_init call"
-        call MPI_AllREDUCE(locDINmax, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal max init. DIN. =', glo
-        call MPI_AllREDUCE(locDINmin, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal min init. DIN. =', glo
-
-        call MPI_AllREDUCE(locDICmax, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal max init. DIC. =', glo
-        call MPI_AllREDUCE(locDICmin, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal min init. DIC. =', glo
-        call MPI_AllREDUCE(locAlkmax, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal max init. Alk. =', glo
-        call MPI_AllREDUCE(locAlkmin, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal min init. Alk. =', glo
-        call MPI_AllREDUCE(locDSimax, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal max init. DSi. =', glo
-        call MPI_AllREDUCE(locDSimin, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal min init. DSi. =', glo
-        call MPI_AllREDUCE(locDFemax, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal max init. DFe. =', glo
-        call MPI_AllREDUCE(locDFemin, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  `-> gobal min init. DFe. =', glo
+        call MPI_AllREDUCE(locDINmax, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
+        if (mype == 0) write(*, *) '  |-> global max init. DIN  =', glo
+        call MPI_AllREDUCE(locDINmin, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, MPIerr)
+        if (mype == 0) write(*, *) '  |-> global min init. DIN  =', glo
+        call MPI_AllREDUCE(locDICmax, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
+        if (mype == 0) write(*, *) '  |-> global max init. DIC  =', glo
+        call MPI_AllREDUCE(locDICmin, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, MPIerr)
+        if (mype == 0) write(*, *) '  |-> global min init. DIC  =', glo
+        call MPI_AllREDUCE(locAlkmax, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
+        if (mype == 0) write(*, *) '  |-> global max init. Alk  =', glo
+        call MPI_AllREDUCE(locAlkmin, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, MPIerr)
+        if (mype == 0) write(*, *) '  |-> global min init. Alk  =', glo
+        call MPI_AllREDUCE(locDSimax, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
+        if (mype == 0) write(*, *) '  |-> global max init. DSi  =', glo
+        call MPI_AllREDUCE(locDSimin, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, MPIerr)
+        if (mype == 0) write(*, *) '  |-> global min init. DSi  =', glo
+        call MPI_AllREDUCE(locDFemax, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
+        if (mype == 0) write(*, *) '  |-> global max init. DFe  =', glo
+        call MPI_AllREDUCE(locDFemin, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, MPIerr)
+        if (mype == 0) write(*, *) '  |-> global min init. DFe  =', glo
         call MPI_AllREDUCE(locO2max, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal max init. O2. =', glo
+        if (mype == 0) write(*, *) '  |-> global max init. O2   =', glo
         call MPI_AllREDUCE(locO2min, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, MPIerr)
-        if (mype == 0) write(*, *) '  `-> gobal min init. O2. =', glo
+        if (mype == 0) write(*, *) '  `-> global min init. O2   =', glo
 
         if (enable_3zoo2det) then
             is_3zoo2det = 1.0_WP
