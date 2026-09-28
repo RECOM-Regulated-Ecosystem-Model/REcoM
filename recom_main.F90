@@ -357,31 +357,47 @@ contains
             !!---- Atmospheric CO2 in LocVar
             LocAtmCO2 = AtmCO2(month)
 
-            ! Update of prognostic atmospheric CO2 values
+            !-----------------------------------------------------------------------
+            ! Atmospheric CO2 [ppm] and its 13C/14C ratios
+            !   use_atbox : prognostic 0-d box (recom_atbox)
+            !   __oifs    : per-node field from OpenIFS via the coupler
+            !   otherwise : prescribed monthly values (standalone FESOM-REcoM)
+            !-----------------------------------------------------------------------
+
             if (use_atbox) then
                 LocAtmCO2 = x_co2atm(1)
                 if (ciso) then
                     LocAtmCO2_13 = x_co2atm_13(1)
-                    if (ciso_14) LocAtmCO2_14 = x_co2atm_14(1)
+                    r_atm_13 = LocAtmCO2_13(1) / LocAtmCO2(1)
+                    if (ciso_14) then
+                        LocAtmCO2_14 = x_co2atm_14(1)
+                        r_atm_14     = LocAtmCO2_14(1) / LocAtmCO2(1)
+                    end if
                 end if
             else
-                ! Consider prescribed atmospheric CO2 values
+#if defined(__oifs)
+                LocAtmCO2 = x_co2atm(n)        ! ppm, received from OpenIFS
+#else
+                LocAtmCO2 = AtmCO2(month)      ! ppm, prescribed (standalone)
+#endif
                 if (ciso) then
-                    LocAtmCO2_13 = AtmCO2_13(month)
+                    ! Isotope ratios from the prescribed series, applied to whichever
+                    ! 12CO2 is actually used, so r_atm stays consistent when the
+                    ! coupled CO2 differs from the prescribed one.
+                    r_atm_13     = AtmCO2_13(month) / AtmCO2(month)
+                    LocAtmCO2_13 = r_atm_13 * LocAtmCO2(1)
+                    !LocAtmCO2_13 = AtmCO2_13(month)
                     if (ciso_14) then
                         !          Latitude of nodal point n
                         lat_val = geo_coord_nod2D(2, n) / rad
                         !          Zonally binned NH / SH / TZ 14CO2 input values
-                        LocAtmCO2_14 = AtmCO2_14(lat_zone(lat_val), month)
+                        r_atm_14     = AtmCO2_14(lat_zone(lat_val), month) / AtmCO2(month)
+                        LocAtmCO2_14 = r_atm_14 * LocAtmCO2(1)
+                        !LocAtmCO2_14 = AtmCO2_14(lat_zone(lat_val), month)
                     end if
                 end if
-                LocAtmCO2 = x_co2atm(n) ! ppm; from oifs
             end if ! use_atbox
 
-            if (ciso) then
-                r_atm_13 = LocAtmCO2_13(1) / LocAtmCO2(1)
-                if (ciso_14) r_atm_14 = LocAtmCO2_14(1) / LocAtmCO2(1)
-            end if
 
             !-----------------------------------------------------------------------
             ! Shortwave (PAR fraction), scaled by open-water fraction
