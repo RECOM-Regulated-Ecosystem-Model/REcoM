@@ -75,6 +75,18 @@ contains
         integer :: n_transit_tracers ! number of active transit tracers
         integer :: bgc_start, bgc_end ! first/last slot of the BGC-only block
 
+        !-----------------------------------------------------------------------
+        ! Atmospheric CO2 source check: with OpenIFS coupling, CO2 comes from the
+        ! atmosphere model, so the prognostic box (use_atbox) must be off.
+        !-----------------------------------------------------------------------
+#if defined(__oifs)
+        if (use_atbox) then
+            if (mype == 0) write(*, *) 'ERROR: use_atbox=.true. is not allowed with OIFS coupling ' // &
+                    '(atmospheric CO2 comes from OpenIFS)'
+            call MPI_Abort(MPI_COMM_FESOM, 1, MPIerr)
+        end if
+#endif
+
         call initialize_memory(myDim_nod2D + eDim_nod2D, nl, num_tracers)
 
         call initialize_ciso(myDim_nod2D + eDim_nod2D, nl, ocean_area)
@@ -393,7 +405,7 @@ contains
 
         ! --- Atmospheric box model (13C/14C spin-up ratios) ---
         if (use_atbox) then
-            allocate(x_co2atm(node_size), source=CO2_for_spinup)
+            !allocate(x_co2atm(node_size), source=CO2_for_spinup)
 
             if (ciso) then
                 allocate(x_co2atm_13(node_size))
