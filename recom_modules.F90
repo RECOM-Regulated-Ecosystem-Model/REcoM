@@ -2775,7 +2775,7 @@ contains
         ! --------------------------------------------------------------------------
         ! Zooplankton grazing (optional)
         ! --------------------------------------------------------------------------
-        if (Grazing_detritus) call alloc_init_zoo_diags(nl)
+        call alloc_init_zoo_diags(nl)   ! respiration always; grazing gated inside
 
     end subroutine allocate_and_init_diags
 
@@ -2943,63 +2943,73 @@ contains
         integer, intent(in) :: nl
 
         ! --------------------------------------------------------------------------
-        ! Microzooplankton and Mesozooplankton (3-zoo configuration only)
+        ! Respiration: mesozooplankton exist in every configuration
         ! --------------------------------------------------------------------------
+        allocate(vertrespmeso(nl - 1))
+        vertrespmeso = 0.d0
+
         if (enable_3zoo2det) then
-            ! Microzooplankton
-            allocate(vertgrazmicro_tot(nl - 1), vertgrazmicro_n(nl - 1), vertgrazmicro_d(nl - 1))
-            allocate(vertrespmicro(nl - 1))
-
-            vertgrazmicro_tot = 0.d0
-            vertgrazmicro_n = 0.d0
-            vertgrazmicro_d = 0.d0
+            allocate(vertrespmacro(nl - 1), vertrespmicro(nl - 1))
+            vertrespmacro = 0.d0
             vertrespmicro = 0.d0
-
-            ! Mesozooplankton
-            allocate(vertgrazmeso_tot(nl - 1), vertgrazmeso_n(nl - 1), vertgrazmeso_d(nl - 1))
-            allocate(vertgrazmeso_det(nl - 1), vertgrazmeso_mic(nl - 1), vertgrazmeso_det2(nl - 1))
-            allocate(vertrespmeso(nl - 1))
-
-            vertgrazmeso_tot = 0.d0
-            vertgrazmeso_n = 0.d0
-            vertgrazmeso_d = 0.d0
-            vertgrazmeso_det = 0.d0
-            vertgrazmeso_mic = 0.d0
-            vertgrazmeso_det2 = 0.d0
-            vertrespmeso = 0.d0
-
-            if (enable_coccos) then
-                allocate(vertgrazmicro_c(nl - 1), vertgrazmicro_p(nl - 1))
-                allocate(vertgrazmeso_c(nl - 1), vertgrazmeso_p(nl - 1))
-
-                vertgrazmicro_c = 0.d0
-                vertgrazmicro_p = 0.d0
-                vertgrazmeso_c = 0.d0
-                vertgrazmeso_p = 0.d0
-            end if
         end if
 
         ! --------------------------------------------------------------------------
-        ! Macrozooplankton (always allocated when Grazing_detritus is on)
+        ! Grazing diagnostics (only computed with detritus grazing)
         ! --------------------------------------------------------------------------
-        allocate(vertgrazmacro_tot(nl - 1), vertgrazmacro_n(nl - 1), vertgrazmacro_d(nl - 1))
-        allocate(vertgrazmacro_mes(nl - 1), vertgrazmacro_det(nl - 1))
-        allocate(vertgrazmacro_mic(nl - 1), vertgrazmacro_det2(nl - 1))
-        allocate(vertrespmacro(nl - 1))
+        if (.not. Grazing_detritus) return
 
-        vertgrazmacro_tot = 0.d0
-        vertgrazmacro_n = 0.d0
-        vertgrazmacro_d = 0.d0
-        vertgrazmacro_mes = 0.d0
-        vertgrazmacro_det = 0.d0
-        vertgrazmacro_mic = 0.d0
-        vertgrazmacro_det2 = 0.d0
-        vertrespmacro = 0.d0
+        ! Mesozooplankton
+        allocate(vertgrazmeso_tot(nl - 1), vertgrazmeso_n(nl - 1), vertgrazmeso_d(nl - 1))
+        allocate(vertgrazmeso_det(nl - 1))
+        vertgrazmeso_tot = 0.d0
+        vertgrazmeso_n   = 0.d0
+        vertgrazmeso_d   = 0.d0
+        vertgrazmeso_det = 0.d0
 
         if (enable_coccos) then
-            allocate(vertgrazmacro_c(nl - 1), vertgrazmacro_p(nl - 1))
-            vertgrazmacro_c = 0.d0
-            vertgrazmacro_p = 0.d0
+            allocate(vertgrazmeso_c(nl - 1), vertgrazmeso_p(nl - 1))
+            vertgrazmeso_c = 0.d0
+            vertgrazmeso_p = 0.d0
+        end if
+
+        ! --------------------------------------------------------------------------
+        ! Microzooplankton and Mesozooplankton (3-zoo configuration only)
+        ! --------------------------------------------------------------------------
+        if (enable_3zoo2det) then
+
+            ! Mesozooplankton
+            allocate(vertgrazmeso_mic(nl - 1), vertgrazmeso_det2(nl - 1))
+            vertgrazmeso_mic = 0.d0
+            vertgrazmeso_det2 = 0.d0
+
+            ! Macrozooplankton
+            allocate(vertgrazmacro_tot(nl - 1), vertgrazmacro_n(nl - 1), vertgrazmacro_d(nl - 1))
+            allocate(vertgrazmacro_mes(nl - 1), vertgrazmacro_det(nl - 1))
+            allocate(vertgrazmacro_mic(nl - 1), vertgrazmacro_det2(nl - 1))
+
+            vertgrazmacro_tot = 0.d0
+            vertgrazmacro_n = 0.d0
+            vertgrazmacro_d = 0.d0
+            vertgrazmacro_mes = 0.d0
+            vertgrazmacro_det = 0.d0
+            vertgrazmacro_mic = 0.d0
+            vertgrazmacro_det2 = 0.d0
+
+            ! Microzooplankton
+            allocate(vertgrazmicro_tot(nl - 1), vertgrazmicro_n(nl - 1), vertgrazmicro_d(nl - 1))
+            vertgrazmicro_tot = 0.d0
+            vertgrazmicro_n = 0.d0
+            vertgrazmicro_d = 0.d0
+
+            if (enable_coccos) then
+                allocate(vertgrazmacro_c(nl - 1), vertgrazmacro_p(nl - 1))
+                allocate(vertgrazmicro_c(nl - 1), vertgrazmicro_p(nl - 1))
+                vertgrazmacro_c = 0.d0
+                vertgrazmacro_p = 0.d0
+                vertgrazmicro_c = 0.d0
+                vertgrazmicro_p = 0.d0
+            end if
         end if
 
     end subroutine alloc_init_zoo_diags
@@ -3266,7 +3276,6 @@ contains
         ! Mesozooplankton (base heterotroph group; see matching unconditional
         ! allocation above)
         ! --------------------------------------------------------------------------
-        deallocate(vertrespmeso)
 
         if (enable_coccos) then
             deallocate(VTTemp_phyto, VTqlimitFac_phyto)
@@ -3291,37 +3300,30 @@ contains
         end if
 
         ! --------------------------------------------------------------------------
-        ! Zooplankton Grazing (if enabled)
+        ! Zooplankton respiration (mirrors alloc_init_zoo_diags)
+        ! --------------------------------------------------------------------------
+        deallocate(vertrespmeso)
+        if (enable_3zoo2det) deallocate(vertrespmacro, vertrespmicro)
+
+        ! --------------------------------------------------------------------------
+        ! Zooplankton grazing (mirrors alloc_init_zoo_diags)
         ! --------------------------------------------------------------------------
         if (Grazing_detritus) then
-            deallocate(vertgrazmeso_tot, vertgrazmeso_n, vertgrazmeso_d)
-            deallocate(vertgrazmeso_det)
-
-            if (enable_coccos) then
-                deallocate(vertgrazmeso_c, vertgrazmeso_p)
-            end if
+            deallocate(vertgrazmeso_tot, vertgrazmeso_n, vertgrazmeso_d, vertgrazmeso_det)
+            if (enable_coccos) deallocate(vertgrazmeso_c, vertgrazmeso_p)
 
             if (enable_3zoo2det) then
                 deallocate(vertgrazmeso_mic, vertgrazmeso_det2)
-
                 deallocate(vertgrazmacro_tot, vertgrazmacro_n, vertgrazmacro_d)
                 deallocate(vertgrazmacro_mes, vertgrazmacro_det)
                 deallocate(vertgrazmacro_mic, vertgrazmacro_det2)
-                deallocate(vertrespmacro)
-
+                deallocate(vertgrazmicro_tot, vertgrazmicro_n, vertgrazmicro_d)
                 if (enable_coccos) then
                     deallocate(vertgrazmacro_c, vertgrazmacro_p)
-                end if
-
-                deallocate(vertgrazmicro_tot, vertgrazmicro_n, vertgrazmicro_d)
-                deallocate(vertrespmicro)
-
-                if (enable_coccos) then
                     deallocate(vertgrazmicro_c, vertgrazmicro_p)
                 end if
             end if
         end if
-
     end subroutine deallocate_diags
 
 end module recom_diags_management
