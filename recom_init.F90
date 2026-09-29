@@ -10,6 +10,7 @@ module recom_init_interface
     public :: recom_init
     public :: initialize_tracer_ids
     public :: get_tracer_init_value
+    public :: get_ciso_tracer_ids
 
 contains
     !
@@ -52,7 +53,8 @@ contains
         use REcoM_declarations, only: wp, tracer_ids
         use REcoM_GloVar, only: tracers_info_type
         use recom_config, only: validate_recom_tracers, initialize_tracer_indices, &
-                validate_tracer_id_sequence, bgc_num
+                validate_tracer_id_sequence, bgc_num, use_atbox
+        use mpi
 
         implicit none
 
@@ -75,6 +77,9 @@ contains
         integer :: n_transit_tracers ! number of active transit tracers
         integer :: bgc_start, bgc_end ! first/last slot of the BGC-only block
 
+        integer :: MPIerr
+        integer, allocatable :: ciso_ids(:)
+
         !-----------------------------------------------------------------------
         ! Atmospheric CO2 source check: with OpenIFS coupling, CO2 comes from the
         ! atmosphere model, so the prognostic box (use_atbox) must be off.
@@ -89,21 +94,24 @@ contains
 
         call initialize_memory(myDim_nod2D + eDim_nod2D, nl, num_tracers)
 
-        call initialize_ciso(myDim_nod2D + eDim_nod2D, nl, ocean_area)
-
         call initialize_tracer_ids
 
-        ! After reading parecomsetup namelist
+        ! After reading parecomsetup namelist; sets idicremin, which the
+        ! carbon-isotope indices below are placed after.
         call initialize_tracer_indices
+
+        call initialize_ciso(myDim_nod2D + eDim_nod2D, nl, ocean_area)
+
+        ciso_ids = get_ciso_tracer_ids()
 
         ! Validation check here
         call validate_recom_tracers(num_tracers, use_age_tracer, use_transit, l_sf6, l_f11, l_f12, &
-                l_r14c, l_r39ar, mype)
+                l_r14c, l_r39ar, mype, ciso_ids)
 
         ! After reading tracer namelist - validate actual IDs
         call validate_tracer_id_sequence(tracers_info%ids(1:num_tracers), num_tracers, &
                 use_age_tracer, use_transit, &
-                l_sf6, l_f11, l_f12, l_r14c, l_r39ar, mype)
+                l_sf6, l_f11, l_f12, l_r14c, l_r39ar, mype, ciso_ids)
 
         ! T,S | BGC | [age] | [transit] num_physical_tracers
         ! is always just T,S (=2): BGC tracers start right after them, regardless
@@ -137,9 +145,10 @@ contains
                         tracers_info%data_pointers(i)%tracer_data(:, :) * 1.e9
 
                 ! Avoids tracers 1001, 1002, 1003, 1018, 1022 and DICremin (read from gen_ic3d)
-            else if (tracer_id > 1003 .and. tracer_id /= 1018 .and. tracer_id /= 1022 .and. &
+            else if (tracer_id > 1003 .and. tracer_id < 1300 .and. &
+                    tracer_id /= 1018 .and. tracer_id /= 1022 .and. &
                     tracer_id /= tracer_ids%dic_remineralization) then  ! allowed since call initialize_tracer_ids happens earlier
-                tracers_info%data_pointers(i)%tracer_data(:, :) = get_tracer_init_value(tracer_id)
+                tracers_info%data_pointers(i)%tracer_data(:, :) = get_tracer_init_value(tracer_id, mype)
             end if
         end do
 
@@ -387,7 +396,7 @@ contains
     !===============================================================================
     subroutine initialize_ciso(node_size, nl, ocean_area)
         use recom_declarations, only: wp
-        use recom_config, only: ciso, bgc_base_num, CO2_for_spinup, use_atbox
+        use recom_config, only: ciso, idicremin, CO2_for_spinup, use_atbox
         use recom_ciso, only: ciso_14, ciso_organic_14, delta_co2_13, &
                 big_delta_co2_14, cosmic_14_init, delta_co2_14, r_atm_spinup_13, &
                 r_atm_spinup_14, production_rate_to_flux_14, cosmic_14, x_co2atm_13, &
@@ -444,23 +453,33 @@ contains
         ! those config options would misindex these tracers in both int_recom and here. Ported
         ! as-is; re-derive these offsets first if ciso needs to work alongside
         ! enable_3zoo2det/enable_coccos.
+
+        ! --- ciso tracer indices and surface diagnostic fields ---
+        ! Carbon-isotope tracers are appended after DICremin, the last slot of the
+        ! non-isotope BGC block in every configuration (base, 3zoo2det, coccos, full).
+        ! Their order here must match get_ciso_tracer_ids and the namelist.
         if (ciso) then
-            idic_13 = bgc_base_num + 1
-            iphyc_13 = bgc_base_num + 2
-            idetc_13 = bgc_base_num + 3
-            ihetc_13 = bgc_base_num + 4
-            idoc_13 = bgc_base_num + 5
-            idiac_13 = bgc_base_num + 6
-            iphycal_13 = bgc_base_num + 7
-            idetcal_13 = bgc_base_num + 8
-            idic_14 = bgc_base_num + 9
-            iphyc_14 = bgc_base_num + 10
-            idetc_14 = bgc_base_num + 11
-            ihetc_14 = bgc_base_num + 12
-            idoc_14 = bgc_base_num + 13
-            idiac_14 = bgc_base_num + 14
-            iphycal_14 = bgc_base_num + 15
-            idetcal_14 = bgc_base_num + 16
+            idic_13    = idicremin + 1   ! 1302
+            iphyc_13   = idicremin + 2   ! 1305
+            idetc_13   = idicremin + 3   ! 1308
+            ihetc_13   = idicremin + 4   ! 1310
+            idoc_13    = idicremin + 5   ! 1312
+            idiac_13   = idicremin + 6   ! 1314
+            iphycal_13 = idicremin + 7   ! 1320
+            idetcal_13 = idicremin + 8   ! 1321
+
+            if (ciso_14) then
+                idic_14 = idicremin + 9  ! 1402 (abiotic and organic 14C)
+                if (ciso_organic_14) then
+                    iphyc_14   = idicremin + 10  ! 1405
+                    idetc_14   = idicremin + 11  ! 1408
+                    ihetc_14   = idicremin + 12  ! 1410
+                    idoc_14    = idicremin + 13  ! 1412
+                    idiac_14   = idicremin + 14  ! 1414
+                    iphycal_14 = idicremin + 15  ! 1420
+                    idetcal_14 = idicremin + 16  ! 1421
+                end if
+            end if
 
             allocate(GloPCO2surf_13(node_size), source=0.d0)
             allocate(GloCO2flux_13(node_size), source=0.d0)
@@ -720,6 +739,30 @@ contains
             end if
         end if
     end function get_tracer_init_value
+
+    !===============================================================================
+    ! Expected carbon-isotope tracer IDs, in slot order after DICremin.
+    ! Empty when ciso = .false.
+    !===============================================================================
+    function get_ciso_tracer_ids() result(ids)
+        use recom_config, only: ciso
+        use recom_ciso,   only: ciso_14, ciso_organic_14
+
+        implicit none
+
+        integer, allocatable :: ids(:)
+        integer, parameter :: c13(8) = [1302, 1305, 1308, 1310, 1312, 1314, 1320, 1321]
+
+        if (.not. ciso) then
+            allocate(ids(0))
+        else if (.not. ciso_14) then
+            ids = c13
+        else if (ciso_organic_14) then
+            ids = [c13, c13 + 100]   ! 1402 ... 1421
+        else
+            ids = [c13, 1402]        ! abiotic 14C: DIC_14 only
+        end if
+    end function get_ciso_tracer_ids
 
     subroutine mask_hydrothermal_vents(tracers_info, myDim_nod2D, eDim_nod2D, ulevels_nod2D, &
             nlevels_nod2D, geo_coord_nod2D, Z_3d_n, rad)
