@@ -164,11 +164,13 @@ contains
         !   We clamp to [2, 40] deg C and [21, 43] to avoid extrapolation errors,
         !   including in near-freezing, low-salinity, high-ice-cover cells.
         !---------------------------------------------------------------------------
-        REcoM_DIC  = max(tiny * 1e-3, state(one, idic) * 1e-3) ! mmol/m3 -> mol/m3
-        REcoM_Alk  = max(tiny * 1e-3, state(one, ialk) * 1e-3)
-        REcoM_Si   = max(tiny * 1e-3, state(one, isi)  * 1e-3)
-        REcoM_Phos = max(tiny * 1e-3, state(one, idin) * 1e-3) / 16.d0  ! N->P Redfield
-        REcoM_O2   = max(tiny * 1e-3, state(one, ioxy) * 1e-3)
+        ! Top wet level of the column (nzmin > 1 under ice shelves)
+
+        REcoM_DIC  = max(tiny * 1e-3, state(nzmin, idic) * 1e-3) ! mmol/m3 -> mol/m3
+        REcoM_Alk  = max(tiny * 1e-3, state(nzmin, ialk) * 1e-3)
+        REcoM_Si   = max(tiny * 1e-3, state(nzmin, isi)  * 1e-3)
+        REcoM_Phos = max(tiny * 1e-3, state(nzmin, idin) * 1e-3) / 16.d0  ! N->P Redfield
+        REcoM_O2   = max(tiny * 1e-3, state(nzmin, ioxy) * 1e-3)
 
         !!---- minimum set to 2 degC: K1/K2 Lueker valid between 2degC-35degC and 19-43psu
         REcoM_T = max(2.d0, Temp(nzmin))
@@ -209,7 +211,7 @@ contains
 
         ! Guard against unphysical DIC (indicates upstream tracer corruption)
         if (REcoM_DIC(1) > 10.d0) then  ! > 10 mol/m3 = 10000 mmol/m3
-            print *, 'error: DIC out of range at n=', n
+            print *, 'error: DIC out of range at n=', n, ' mype=', mype, ' mstep=', mstep
             print *, '  nzmin, depth   =', nzmin, zF(nzmin)
             print *, '  DIC   [mol/m3] =', REcoM_DIC
             print *, '  Alk   [mol/m3] =', REcoM_Alk
