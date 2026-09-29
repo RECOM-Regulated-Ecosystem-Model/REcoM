@@ -1181,7 +1181,7 @@ contains
     ! after the optional age tracer.
     ! ==============================================================================
     subroutine validate_recom_tracers(num_tracers, use_age_tracer, use_transit, l_sf6, l_f11, l_f12&
-            , l_r14c, l_r39ar, mype)
+            , l_r14c, l_r39ar, mype, ciso_ids)
         use mpi, only: MPI_Abort, MPI_COMM_WORLD
 
         implicit none
@@ -1190,6 +1190,7 @@ contains
         integer, intent(in) :: num_tracers ! Total number of tracers from namelist
         logical, intent(in) :: use_age_tracer, use_transit, l_sf6, l_f11, l_f12, l_r14c, l_r39ar
         integer, intent(in) :: mype ! MPI rank
+        integer, intent(in) :: ciso_ids(:)       ! carbon-isotope IDs, empty if ciso off
 
         ! Local variables
         integer :: expected_bgc_num
@@ -1209,6 +1210,7 @@ contains
         integer :: slot ! running slot index when building expected_ids
 
         integer, parameter :: n_base_physical = 2   ! T (id=1), S (id=2)
+        integer :: n_ciso
 
         ! ---- count active transit tracers -----------------------------------------
         n_transit_tracers = 0
@@ -1277,6 +1279,10 @@ contains
             expected_bgc_num = 23
 
         end if
+
+        ! Carbon-isotope tracers follow DICremin in every configuration
+        n_ciso = size(ciso_ids)
+        expected_bgc_num = expected_bgc_num + n_ciso
 
         !   T, S  +  BGC  +  age (opt)  +  transit (opt)
         expected_total_tracers = n_base_physical + expected_bgc_num
@@ -1354,6 +1360,11 @@ contains
 
         end if
 
+        ! ---- Carbon-isotope tracers: right after DICremin ------------------------
+        if (n_ciso > 0) then
+            expected_tracer_ids(n_base_physical + expected_bgc_num - n_ciso + 1 : &
+                                n_base_physical + expected_bgc_num) = ciso_ids
+        end if
         ! ---- Age tracer (ID=100): appended immediately after the last BGC slot -----
         slot = n_base_physical + expected_bgc_num + 1
         if (use_age_tracer) then
@@ -1408,6 +1419,7 @@ contains
             write(*, *) ''
             write(*, *) 'Tracer counts:'
             write(*, *) '  Physical tracers (T, S)           = ', n_base_physical
+            write(*, *) '  Carbon-isotope tracers (ciso)     = ', n_ciso
             write(*, *) '  Age tracer  (ID=100)               = ', merge(1, 0, use_age_tracer)
             write(*, *) '  Transit tracers                    = ', n_transit_tracers
             write(*, *) '  Expected BGC tracers              = ', expected_bgc_num
@@ -1650,7 +1662,7 @@ contains
     ! mirroring the append order in tracer_init.
     ! ==============================================================================
     subroutine validate_tracer_id_sequence(tracer_ids, num_tracers, use_age_tracer, use_transit, &
-            l_sf6, l_f11, l_f12, l_r14c, l_r39ar, mype)
+            l_sf6, l_f11, l_f12, l_r14c, l_r39ar, mype, ciso_ids)
         use mpi, only: MPI_Abort, MPI_COMM_WORLD
 
         implicit none
@@ -1660,6 +1672,7 @@ contains
         integer, intent(in) :: num_tracers ! Number of tracers
         logical, intent(in) :: use_age_tracer, use_transit, l_sf6, l_f11, l_f12, l_r14c, l_r39ar
         integer, intent(in) :: mype ! MPI rank
+        integer, intent(in) :: ciso_ids(:)       ! carbon-isotope IDs, empty if ciso off
 
         ! Local variables
         integer :: i, j
@@ -1671,6 +1684,7 @@ contains
         integer :: slot                    ! running slot for age + transit tail
         integer :: n_transit_tracers       ! number of active transit tracers
         integer, parameter :: n_base_physical = 2   ! T (id=1), S (id=2)
+        integer :: n_ciso
 
         error_found = .false.
         duplicate_found = .false.
@@ -1689,6 +1703,9 @@ contains
             ! Additional DICremin: 1 tracer (1037)
             bgc_num_local = 23
         end if
+
+        n_ciso = size(ciso_ids)
+        bgc_num_local = bgc_num_local + n_ciso
 
         ! Allocate expected IDs array
         allocate(expected_ids(num_tracers))
@@ -1722,6 +1739,12 @@ contains
         else
             ! Base configuration
             expected_ids(n_base_physical+23)    = 1037 ! DICremin
+        end if
+
+        ! ---- carbon-isotope tracers, right after DICremin ---------------------------
+        if (n_ciso > 0) then
+            expected_ids(n_base_physical + bgc_num_local - n_ciso + 1 : &
+                         n_base_physical + bgc_num_local) = ciso_ids
         end if
 
         ! ---- age tracer (running slot, right after BGC) ----------------------------
