@@ -166,7 +166,7 @@ contains
         real(kind=WP), intent(in), dimension(:) :: u_wind, v_wind, shortwave
         real(kind=WP), intent(in), dimension(:, :) :: hnode, z_3d_n, zbar_3d_n
         real(kind=WP), intent(in), dimension(:, :) :: geo_coord_nod2D, areasvol
-        real(kind=WP), intent(inout), dimension(:, :, :) :: tra_recom_sms
+        real(kind=WP), intent(inout), dimension(:, :, :), optional :: tra_recom_sms
         logical, intent(in) :: use_age_tracer, use_transit, l_sf6, l_f11, l_f12, l_r14c, l_r39ar
 
         ! These should all go into a dedicated REcoM type
@@ -176,6 +176,7 @@ contains
         integer, intent(inout), dimension(:) :: requests
         integer, intent(in), dimension(:), pointer :: s_mpitype_nod2D, r_mpitype_nod2D
         integer, intent(in), dimension(:, :, :), pointer :: s_mpitype_nod3D, r_mpitype_nod3D
+        logical :: do_sms_diag   ! tra_recom_sms is present (allocated by FESOM)
 
         type(tracers_info_type), intent(in) :: tracers_info
 
@@ -242,6 +243,9 @@ contains
         allocate(CO3_watercolumn(nl - 1), OmegaC_watercolumn(nl - 1), kspc_watercolumn(nl - 1), &
                 rhoSW_watercolumn(nl - 1))
 
+        do_sms_diag = present(tra_recom_sms)
+
+        C = 0.0_WP
         num_physical_tracers = 2
 
         n_transit_tracers = 0
@@ -414,7 +418,7 @@ contains
             Temp(nzmin:nzmax) = tracers_info%data_pointers(1)%tracer_data(nzmin:nzmax, n)
 
             !!---- Surface salinity
-            Sali = tracers_info%data_pointers(2)%tracer_data(1, n)
+            Sali = tracers_info%data_pointers(2)%tracer_data(nzmin, n)
             Sali_depth(nzmin:nzmax) = tracers_info%data_pointers(2)%tracer_data(nzmin:nzmax, n)
 
             !-----------------------------------------------------------------------
@@ -441,12 +445,15 @@ contains
             !-----------------------------------------------------------------------
             ttf_rhs_bak = 0.0
 
-            do tr_num = 1, num_tracers   !!!!! Check OG
-                if (tracers_info%ltra_diag(tr_num)) then
-                    ttf_rhs_bak(1:nzmax, tr_num) = &
-                            tracers_info%data_pointers(tr_num)%tracer_data(1:nzmax, n)
-                end if
-            end do
+            if (do_sms_diag) then
+                ttf_rhs_bak = 0.0_WP
+                do tr_num = 1, num_tracers   !!!!! Check OG
+                    if (tracers_info%ltra_diag(tr_num)) then
+                        ttf_rhs_bak(1:nzmax, tr_num) = &
+                                tracers_info%data_pointers(tr_num)%tracer_data(1:nzmax, n)
+                    end if
+                end do
+            end if
 
             !!---- Depth of the nodes in the water column
             zr(1:nzmax) = Z_3d_n(1:nzmax, n)
@@ -503,16 +510,16 @@ contains
             !-----------------------------------------------------------------------
             ! Sources-minus-sinks (SMS) tendency for diagnostic tracers
             !-----------------------------------------------------------------------
-            do tr_num = 1, num_tracers
-                if (tracers_info%ltra_diag(tr_num)) then
-                    tra_recom_sms(1:nzmax, n, tr_num) = &
-                            tracers_info%data_pointers(tr_num)%tracer_data(1:nzmax, n) &
-                            - ttf_rhs_bak(1:nzmax, tr_num)
-                    !if (mype==0)  print *,  tra_recom_sms(:,:,tr_num)
-                end if
-
-            end do
-
+            if (do_sms_diag) then
+                do tr_num = 1, num_tracers
+                    if (tracers_info%ltra_diag(tr_num)) then
+                        tra_recom_sms(1:nzmax, n, tr_num) = &
+                                tracers_info%data_pointers(tr_num)%tracer_data(1:nzmax, n) &
+                                - ttf_rhs_bak(1:nzmax, tr_num)
+                        !if (mype==0)  print *,  tra_recom_sms(:,:,tr_num)
+                    end if
+                end do
+            end if
             !-----------------------------------------------------------------------
             ! Store updated benthic state and decay rates
             !-----------------------------------------------------------------------
