@@ -18,6 +18,9 @@ file(GLOB_RECURSE SOURCES "*.?90")
 # sinking tracers, and the Benthos_tr cross-group merge that was supposed to
 # fill in the rest never receives anything to merge).
 add_compile_definitions(__recom __usetp)
+if(OIFS_COUPLED)
+    add_compile_definitions(__oifs)
+endif()
 
 # Create the target library for REcoM and add its dependencies
 add_library(recom STATIC ${SOURCES})
