@@ -185,6 +185,8 @@ contains
         real(kind=wp) :: recip_res_het
         real(kind=wp) :: Sink_Vel
         real(kind=wp) :: aux
+        real(kind=wp) :: lightlim
+
         integer :: k, step
 
         real(kind=wp) :: Patm_depth(1)
@@ -839,26 +841,36 @@ contains
                 !-------------------------------------------------------------------------------
                 ! Small Phytoplankton and Diatom Photosynthesis
                 !-------------------------------------------------------------------------------
-                call calculate_photosynthesis_rate(pMax, PARave, Chl2C, PhyCO2, alfa, Cphot, &
-                        VTCphotLigLim_phyto(k))
+                call calculate_photosynthesis_rate(pMax, PARave, Chl2C, PhyCO2, alfa, Cphot, lightlim) !VTCphotLigLim_phyto(k))
+                if (Diags) then
+                    VTCphotLigLim_phyto(k) = lightlim
+                    VTCphot_phyto(k)       = Cphot
+                end if
+
                 call calculate_photosynthesis_rate(pMax_dia, PARave, Chl2C_dia, DiaCO2, &
-                        alfa_d, Cphot_dia, VTCphotLigLim_diatoms(k))
-                !! Store photosynthesis rate for diagnostics and output
-                VTCphot_phyto(k) = Cphot
-                VTCphot_diatoms(k) = Cphot_dia
+                        alfa_d, Cphot_dia, lightlim) !VTCphotLigLim_diatoms(k))
+                if (Diags) then
+                    VTCphotLigLim_diatoms(k) = lightlim
+                    VTCphot_diatoms(k)       = Cphot_dia
+                end if
 
                 if (enable_coccos) then
                     !-------------------------------------------------------------------------------
                     ! Coccolithophore and Phaeocystis Photosynthesis (Optional)
                     !-------------------------------------------------------------------------------
                     call calculate_photosynthesis_rate(pMax_cocco, PARave, Chl2C_cocco, CoccoCO2, &
-                            alfa_c, Cphot_cocco, VTCphotLigLim_cocco(k))
-                    call calculate_photosynthesis_rate(pMax_phaeo, PARave, Chl2C_phaeo, PhaeoCO2, &
-                            alfa_p, Cphot_phaeo, VTCphotLigLim_phaeo(k))
+                            alfa_c, Cphot_cocco, lightlim) !VTCphotLigLim_cocco(k))
+                    if (Diags) then
+                        VTCphotLigLim_cocco(k) = lightlim
+                        VTCphot_cocco(k)       = Cphot_cocco
+                    end if
 
-                    !! Store photosynthesis rate for diagnostics and output
-                    VTCphot_cocco(k) = Cphot_cocco
-                    VTCphot_phaeo(k) = Cphot_phaeo
+                    call calculate_photosynthesis_rate(pMax_phaeo, PARave, Chl2C_phaeo, PhaeoCO2, &
+                            alfa_p, Cphot_phaeo, lightlim) !VTCphotLigLim_phaeo(k))
+                    if (Diags) then
+                        VTCphotLigLim_phaeo(k) = lightlim
+                        VTCphot_phaeo(k)       = Cphot_phaeo
+                    end if
                 end if
 
                 !===============================================================================
@@ -1090,7 +1102,7 @@ contains
                     ! Alternative formulation with temperature dependence
                     Si_assim = V_cm_fact_d * Temp_diatoms * SiCUptakeRatio * limitFacSi * &
                             Si / (Si + k_si)
-                    VTSi_assimDia(k) = Si_assim
+                    if (Diags) VTSi_assimDia(k) = Si_assim
                 end if
 
                 !===============================================================================
@@ -3852,7 +3864,7 @@ contains
         use recom_config, only: a_co2_cocco, a_co2_dia, a_co2_phaeo, a_co2_phy, &
                 b_co2_cocco, b_co2_dia, b_co2_phaeo, b_co2_phy, c_co2_cocco, c_co2_dia, &
                 c_co2_phaeo, c_co2_phy, cunits, d_co2_cocco, d_co2_dia, d_co2_phaeo, &
-                d_co2_phy, enable_coccos
+                d_co2_phy, enable_coccos, diags
 
         implicit none
 
@@ -3916,7 +3928,7 @@ contains
         PhyCO2 = max(0.d0, PhyCO2) ! Lower limit: prevent negative growth response
 
         ! Store for diagnostics and output
-        VTPhyCO2(k) = PhyCO2
+        if (Diags) VTPhyCO2(k) = PhyCO2
 
         !-------------------------------------------------------------------------------
         ! Diatoms CO2 Response
@@ -3934,7 +3946,7 @@ contains
         DiaCO2 = max(0.d0, DiaCO2) ! Lower limit: no negative effect
 
         ! Store for diagnostics
-        VTDiaCO2(k) = DiaCO2
+        if (Diags) VTDiaCO2(k) = DiaCO2
 
         if (enable_coccos) then
 
@@ -3955,7 +3967,7 @@ contains
             CoccoCO2 = max(0.d0, CoccoCO2) ! Lower limit: no negative effect
 
             ! Store for diagnostics
-            VTCoccoCO2(k) = CoccoCO2
+            if (Diags) VTCoccoCO2(k) = CoccoCO2
 
             !---------------------------------------------------------------------------
             ! Phaeocystis CO2 Response
@@ -3973,7 +3985,7 @@ contains
             PhaeoCO2 = max(0.d0, PhaeoCO2) ! Lower limit: no negative effect
 
             ! Store for diagnostics
-            VTPhaeoCO2(k) = PhaeoCO2
+            if (Diags) VTPhaeoCO2(k) = PhaeoCO2
 
         end if
     end subroutine calculate_phytoplankton_co2_effects
@@ -4036,6 +4048,7 @@ contains
                 ieee_is_nan(layer_available_radiation) .or. &
                 ieee_is_nan(chlorophyll_carbon_quota)) then
             photosynthesis_rate = zero
+            light_limitation_factor = zero
         else
             ! Calculate photosynthesis using exponential P-I curve
             ! Model saturates at high light (no photoinhibition)

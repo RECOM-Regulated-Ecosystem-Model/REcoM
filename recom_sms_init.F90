@@ -32,7 +32,7 @@ contains
                 ncmax_d, ncmax_p, ncmin, ncmin_c, ncmin_d, ncmin_p, o2dep_remin, one, ord_cocco, &
                 recom_tref, res_het, sicmax, t1_zoo2, t2_zoo2, t3_zoo2, t4_zoo2, tiny, tiny_chl, &
                 tiny_het, tmax_phaeo, topt_phaeo, uopt_phaeo, ciso, idetsi, reminsi, zero, &
-                iphycal, ord_d, ord_phy
+                iphycal, ord_d, ord_phy, diags
 
         use recoM_ciso, only: alpha_dcal_13, alpha_dcal_14, calc_diss_13, calc_diss_14, ciso_14, &
                 ciso_organic_14, detc_13, detc_14, detcalc_13, detcalc_14, diac_13, diac_14, &
@@ -757,7 +757,7 @@ contains
             ! Monotonic increase with temperature (no upper limit in this formulation)
 
             Temp_phyto = exp(ord_phy + expon_phy * Temp(k))
-            VTTemp_phyto(k) = Temp_phyto ! Store for diagnostics
+            if (Diags) VTTemp_phyto(k) = Temp_phyto ! Store for diagnostics
 
             !---------------------------------------------------------------------------
             ! Diatoms
@@ -767,7 +767,7 @@ contains
             ! Generally favored by cooler, nutrient-rich conditions
 
             Temp_diatoms = exp(ord_d + expon_d * Temp(k))
-            VTTemp_diatoms(k) = Temp_diatoms ! Store for diagnostics
+            if (Diags) VTTemp_diatoms(k) = Temp_diatoms ! Store for diagnostics
 
             !---------------------------------------------------------------------------
             ! Coccolithophores
@@ -786,7 +786,7 @@ contains
                 Temp_cocco = exp(ord_cocco + expon_cocco * Temp(k))
                 Temp_cocco = max(Temp_cocco, tiny) ! Ensure positive values
             end if
-            VTTemp_cocco(k) = Temp_cocco ! Store for diagnostics
+            if (Diags) VTTemp_cocco(k) = Temp_cocco ! Store for diagnostics
 
             !---------------------------------------------------------------------------
             ! Phaeocystis
@@ -811,7 +811,7 @@ contains
                     * ((Tmax_phaeo - Temp(k)) / (Tmax_phaeo - Topt_phaeo)) ** beta_phaeo &
                     * exp(-beta_phaeo * (Topt_phaeo - Temp(k)) / (Tmax_phaeo - Topt_phaeo))
             Temp_phaeo = max(Temp_phaeo, tiny) ! Ensure positive values
-            VTTemp_phaeo(k) = Temp_phaeo ! Store for diagnostics
+            if (Diags) VTTemp_phaeo(k) = Temp_phaeo ! Store for diagnostics
 
         end if
 

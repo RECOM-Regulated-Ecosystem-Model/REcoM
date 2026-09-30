@@ -56,8 +56,8 @@ contains
         use recom_glovar, only: Benthos, Benthos_tr, SinkFlx, SinkFlx_tr
 
         use recom_config, only: allow_var_sinking, benthos_num, bottflx_num, ciso, Vdet, VPhy, &
-            VDia, VDet_zoo2, enable_3zoo2det, use_MEDUSA, sedflx_num, recom_det_tracer_id, &
-            recom_phy_tracer_id, recom_dia_tracer_id, SecondsPerDay, vdet_a
+            VDia, VDet_zoo2, VCocco, VPhaeo, enable_3zoo2det, enable_coccos, use_MEDUSA, sedflx_num, recom_det_tracer_id, &
+            recom_phy_tracer_id, recom_dia_tracer_id, recom_cocco_tracer_id, recom_phaeo_tracer_id, SecondsPerDay, vdet_a
 
         use recom_ciso, only: ciso_organic_14
 
@@ -110,6 +110,14 @@ contains
             if (any(recom_det_tracer_id == tracer_id)) Vben = Vdet
             if (any(recom_phy_tracer_id == tracer_id)) Vben = VPhy
             if (any(recom_dia_tracer_id == tracer_id)) Vben = VDia
+            if (enable_coccos) then
+                if (any(recom_cocco_tracer_id == tracer_id)) Vben = VCocco
+                if (any(recom_phaeo_tracer_id == tracer_id)) Vben = VPhaeo
+                ! PhyCalc (1020) is in recom_phy_tracer_id, so it gets VPhy above.
+                ! With coccos on, ver_sinking_recom sinks it at VCocco; match that
+                ! here so calcite leaves the bottom cell at the rate it arrives.
+                if (tracer_id == tracer_ids%phytoplankton_calcite) Vben = VCocco
+            end if
             if (allow_var_sinking) then
                 Vben = Vdet_a * abs(zbar_3d_n(:, n)) + Vben
             end if
@@ -208,6 +216,8 @@ contains
             if (tracer_id == tracer_ids%phytoplankton_nitrogen .or. & !iphyn
                 tracer_id == tracer_ids%detrital_nitrogen .or. & !idetn
                 tracer_id == tracer_ids%diatom_nitrogen .or. & !idian
+                tracer_id == tracer_ids%coccolithophore_nitrogen .or. & !icocn
+                tracer_id == tracer_ids%phaeocystis_nitrogen .or. & !iphan
                 tracer_id == tracer_ids%macrozooplankton_detrital_nitrogen) then !idetz2n
 #if defined(__usetp)
                 Benthos_tr(n, 1, tr_num) = Benthos_tr(n, 1, tr_num) + add_benthos_2d(n) ![mmol/m2]
@@ -231,6 +241,8 @@ contains
             if (tracer_id == tracer_ids%phytoplankton_carbon .or. & !iphyc
                 tracer_id == tracer_ids%detrital_carbon .or. & !idetc
                 tracer_id == tracer_ids%diatom_carbon .or. & !idiac
+                tracer_id == tracer_ids%coccolithophore_carbon .or. & !icocc
+                tracer_id == tracer_ids%phaeocystis_carbon .or. & !iphac
                 tracer_id == tracer_ids%macrozooplankton_detrital_carbon) then !idetz2c
 #if defined(__usetp)
                 Benthos_tr(n, 2, tr_num) = Benthos_tr(n, 2, tr_num) + add_benthos_2d(n)

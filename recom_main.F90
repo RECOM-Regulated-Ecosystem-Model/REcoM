@@ -354,8 +354,12 @@ contains
             ULoc = sqrt(u_wind(n) ** 2 + v_wind(n) ** 2)
 #endif
 
-            !!---- Atmospheric CO2 in LocVar
-            LocAtmCO2 = AtmCO2(month)
+
+#if defined(__oifs)
+                LocAtmCO2 = x_co2atm(n)        ! ppm, received from OpenIFS
+#else
+                LocAtmCO2 = AtmCO2(month)      ! ppm, prescribed (standalone)
+#endif
 
             ! Update of prognostic atmospheric CO2 values
             if (use_atbox) then
@@ -375,7 +379,6 @@ contains
                         LocAtmCO2_14 = AtmCO2_14(lat_zone(lat_val), month)
                     end if
                 end if
-                LocAtmCO2 = x_co2atm(n) ! ppm; from oifs
             end if ! use_atbox
 
             if (ciso) then
