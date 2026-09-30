@@ -164,11 +164,11 @@ contains
         !   We clamp to [2, 40] deg C and [21, 43] to avoid extrapolation errors,
         !   including in near-freezing, low-salinity, high-ice-cover cells.
         !---------------------------------------------------------------------------
-        REcoM_DIC  = max(tiny * 1e-3, state(one, idic) * 1e-3) ! mmol/m3 -> mol/m3
-        REcoM_Alk  = max(tiny * 1e-3, state(one, ialk) * 1e-3)
-        REcoM_Si   = max(tiny * 1e-3, state(one, isi)  * 1e-3)
-        REcoM_Phos = max(tiny * 1e-3, state(one, idin) * 1e-3) / 16.d0  ! N->P Redfield
-        REcoM_O2   = max(tiny * 1e-3, state(one, ioxy) * 1e-3)
+        REcoM_DIC  = max(tiny * 1e-3, state(nzmin, idic) * 1e-3) ! mmol/m3 -> mol/m3
+        REcoM_Alk  = max(tiny * 1e-3, state(nzmin, ialk) * 1e-3)
+        REcoM_Si   = max(tiny * 1e-3, state(nzmin, isi)  * 1e-3)
+        REcoM_Phos = max(tiny * 1e-3, state(nzmin, idin) * 1e-3) / 16.d0  ! N->P Redfield
+        REcoM_O2   = max(tiny * 1e-3, state(nzmin, ioxy) * 1e-3)
 
         !!---- minimum set to 2 degC: K1/K2 Lueker valid between 2degC-35degC and 19-43psu
         REcoM_T = max(2.d0, Temp(nzmin))
