@@ -3702,7 +3702,6 @@ contains
                             ' (cavity=', (nzmin > 1), ')  mstep=', mstep
                     print *, '  lat, lon               =', Latd(1), geo_coord_nod2D(1, n) * rad2deg_diag
                     print *, '  LocBenthos(3) [assumed mmolSi/m2] =', LocBenthos(3)
-                    print *, '  decayRateBenSi [1/d]    =', decayRateBenSi
                     print *, '  decayBenthos(3) [assumed mmolSi/m2/d] =', decayBenthos(3)
                 end if
 
