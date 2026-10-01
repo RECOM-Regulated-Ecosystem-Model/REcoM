@@ -383,6 +383,11 @@ contains
                         LocAtmCO2_14 = AtmCO2_14(lat_zone(lat_val), month)
                     end if
                 end if
+#if !defined(__oifs)
+                ! standalone: keep the xCO2atm output meaningful (prescribed AtmCO2(month)
+                ! instead of the never-filled 0); coupled runs receive x_co2atm from OpenIFS
+                x_co2atm(n) = LocAtmCO2(1)
+#endif
             end if ! use_atbox
 
             if (ciso) then

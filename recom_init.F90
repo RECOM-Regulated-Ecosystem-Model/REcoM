@@ -223,11 +223,7 @@ contains
         allocate(decayBenthos(benthos_num), source=0.d0)
         allocate(PAR3D(nl - 1, node_size), source=0.d0)
 
-        if (use_atbox) then
-            allocate(x_co2atm(1), source=0.d0)
-        else
-            allocate(x_co2atm(node_size), source=0.d0)
-        end if
+        if (.not. use_atbox) allocate(x_co2atm(node_size), source=0.d0) ! use_atbox: allocated in initialize_ciso
 
         if (Diags) then
             !! *** Allocate 2D diagnostics ***
