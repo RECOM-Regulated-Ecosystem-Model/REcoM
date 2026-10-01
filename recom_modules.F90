@@ -580,6 +580,9 @@ module recom_config
 
     integer :: bottflx_num = 4
     logical :: use_atbox = .false. ! switch for atmospheric box model for CO2
+    ! linfs only: virtual freshwater fluxes C(top wet layer)*water_flux of DIN, DIC, Alk,
+    ! DSi, Fe and O2, globally balanced as virtual_salt (as in FESOM 1.4)
+    logical :: use_virt_tracers = .false.
 
     namelist /pavariables/ use_REcoM, REcoM_restart, &
             bgc_num, diags3d_num, bgc_base_num, &
@@ -603,7 +606,7 @@ module recom_config
             currentCO2cycle, DIC_PI, Nmocsy, &
             recom_debug, ciso, benthos_num, &
             use_MEDUSA, sedflx_num, bottflx_num, &
-            add_loopback, lb_tscale, use_atbox
+            add_loopback, lb_tscale, use_atbox, use_virt_tracers
 
     !!------------------------------------------------------------------------------
     !! *** Sinking ***
@@ -2119,6 +2122,9 @@ module REcoM_GloVar
     real(kind=wp), allocatable, dimension(:) :: Alk_surf
     real(kind=wp), allocatable, dimension(:) :: relax_alk
     real(kind=wp), allocatable, dimension(:) :: virtual_alk
+    ! virtual freshwater fluxes (linfs, use_virt_tracers) [mmol/m2/s], see oce_fluxes
+    real(kind=wp), allocatable, dimension(:) :: virtual_din, virtual_dic, virtual_dsi, &
+            virtual_dfe, virtual_oxy
 
     ! Light in the water column [nl-1 n2d]
     real(kind=wp), allocatable, dimension(:, :) :: PAR3D

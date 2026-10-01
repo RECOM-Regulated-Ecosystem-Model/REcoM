@@ -147,6 +147,7 @@ contains
         use recom_glovar, only: GloFeDust, AtmFeInput, GloNDust, AtmNInput, RiverDIN2D, &
                 RiverDON2D, RiverDOC2D, RiverDSi2D, RiverDIC2D, RiverAlk2D, RiverFe, &
                 ErosionTON2D, ErosionTOC2D, ErosionTSi2D, relax_alk, virtual_alk, cosAI, &
+                virtual_din, virtual_dic, virtual_dsi, virtual_dfe, virtual_oxy, &
                 GloPCO2surf, GloCO2flux, GloO2flux, GloCO2flux_seaicemask, GloO2flux_seaicemask, &
                 GlodPCO2surf, DenitBen, PistonVelocity, alphaCO2, GlodecayBenthos, Benthos, &
                 Benthos_tr, GloHplus, PAR3D, NPPn, NPPd, NPPc, NPPp, GPPn, GPPd, GPPc, GPPp, &
@@ -199,6 +200,11 @@ contains
         !! * Alkalinity restoring to climatology *
         allocate(relax_alk(node_size), source=0.d0)
         allocate(virtual_alk(node_size), source=0.d0)
+        allocate(virtual_din(node_size), source=0.d0)
+        allocate(virtual_dic(node_size), source=0.d0)
+        allocate(virtual_dsi(node_size), source=0.d0)
+        allocate(virtual_dfe(node_size), source=0.d0)
+        allocate(virtual_oxy(node_size), source=0.d0)
 
         allocate(cosAI(node_size), source=0.d0)
         allocate(GloPCO2surf(node_size), source=0.d0)
