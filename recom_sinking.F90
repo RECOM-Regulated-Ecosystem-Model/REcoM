@@ -310,6 +310,10 @@ contains
                         tracer_id == 1314) then !idiac_13
 
 #if defined(__usetp)
+                    ! kh 25.03.22 buffer sums per tracer index to avoid non bit identical
+                    ! results regarding global sums when running the tracer loop in parallel;
+                    ! summed into Benthos across tr_num by oce_ale_tracer.F90 after the
+                    ! tracer loop
                     Benthos_tr(n, 5, tr_num) = Benthos_tr(n, 5, tr_num) + add_benthos_2d(n)
 
                     if (use_MEDUSA) then
@@ -329,6 +333,10 @@ contains
                         tracer_id == 1321) then !idetcal_13
 
 #if defined(__usetp)
+                    ! kh 25.03.22 buffer sums per tracer index to avoid non bit identical
+                    ! results regarding global sums when running the tracer loop in parallel;
+                    ! summed into Benthos across tr_num by oce_ale_tracer.F90 after the
+                    ! tracer loop
                     Benthos_tr(n, 6, tr_num) = Benthos_tr(n, 6, tr_num) + add_benthos_2d(n)
 
                     if (use_MEDUSA) then
@@ -396,6 +404,8 @@ contains
         if (use_MEDUSA) then
             do n = 1, bottflx_num
 #if defined(__usetp)
+                ! kh 25.03.22 buffer sums per tracer index to avoid non bit identical results
+                ! regarding global sums when running the tracer loop in parallel
                 call recom_exchange_nod(SinkFlx_tr(:, n, tr_num), npes, sn, rn, MPI_COMM_FESOM, &
                         mype, s_mpitype_nod2D, r_mpitype_nod2D, sPE, rPE, requests, nreq)
 #else
