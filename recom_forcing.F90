@@ -58,6 +58,7 @@ contains
         use recom_extra, only: cobeta, depth_calculations
         use recom_sms_module, only: recom_sms
         use gasx, only: scco2, flxco2, pistonvel, o2flux
+        use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
 
         implicit none
 
@@ -164,6 +165,7 @@ contains
         !   We clamp to [2, 40] deg C and [21, 43] to avoid extrapolation errors,
         !   including in near-freezing, low-salinity, high-ice-cover cells.
         !---------------------------------------------------------------------------
+        ! nzmin, not level 1: at cavity nodes level 1 is inside the ice shelf and not set in `state`
         REcoM_DIC  = max(tiny * 1e-3, state(nzmin, idic) * 1e-3) ! mmol/m3 -> mol/m3
         REcoM_Alk  = max(tiny * 1e-3, state(nzmin, ialk) * 1e-3)
         REcoM_Si   = max(tiny * 1e-3, state(nzmin, isi)  * 1e-3)
@@ -269,15 +271,17 @@ contains
             dflux              = co2flux * 1.e3 * SecondsPerDay  ! mol/m2/s -> mmol/m2/d
             co2flux_seaicemask = co2flux * 1.e3                  ! mol/m2/s -> mmol/m2/s
         else  ! cavity - no atmosphere above
-            dflux              = 0.0_WP
+            ! NaN as fill value for output/diagnostic quantities; the flux that enters
+            ! the DIC boundary condition, the coupling and the atmosphere box stays 0
             co2flux_seaicemask = 0.0_WP
-            pco2surf = 0.0_WP
-            dpco2surf = 0.0_WP
-            ph = 0.0_WP
-            kw660 = 0.0_WP
-            K0 = 0.0_WP
-            omegaC = 0.0_WP
-            omegaA = 0.0_WP
+            dflux     = ieee_value(0.0_WP, ieee_quiet_nan)
+            pco2surf  = ieee_value(0.0_WP, ieee_quiet_nan)
+            dpco2surf = ieee_value(0.0_WP, ieee_quiet_nan)
+            ph        = ieee_value(0.0_WP, ieee_quiet_nan)
+            kw660     = ieee_value(0.0_WP, ieee_quiet_nan)
+            K0        = ieee_value(0.0_WP, ieee_quiet_nan)
+            omegaC    = ieee_value(0.0_WP, ieee_quiet_nan)
+            omegaA    = ieee_value(0.0_WP, ieee_quiet_nan)
         end if
  
         !---------------------------------------------------------------------------
@@ -289,8 +293,8 @@ contains
             call o2flux(REcoM_T, REcoM_S, kw660, ppo, REcoM_O2, Nmocsy, o2ex)
             oflux              = o2ex * 1.e3 * SecondsPerDay  ! mol/m2/s -> mmol/m2/d
             o2flux_seaicemask  = o2ex * 1.e3                  ! mol/m2/s -> mmol/m2/s
-        else
-            oflux              = 0.0_WP
+        else  ! cavity: NaN fill for the output flux; the O2 boundary-condition flux stays 0
+            oflux              = ieee_value(0.0_WP, ieee_quiet_nan)
             o2flux_seaicemask  = 0.0_WP
         end if
 
