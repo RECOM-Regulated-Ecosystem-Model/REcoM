@@ -129,23 +129,8 @@ contains
         real(kind=wp), dimension(nl - 1) :: thick      ! Layer thickness [m]
         real(kind=wp), dimension(nl - 1) :: recipthick ! 1/thick [1/m]
 
-        !---------------------------------------------------------------------------
-        ! Threshold concentrations derived from config parameters
-        !   tiny_X = minimum meaningful concentration for species X, used as lower
-        !   bound after the SMS update and as a near-zero guard in ratio calculations.
-        !---------------------------------------------------------------------------
-        tiny_N   = tiny_chl / chl2N_max    ! [mmol N/m3]  small phytoplankton N
-        tiny_N_d = tiny_chl / chl2N_max_d  ! [mmol N/m3]  diatom N
-        tiny_C   = tiny_N   / NCmax        ! [mmol C/m3]  small phytoplankton C
-        tiny_C_d = tiny_N_d / NCmax_d      ! [mmol C/m3]  diatom C
-        tiny_Si  = tiny_C_d / SiCmax       ! [mmol Si/m3] diatom Si
-
-        if (enable_coccos) then
-            tiny_N_c = tiny_chl / chl2N_max_c  ! [mmol N/m3]  coccolithophore N
-            tiny_C_c = tiny_N_c / NCmax_c      ! [mmol C/m3]  coccolithophore C
-            tiny_N_p = tiny_chl / chl2N_max_p  ! [mmol N/m3]  phaeocystis N
-            tiny_C_p = tiny_N_p / NCmax_p      ! [mmol C/m3]  phaeocystis C
-        end if
+        ! tiny_N, tiny_C, tiny_N_d, tiny_C_d, tiny_Si (and cocco/phaeo): lower bounds after the
+        ! SMS update, computed once in initialize_tiny_thresholds (recom_init.F90)
 
         !---------------------------------------------------------------------------
         ! Grid geometry for this column
