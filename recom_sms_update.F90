@@ -1454,7 +1454,7 @@ contains
                 !-----------------------------------------------------------------------
                 ! Net flux = Total grazing - Assimilated portion
                 ! Small phytoplankton
-                        +grazingFlux_phy3 - grazingFlux_phy3 * grazEff3 &
+                        + grazingFlux_phy3 - grazingFlux_phy3 * grazEff3 &
                         + grazingFlux_dia3 - grazingFlux_dia3 * grazEff3 & ! Diatoms
 
                 ! Coccolithophores
@@ -1529,7 +1529,7 @@ contains
                 ! SOURCES: Direct Transfer from Grazing
                 !-----------------------------------------------------------------------
                 ! All grazed material enters detritus (no detritus grazing)
-                        +grazingFlux_phy3 & ! Microzooplankton->small phyto
+                        + grazingFlux_phy3 & ! Microzooplankton->small phyto
                         + grazingFlux_dia3 & ! Microzooplankton->diatoms
                         + grazingFlux_Cocco3 * is_coccos & ! Microzooplankton->coccoliths
                         + grazingFlux_Phaeo3 * is_coccos & ! Microzooplankton->Phaeocystis
@@ -1547,7 +1547,7 @@ contains
                 !-----------------------------------------------------------------------
                 ! SINKS: Generic Zooplankton Consumption
                 !-----------------------------------------------------------------------
-                        - grazingFlux * grazEff3 &
+                        - grazingFlux3 * grazEff3 &
                 !-----------------------------------------------------------------------
                 ! SINKS: Remineralization
                 !-----------------------------------------------------------------------
@@ -1635,7 +1635,7 @@ contains
                 !-----------------------------------------------------------------------
                 ! SOURCES: Sloppy Feeding by Microzooplankton (C-basis)
                 !-----------------------------------------------------------------------
-                        +grazingFlux_phy3 * recipQuota * (1.d0 - grazEff3) & ! Small phyto
+                        + grazingFlux_phy3 * recipQuota * (1.d0 - grazEff3) & ! Small phyto
                         + grazingFlux_Dia3 * recipQuota_Dia * (1.d0 - grazEff3) & ! Diatoms
                         + grazingFlux_Cocco3 * recipQuota_Cocco * (1.d0 - grazEff3) * &
                         is_coccos & ! Coccoliths
@@ -1709,7 +1709,7 @@ contains
                 !-----------------------------------------------------------------------
                 ! SOURCES: Sloppy Feeding by Microzooplankton (C-basis)
                 !-----------------------------------------------------------------------
-                        +grazingFlux_phy3 * recipQuota * (1.d0 - grazEff3) &
+                        + grazingFlux_phy3 * recipQuota * (1.d0 - grazEff3) &
                         + grazingFlux_Dia3 * recipQuota_Dia * (1.d0 - grazEff3) &
                         + grazingFlux_Cocco3 * recipQuota_Cocco * (1.d0 - grazEff3) * &
                         is_coccos &
@@ -1977,7 +1977,7 @@ contains
             !-----------------------------------------------------------------------
             ! SOURCES: Grazing
             !-----------------------------------------------------------------------
-                    +grazingFlux3 * grazEff3 & ! Assimilated N
+                    + grazingFlux3 * grazEff3 & ! Assimilated N
             !-----------------------------------------------------------------------
             ! SINKS: Predation, Mortality, Excretion
             !-----------------------------------------------------------------------
@@ -2003,7 +2003,7 @@ contains
             !-----------------------------------------------------------------------
             ! SOURCES: Grazing (C-basis)
             !-----------------------------------------------------------------------
-                    +grazingFlux_phy3 * recipQuota * grazEff3 & ! Small phytoplankton
+                    + grazingFlux_phy3 * recipQuota * grazEff3 & ! Small phytoplankton
                     + grazingFlux_Dia3 * recipQuota_Dia * grazEff3 & ! Diatoms
             ! Coccolithophores
                     + grazingFlux_Cocco3 * recipQuota_Cocco * grazEff3 * is_coccos &

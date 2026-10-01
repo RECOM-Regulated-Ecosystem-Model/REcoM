@@ -28,15 +28,14 @@ contains
     ! ver_sinking_recom_benthos
     !   Computes vertical sinking of particulate tracers into the benthos layer.
     !
-    !   For each locally-owned open-ocean node the sinking velocity is selected
+    !   For each locally-owned node the sinking velocity is selected
     !   by tracer ID, the downward flux through each layer interface is accumulated
     !   into str_bf, and the net material reaching the seafloor is added to the
     !   appropriate Benthos bucket (N, C, Si, Cal) and optionally to the MEDUSA
     !   sediment flux arrays.
     !
-    !   Cavity nodes (ulevels_nod2D > 1) are skipped - there is no overlying
-    !   water column above the ice-shelf cavity base that could deposit material
-    !   onto a benthic boundary.
+    !   Cavity nodes (ulevels_nod2D > 1) are included; their column starts at
+    !   ul1, the first wet layer below the ice.
     !
     !   Note: second-detritus class (zoo2det) uses a separate sinking speed
     !   (VDet_zoo2) and is identified by hardcoded IDs (1025-1028) because no
@@ -57,7 +56,7 @@ contains
         use recom_glovar, only: Benthos, Benthos_tr, SinkFlx, SinkFlx_tr
 
         use recom_config, only: allow_var_sinking, benthos_num, bottflx_num, ciso, Vdet, VPhy, &
-            VDia, VDet_zoo2, enable_3zoo2det, use_MEDUSA, recom_det_tracer_id, &
+            VDia, VDet_zoo2, enable_3zoo2det, use_MEDUSA, sedflx_num, recom_det_tracer_id, &
             recom_phy_tracer_id, recom_dia_tracer_id, SecondsPerDay, vdet_a
 
         use recom_ciso, only: ciso_organic_14
@@ -86,10 +85,17 @@ contains
         real(kind=WP) :: Vben(nl), aux(nl - 1), add_benthos_2d(myDim_nod2D)
         integer :: nlevels_nod2D_minimum
         real(kind=WP) :: tv
+        ! Print caps per MPI rank (cavity/open ocean separately)
+        integer, parameter :: n_si_deposit_diag_prints_max = 5
+        ! Threshold [mmolSi/m2 per step]; normal deposits reach ~2
+        real(kind=WP), parameter :: si_deposit_diag_min = 5.0_WP
+        integer, save :: n_si_deposit_diag_prints_cav = 0
+        integer, save :: n_si_deposit_diag_prints_open = 0
+        ! n is rank-local: a location is given by mype and n
+        integer, parameter :: n_si_negdep_diag_prints_max = 15
+        integer, save :: n_si_negdep_diag_prints = 0
 
         do n = 1, myDim_nod2D ! needs exchange_nod in the end
-
-            if (ulevels_nod2D(n) > 1) cycle ! Cavity guard: no water column above cavity base
 
             nl1 = nlevels_nod2D(n) - 1   ! index of deepest layer centre
             ul1 = ulevels_nod2D(n)       ! index of shallowest (surface) layer centre
@@ -133,18 +139,56 @@ contains
             ! ----------------------------------------------------------------
             ! Downward mass flux through each layer, weighted by the change in
             ! cross-sectional area between adjacent layer interfaces.
+            !
+            ! max(.., ul1): don't start under the ice at cavity nodes.
             ! ----------------------------------------------------------------
-            do nz = nlevels_nod2D_minimum, nl1
+            do nz = max(nlevels_nod2D_minimum, ul1), nl1
                 tv = tracer_data_values(nz, n) * Vben(nz)
-                aux(nz) = -tv * (area(nz, n) - area(nz + 1, n))
+                ! Clamped at 0: cavities can widen with depth (spurious negative capture)
+                aux(nz) = -tv * max(area(nz, n) - area(nz + 1, n), 0.0_WP)
             end do
 
             do nz = ul1, nl1
                 str_bf(nz, n) = str_bf(nz, n) &
                         + (aux(nz)) * dt / areasvol(nz, n) / (zbar_3d_n(nz, n) - zbar_3d_n(nz + 1, n))
-                !!!!!!!!CHECK Maybe /area(nz,n) -> [mmol/m2]
                 add_benthos_2d(n) = add_benthos_2d(n) - (aux(nz)) * dt
             end do
+
+            ! ----------------------------------------------------------------
+            ! Deposit [mmol] -> [mmol/m2] as Benthos expects; area(1,n) is 0 in cavities
+            ! ----------------------------------------------------------------
+            add_benthos_2d(n) = add_benthos_2d(n) / area(ul1, n)
+
+            ! ----------------------------------------------------------------
+            ! Diagnostic: implausible Si deposit (> si_deposit_diag_min in one step)
+            ! ----------------------------------------------------------------
+            if (tracer_id == tracer_ids%detrital_silica .and. abs(add_benthos_2d(n)) > si_deposit_diag_min .and. &
+                    ((ul1 > 1 .and. n_si_deposit_diag_prints_cav < n_si_deposit_diag_prints_max) .or. &
+                     (ul1 == 1 .and. n_si_deposit_diag_prints_open < n_si_deposit_diag_prints_max))) then
+                if (ul1 > 1) then
+                    n_si_deposit_diag_prints_cav = n_si_deposit_diag_prints_cav + 1
+                else
+                    n_si_deposit_diag_prints_open = n_si_deposit_diag_prints_open + 1
+                end if
+                print *, 'diag: Si deposit at mype=', mype, ' n=', n, ' ul1=', ul1, &
+                        ' (cavity=', (ul1 > 1), ')'
+                print *, '  add_benthos_2d(n) [mmolSi/m2, this timestep] =', add_benthos_2d(n)
+                print *, '  area(ul1,n) [m2]                             =', area(ul1, n)
+            end if
+
+            ! ----------------------------------------------------------------
+            ! Diagnostic: area profile at large negative Si deposits
+            ! ----------------------------------------------------------------
+            if (tracer_id == tracer_ids%detrital_silica .and. add_benthos_2d(n) < -1.0_WP .and. &
+                    n_si_negdep_diag_prints < n_si_negdep_diag_prints_max) then
+                n_si_negdep_diag_prints = n_si_negdep_diag_prints + 1
+                print *, 'diag: negative Si deposit area profile at mype=', mype, ' n=', n, &
+                        ' ul1=', ul1, ' nl1=', nl1
+                do nz = ul1, min(ul1 + 5, nl1)
+                    print *, '  nz=', nz, ' area(nz,n) [m2]=', area(nz, n), &
+                            ' aux(nz) [mmol/s]=', aux(nz)
+                end do
+            end if
 
             ! ----------------------------------------------------------------
             ! Route accumulated deposition into the appropriate Benthos /
@@ -166,19 +210,18 @@ contains
                 tracer_id == tracer_ids%diatom_nitrogen .or. & !idian
                 tracer_id == tracer_ids%macrozooplankton_detrital_nitrogen) then !idetz2n
 #if defined(__usetp)
-                Benthos_tr(n, 1, tr_num) = Benthos_tr(n, 1, tr_num) + add_benthos_2d(n) ![mmol]
+                Benthos_tr(n, 1, tr_num) = Benthos_tr(n, 1, tr_num) + add_benthos_2d(n) ![mmol/m2]
 
                 if (use_MEDUSA) then
                     SinkFlx_tr(n, 1, tr_num) = SinkFlx_tr(n, 1, tr_num) &
-                            + add_benthos_2d(n) / area(1, n) / dt ![mmol/m2]
-                    ! SinkFlx has units mmol/timestep; MEDUSA needs mmol/m2/timestep,
-                    ! hence the division by area here.
+                            + add_benthos_2d(n) / dt ![mmol/m2/s]
+                    ! add_benthos_2d is already [mmol/m2]; /dt gives the rate
                 end if
 #else
-                Benthos(n, 1) = Benthos(n, 1) + add_benthos_2d(n) ![mmol]
+                Benthos(n, 1) = Benthos(n, 1) + add_benthos_2d(n) ![mmol/m2]
 
                 if (use_MEDUSA) then
-                    SinkFlx(n, 1) = SinkFlx(n, 1) + add_benthos_2d(n) / area(1, n) / dt ![mmol/m2]
+                    SinkFlx(n, 1) = SinkFlx(n, 1) + add_benthos_2d(n) / dt ![mmol/m2/s]
                 end if
 #endif
 
@@ -194,13 +237,13 @@ contains
 
                 if (use_MEDUSA) then
                     SinkFlx_tr(n, 2, tr_num) = SinkFlx_tr(n, 2, tr_num) &
-                            + add_benthos_2d(n) / area(1, n) / dt
+                            + add_benthos_2d(n) / dt
                 end if
 #else
                 Benthos(n, 2) = Benthos(n, 2) + add_benthos_2d(n)
 
                 if (use_MEDUSA) then
-                    SinkFlx(n, 2) = SinkFlx(n, 2) + add_benthos_2d(n) / area(1, n) / dt ![mmol/m2]
+                    SinkFlx(n, 2) = SinkFlx(n, 2) + add_benthos_2d(n) / dt ![mmol/m2/s]
                 end if
 #endif
 
@@ -215,13 +258,13 @@ contains
 
                 if (use_MEDUSA) then
                     SinkFlx_tr(n, 3, tr_num) = SinkFlx_tr(n, 3, tr_num) &
-                            + add_benthos_2d(n) / area(1, n) / dt
+                            + add_benthos_2d(n) / dt
                 end if
 #else
                 Benthos(n, 3) = Benthos(n, 3) + add_benthos_2d(n)
 
                 if (use_MEDUSA) then
-                    SinkFlx(n, 3) = SinkFlx(n, 3) + add_benthos_2d(n) / area(1, n) / dt
+                    SinkFlx(n, 3) = SinkFlx(n, 3) + add_benthos_2d(n) / dt
                 end if
 #endif
 
@@ -236,13 +279,13 @@ contains
 
                 if (use_MEDUSA) then
                     SinkFlx_tr(n, 4, tr_num) = SinkFlx_tr(n, 4, tr_num) &
-                            + add_benthos_2d(n) / area(1, n) / dt
+                            + add_benthos_2d(n) / dt
                 end if
 #else
                 Benthos(n, 4) = Benthos(n, 4) + add_benthos_2d(n)
 
                 if (use_MEDUSA) then
-                    SinkFlx(n, 4) = SinkFlx(n, 4) + add_benthos_2d(n) / area(1, n) / dt
+                    SinkFlx(n, 4) = SinkFlx(n, 4) + add_benthos_2d(n) / dt
                 end if
 #endif
 
@@ -255,20 +298,16 @@ contains
                         tracer_id == 1314) then !idiac_13
 
 #if defined(__usetp)
-                    ! kh 25.03.22 buffer sums per tracer index to avoid non bit identical
-                    ! results regarding global sums when running the tracer loop in parallel;
-                    ! summed into Benthos across tr_num by oce_ale_tracer.F90 after the
-                    ! tracer loop
                     Benthos_tr(n, 5, tr_num) = Benthos_tr(n, 5, tr_num) + add_benthos_2d(n)
 
                     if (use_MEDUSA) then
                         SinkFlx_tr(n, 5, tr_num) = SinkFlx_tr(n, 5, tr_num) &
-                                + add_benthos_2d(n) / area(1, n) / dt
+                                + add_benthos_2d(n) / dt
                     end if
 #else
                     Benthos(n, 5) = Benthos(n, 5) + add_benthos_2d(n)
                     if (use_MEDUSA) then
-                        SinkFlx(n, 5) = SinkFlx(n, 5) + add_benthos_2d(n) / area(1, n) / dt
+                        SinkFlx(n, 5) = SinkFlx(n, 5) + add_benthos_2d(n) / dt
                     end if
 #endif
 
@@ -278,20 +317,16 @@ contains
                         tracer_id == 1321) then !idetcal_13
 
 #if defined(__usetp)
-                    ! kh 25.03.22 buffer sums per tracer index to avoid non bit identical
-                    ! results regarding global sums when running the tracer loop in parallel;
-                    ! summed into Benthos across tr_num by oce_ale_tracer.F90 after the
-                    ! tracer loop
                     Benthos_tr(n, 6, tr_num) = Benthos_tr(n, 6, tr_num) + add_benthos_2d(n)
 
                     if (use_MEDUSA) then
                         SinkFlx_tr(n, 6, tr_num) = SinkFlx_tr(n, 6, tr_num) &
-                                + add_benthos_2d(n) / area(1, n) / dt
+                                + add_benthos_2d(n) / dt
                     end if
 #else
                     Benthos(n, 6) = Benthos(n, 6) + add_benthos_2d(n)
                     if (use_MEDUSA) then
-                        SinkFlx(n, 6) = SinkFlx(n, 6) + add_benthos_2d(n) / area(1, n) / dt
+                        SinkFlx(n, 6) = SinkFlx(n, 6) + add_benthos_2d(n) / dt
                     end if
 #endif
 
@@ -310,12 +345,12 @@ contains
 
                     if (use_MEDUSA) then
                         SinkFlx_tr(n, 7, tr_num) = SinkFlx_tr(n, 7, tr_num) &
-                                + add_benthos_2d(n) / area(1, n) / dt
+                                + add_benthos_2d(n) / dt
                     end if
 #else
                     Benthos(n, 7) = Benthos(n, 7) + add_benthos_2d(n)
                     if (use_MEDUSA) then
-                        SinkFlx(n, 7) = SinkFlx(n, 7) + add_benthos_2d(n) / area(1, n) / dt
+                        SinkFlx(n, 7) = SinkFlx(n, 7) + add_benthos_2d(n) / dt
                     end if
 #endif
 
@@ -328,12 +363,12 @@ contains
 
                     if (use_MEDUSA) then
                         SinkFlx_tr(n, 8, tr_num) = SinkFlx_tr(n, 8, tr_num) &
-                                + add_benthos_2d(n) / area(1, n) / dt
+                                + add_benthos_2d(n) / dt
                     end if
 #else
                     Benthos(n, 8) = Benthos(n, 8) + add_benthos_2d(n)
                     if (use_MEDUSA) then
-                        SinkFlx(n, 8) = SinkFlx(n, 8) + add_benthos_2d(n) / area(1, n) / dt
+                        SinkFlx(n, 8) = SinkFlx(n, 8) + add_benthos_2d(n) / dt
                     end if
 #endif
                 end if
@@ -348,10 +383,7 @@ contains
         ! ----------------------------------------------------------------
         if (use_MEDUSA) then
             do n = 1, bottflx_num
-                !           SinkFlx(:,n) = Sinkflx(:,n)/dt
 #if defined(__usetp)
-                ! kh 25.03.22 buffer sums per tracer index to avoid non bit identical results
-                ! regarding global sums when running the tracer loop in parallel
                 call recom_exchange_nod(SinkFlx_tr(:, n, tr_num), npes, sn, rn, MPI_COMM_FESOM, &
                         mype, s_mpitype_nod2D, r_mpitype_nod2D, sPE, rPE, requests, nreq)
 #else
@@ -384,26 +416,15 @@ contains
     !   Two flux sources depending on configuration:
     !     - use_MEDUSA & sedflx_num /= 0 : flux comes from GloSed (MEDUSA sediment
     !       model), converted from mol/time/area to mol/time by multiplying by
-    !       area(1,:).
-    !     - otherwise: flux comes from GlodecayBenthos (REcoM's own simple
-    !       benthic remineralization), already combining terms as needed
-    !       per tracer (e.g. DIC = organic decay + calcite dissolution;
-    !       Alk = 2*calcite - Redfield N contribution; O2 = -redO2C*organic decay).
+    !       area(1,:). NOTE: zero at cavity nodes (area(1,n) = 0); not fixed.
+    !     - otherwise (default): GlodecayBenthos (REcoM's benthic
+    !       remineralization), an areal rate [mmol/m2/s], times area(ul1,n).
     !
     !   Area / cavity handling
     !   -----------------------
-    !   bottom_flux(n) is built from GloSed(:,k) * area(1,n) (or, in the
-    !   non-MEDUSA branch, is already a flux referenced to the surface),
-    !   i.e. it is a *total* flux expressed relative to the surface
-    !   cross-sectional area area(1,n) -- a quantity that is well-defined
-    !   and cavity-independent (it is simply the node's surface footprint).
-    !
-    !   The redistribution across layers must therefore divide by that same
-    !   reference area, area(1,n), to first recover a physically meaningful
-    !   per-unit-area flux before spreading it across the topography-
-    !   following interface-area differences (area(nz,n) - area(nz+1,n)).
-    !   Only the final step -- converting the redistributed flux into a
-    !   tracer tendency for a specific cell nz -- should divide by that
+    !   The redistribution across layers divides by area(ul1,n), not
+    !   area(1,n) (0 at cavity nodes). Only the final step -- converting the
+    !   flux into a tracer tendency for cell nz -- should divide by that
     !   cell's own volume-area areasvol(nz,n), since that is what turns a
     !   flux into a per-volume concentration tendency for cell nz.
     !===============================================================================
@@ -431,15 +452,16 @@ contains
         real(kind=WP) :: vd_flux(nl)
         integer :: nlevels_nod2D_minimum
         real(kind=WP) :: bottom_flux(myDim_nod2D + eDim_nod2D)
+        real(kind=WP) :: tot_flux
+        logical :: areal_flux
 
         bottom_flux = 0._WP
+        areal_flux = .false.
 
 #if defined(__recom)
         ! ----------------------------------------------------------------
-        ! Select the per-node bottom flux [mol/time] for this dissolved
-        ! tracer, from either the MEDUSA sediment model or REcoM's simple
-        ! benthic decay bucket. Both are total fluxes referenced to the
-        ! node's surface area area(1,:) -- see module docstring.
+        ! Per-node bottom flux: MEDUSA gives a total flux [mol/time],
+        ! GlodecayBenthos an areal rate (made total in the node loop).
         ! ----------------------------------------------------------------
         if (use_MEDUSA .and. (sedflx_num /= 0)) then
             ! Note (CV/OG): GloSed is a flux per area (mol/time/area); multiply
@@ -474,6 +496,7 @@ contains
                 stop
             end select
         else
+            areal_flux = .true.
             select case (tracer_id)
             case (1001)
                 bottom_flux = GlodecayBenthos(:, 1) !*** DIN [mmolN/m^2/s] ***
@@ -534,11 +557,16 @@ contains
             ! (see "CHECK" comment above on the GloSed DIN line) as needing review.
             ! Left unchanged; verify against the intended discretization before
             ! trusting sub-surface benthic flux distribution.
-            do nz = nlevels_nod2D_minimum, nl1
-                vd_flux(nz) = (area(nz, n) - area(nz + 1, n)) * bottom_flux(n) / (area(1, n))
+            !
+            ! max(.., ul1) and clamp at 0: cavity fixes as in ver_sinking_recom_benthos.
+            ! GlodecayBenthos is per area: make it a total flux like MEDUSA's.
+            tot_flux = bottom_flux(n)
+            if (areal_flux) tot_flux = tot_flux * area(ul1, n)
+            do nz = max(nlevels_nod2D_minimum, ul1), nl1
+                vd_flux(nz) = max(area(nz, n) - area(nz + 1, n), 0.0_WP) * tot_flux / (area(ul1, n))
             end do
             nz = nl1
-            vd_flux(nz + 1) = (area(nz + 1, n)) * bottom_flux(n) / (area(1, n))
+            vd_flux(nz + 1) = (area(nz + 1, n)) * tot_flux / (area(ul1, n))
 
             !_______________________________________________________________________
             ! Add bottom flux into the tracer tendency (rhs). Each cell nz only
@@ -601,6 +629,8 @@ contains
         real(kind=wp) :: dt_sink
         real(kind=wp) :: Vsink, tv
         real(kind=wp), save :: onesixth = 1.d0 / 6.d0
+        ! Margin below the DST3/TVD limiter's cfl <= 1 bound (clamp below)
+        real(kind=wp), save :: cfl_safety = 0.9d0
 
         real(kind=wp), dimension(nl) :: Wvel_flux, vd_flux, dz_trr
 
@@ -663,7 +693,7 @@ contains
         if (Vsink > 0.1) then
 
             do n = 1, myDim_nod2D
-                if (ulevels_nod2D(n) > 1) cycle   ! skip cavity nodes
+                ! Cavity nodes included: nzmin is the first wet layer under the ice
                 nzmin = ulevels_nod2D(n)
                 nzmax = nlevels_nod2D(n) - 1
 
@@ -748,6 +778,14 @@ contains
 
                     end if
 
+                    ! ----------------------------------------------------------------
+                    ! Cap the sinking CFL at cfl_safety: the DST3/TVD limiter below needs
+                    ! cfl <= 1, which thin cells (e.g. at cavity ice drafts) can exceed.
+                    if (dz_trr(nz) > 0.0d0) then
+                        Wvel_flux(nz) = sign(min(abs(Wvel_flux(nz)), &
+                                cfl_safety * dz_trr(nz) / dt), Wvel_flux(nz))
+                    end if
+
                     ! Diagnostic storage of final sinking velocity for the
                     ! calcite tracers of each detritus class (used elsewhere,
                     ! e.g. for output / other modules that need the actual
@@ -830,7 +868,7 @@ contains
                 ! ----------------------------------------------------------------
                 if (.false.) then ! simple upwind FIXME: use a flag here later
 
-                    vd_flux(nzmin) = 0.0_WP      ! no flux through the free surface
+                    vd_flux(nzmin) = 0.0_WP      ! no flux through the free surface (or ice base)
                     vd_flux(nzmax + 1) = 0.0_WP  ! no flux through the seafloor here
                                                   ! (handled separately by the benthos routine)
 

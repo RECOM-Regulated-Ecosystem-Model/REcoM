@@ -132,6 +132,19 @@ contains
         real(kind=wp), intent(in) :: SurfSR, dt !< [W/m2] ShortWave radiation at surface
         real(kind=wp), intent(in) :: Loc_slp ![Pa] sea-level pressure
         real(kind=wp), intent(in) :: Latd(1) ! latitude in degree
+        ! radians -> degrees for the diagnostics below
+        real(kind=wp), parameter :: rad2deg_diag = 57.29577951308232_wp
+        ! Print caps per MPI rank for the diagnostics below
+        integer, parameter :: n_agg_diag_prints_max = 20
+        integer, save :: n_agg_diag_prints = 0
+        ! LocBenthos(1) diagnostic (cavity/open ocean separately)
+        integer, parameter :: n_locbenthos_diag_prints_max = 20
+        integer, save :: n_locbenthos_diag_prints_cav = 0
+        integer, save :: n_locbenthos_diag_prints_open = 0
+        ! LocBenthos(3) (Si) diagnostic, same
+        integer, parameter :: n_locbenthos_si_diag_prints_max = 20
+        integer, save :: n_locbenthos_si_diag_prints_cav = 0
+        integer, save :: n_locbenthos_si_diag_prints_open = 0
 
         !< [m] Vertical distance between two nodes = Thickness
         real(kind=wp), intent(in), dimension(nl - 1) :: thick
@@ -172,6 +185,8 @@ contains
         real(kind=wp) :: recip_res_het
         real(kind=wp) :: Sink_Vel
         real(kind=wp) :: aux
+        real(kind=wp) :: lightlim
+
         integer :: k, step
 
         real(kind=wp) :: Patm_depth(1)
@@ -826,26 +841,36 @@ contains
                 !-------------------------------------------------------------------------------
                 ! Small Phytoplankton and Diatom Photosynthesis
                 !-------------------------------------------------------------------------------
-                call calculate_photosynthesis_rate(pMax, PARave, Chl2C, PhyCO2, alfa, Cphot, &
-                        VTCphotLigLim_phyto(k))
+                call calculate_photosynthesis_rate(pMax, PARave, Chl2C, PhyCO2, alfa, Cphot, lightlim) !VTCphotLigLim_phyto(k))
+                if (Diags) then
+                    VTCphotLigLim_phyto(k) = lightlim
+                    VTCphot_phyto(k)       = Cphot
+                end if
+
                 call calculate_photosynthesis_rate(pMax_dia, PARave, Chl2C_dia, DiaCO2, &
-                        alfa_d, Cphot_dia, VTCphotLigLim_diatoms(k))
-                !! Store photosynthesis rate for diagnostics and output
-                VTCphot_phyto(k) = Cphot
-                VTCphot_diatoms(k) = Cphot_dia
+                        alfa_d, Cphot_dia, lightlim) !VTCphotLigLim_diatoms(k))
+                if (Diags) then
+                    VTCphotLigLim_diatoms(k) = lightlim
+                    VTCphot_diatoms(k)       = Cphot_dia
+                end if
 
                 if (enable_coccos) then
                     !-------------------------------------------------------------------------------
                     ! Coccolithophore and Phaeocystis Photosynthesis (Optional)
                     !-------------------------------------------------------------------------------
                     call calculate_photosynthesis_rate(pMax_cocco, PARave, Chl2C_cocco, CoccoCO2, &
-                            alfa_c, Cphot_cocco, VTCphotLigLim_cocco(k))
-                    call calculate_photosynthesis_rate(pMax_phaeo, PARave, Chl2C_phaeo, PhaeoCO2, &
-                            alfa_p, Cphot_phaeo, VTCphotLigLim_phaeo(k))
+                            alfa_c, Cphot_cocco, lightlim) !VTCphotLigLim_cocco(k))
+                    if (Diags) then
+                        VTCphotLigLim_cocco(k) = lightlim
+                        VTCphot_cocco(k)       = Cphot_cocco
+                    end if
 
-                    !! Store photosynthesis rate for diagnostics and output
-                    VTCphot_cocco(k) = Cphot_cocco
-                    VTCphot_phaeo(k) = Cphot_phaeo
+                    call calculate_photosynthesis_rate(pMax_phaeo, PARave, Chl2C_phaeo, PhaeoCO2, &
+                            alfa_p, Cphot_phaeo, lightlim) !VTCphotLigLim_phaeo(k))
+                    if (Diags) then
+                        VTCphotLigLim_phaeo(k) = lightlim
+                        VTCphot_phaeo(k)       = Cphot_phaeo
+                    end if
                 end if
 
                 !===============================================================================
@@ -950,6 +975,19 @@ contains
                     print*, '  CHL2C_plast =', CHL2C_plast
                     print*, '  PARave =', PARave
                     print*, '  pMax =', pMax
+                    print*, '  n =', n, ' nzmin =', nzmin
+                    print*, '  qlimitFac =', qlimitFac
+                    print*, '  feLimitFac =', feLimitFac
+                    print*, '  quota =', quota
+                    print*, '  Fe =', Fe
+                    print*, '  k_Fe =', k_Fe
+                    print*, '  P_cm =', P_cm
+                    print*, '  enable_coccos =', enable_coccos
+                    if (enable_coccos) then
+                        print*, '  Temp_phyto =', Temp_phyto
+                    else
+                        print*, '  arrFunc =', arrFunc
+                    end if
                     stop
                 end if
 
@@ -1064,7 +1102,7 @@ contains
                     ! Alternative formulation with temperature dependence
                     Si_assim = V_cm_fact_d * Temp_diatoms * SiCUptakeRatio * limitFacSi * &
                             Si / (Si + k_si)
-                    VTSi_assimDia(k) = Si_assim
+                    if (Diags) VTSi_assimDia(k) = Si_assim
                 end if
 
                 !===============================================================================
@@ -2275,6 +2313,19 @@ contains
                     ! Add coccolithophore and Phaeocystis aggregation
                     ! These can form large blooms with high aggregation potential
                     aggregationrate = aggregationrate + agg_PP * CoccoN + agg_PP * PhaeoN
+                end if
+
+                ! ----------------------------------------------------------------
+                ! Diagnostic: aggregationrate > 5/d (DetN runaway)
+                if (aggregationrate > 5.0_wp .and. n_agg_diag_prints < n_agg_diag_prints_max) then
+                    n_agg_diag_prints = n_agg_diag_prints + 1
+                    print *, 'warning: aggregationrate runaway at n=', n, ' k=', k, ' mstep=', mstep
+                    print *, '  lat, lon        =', Latd(1), geo_coord_nod2D(1, n) * rad2deg_diag
+                    print *, '  aggregationrate [1/d] =', aggregationrate
+                    print *, '  DetN  [mmolN/m3] =', DetN
+                    print *, '  PhyC  [mmolC/m3] =', PhyC
+                    print *, '  DiaN  [mmolN/m3] =', DiaN
+                    print *, '  DiaC  [mmolC/m3] =', DiaC
                 end if
 
                 !===============================================================================
@@ -3555,6 +3606,25 @@ contains
                 ! Calculate N remineralization flux [mmolN m-2 day-1]
                 decayBenthos(1) = decayRateBenN * LocBenthos(1)
 
+                ! ----------------------------------------------------------------
+                ! Diagnostic: benthic N remineralization > 10 mmolN/m2/d
+                ! ----------------------------------------------------------------
+                if (abs(decayBenthos(1)) > 10.0_wp .and. &
+                        ((nzmin > 1 .and. n_locbenthos_diag_prints_cav < n_locbenthos_diag_prints_max) .or. &
+                         (nzmin == 1 .and. n_locbenthos_diag_prints_open < n_locbenthos_diag_prints_max))) then
+                    if (nzmin > 1) then
+                        n_locbenthos_diag_prints_cav = n_locbenthos_diag_prints_cav + 1
+                    else
+                        n_locbenthos_diag_prints_open = n_locbenthos_diag_prints_open + 1
+                    end if
+                    print *, 'diag: LocBenthos runaway at n=', n, ' nzmin=', nzmin, &
+                            ' (cavity=', (nzmin > 1), ')  mstep=', mstep
+                    print *, '  lat, lon              =', Latd(1), geo_coord_nod2D(1, n) * rad2deg_diag
+                    print *, '  LocBenthos(1) [assumed mmolN/m2] =', LocBenthos(1)
+                    print *, '  decayRateBenN [1/d]    =', decayRateBenN
+                    print *, '  decayBenthos(1) [assumed mmolN/m2/d] =', decayBenthos(1)
+                end if
+
                 ! Update benthic N pool (remove remineralized N)
                 LocBenthos(1) = LocBenthos(1) - decayBenthos(1) * dt_b
 
@@ -3616,6 +3686,25 @@ contains
 
                 ! Calculate Si dissolution flux [mmolSi m-2 day-1]
                 decayBenthos(3) = decayRateBenSi * LocBenthos(3)
+
+                ! ----------------------------------------------------------------
+                ! Diagnostic: same for benthic Si
+                ! ----------------------------------------------------------------
+                if (abs(decayBenthos(3)) > 10.0_wp .and. &
+                        ((nzmin > 1 .and. n_locbenthos_si_diag_prints_cav < n_locbenthos_si_diag_prints_max) .or. &
+                         (nzmin == 1 .and. n_locbenthos_si_diag_prints_open < n_locbenthos_si_diag_prints_max))) then
+                    if (nzmin > 1) then
+                        n_locbenthos_si_diag_prints_cav = n_locbenthos_si_diag_prints_cav + 1
+                    else
+                        n_locbenthos_si_diag_prints_open = n_locbenthos_si_diag_prints_open + 1
+                    end if
+                    print *, 'diag: LocBenthos(Si) runaway at n=', n, ' nzmin=', nzmin, &
+                            ' (cavity=', (nzmin > 1), ')  mstep=', mstep
+                    print *, '  lat, lon               =', Latd(1), geo_coord_nod2D(1, n) * rad2deg_diag
+                    print *, '  LocBenthos(3) [assumed mmolSi/m2] =', LocBenthos(3)
+                    print *, '  decayRateBenSi [1/d]    =', decayRateBenSi
+                    print *, '  decayBenthos(3) [assumed mmolSi/m2/d] =', decayBenthos(3)
+                end if
 
                 ! Update benthic Si pool
                 LocBenthos(3) = LocBenthos(3) - decayBenthos(3) * dt_b
@@ -3775,7 +3864,7 @@ contains
         use recom_config, only: a_co2_cocco, a_co2_dia, a_co2_phaeo, a_co2_phy, &
                 b_co2_cocco, b_co2_dia, b_co2_phaeo, b_co2_phy, c_co2_cocco, c_co2_dia, &
                 c_co2_phaeo, c_co2_phy, cunits, d_co2_cocco, d_co2_dia, d_co2_phaeo, &
-                d_co2_phy, enable_coccos
+                d_co2_phy, enable_coccos, diags
 
         implicit none
 
@@ -3839,7 +3928,7 @@ contains
         PhyCO2 = max(0.d0, PhyCO2) ! Lower limit: prevent negative growth response
 
         ! Store for diagnostics and output
-        VTPhyCO2(k) = PhyCO2
+        if (Diags) VTPhyCO2(k) = PhyCO2
 
         !-------------------------------------------------------------------------------
         ! Diatoms CO2 Response
@@ -3857,7 +3946,7 @@ contains
         DiaCO2 = max(0.d0, DiaCO2) ! Lower limit: no negative effect
 
         ! Store for diagnostics
-        VTDiaCO2(k) = DiaCO2
+        if (Diags) VTDiaCO2(k) = DiaCO2
 
         if (enable_coccos) then
 
@@ -3878,7 +3967,7 @@ contains
             CoccoCO2 = max(0.d0, CoccoCO2) ! Lower limit: no negative effect
 
             ! Store for diagnostics
-            VTCoccoCO2(k) = CoccoCO2
+            if (Diags) VTCoccoCO2(k) = CoccoCO2
 
             !---------------------------------------------------------------------------
             ! Phaeocystis CO2 Response
@@ -3896,7 +3985,7 @@ contains
             PhaeoCO2 = max(0.d0, PhaeoCO2) ! Lower limit: no negative effect
 
             ! Store for diagnostics
-            VTPhaeoCO2(k) = PhaeoCO2
+            if (Diags) VTPhaeoCO2(k) = PhaeoCO2
 
         end if
     end subroutine calculate_phytoplankton_co2_effects
@@ -3959,6 +4048,7 @@ contains
                 ieee_is_nan(layer_available_radiation) .or. &
                 ieee_is_nan(chlorophyll_carbon_quota)) then
             photosynthesis_rate = zero
+            light_limitation_factor = zero
         else
             ! Calculate photosynthesis using exponential P-I curve
             ! Model saturates at high light (no photoinhibition)
