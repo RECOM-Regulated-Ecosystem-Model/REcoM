@@ -969,8 +969,8 @@ contains
         ! Minimum diatom carbon
         tiny_C_d = tiny_N_d / NCmax_d
 
-        ! Minimum silicate (based on diatom carbon and maximum Si:C quota)
-        tiny_Si = tiny_C_d / SiCmax
+        ! Minimum silicate (based on diatom carbon and maximum Si:C quota): Si = C * (Si:C)
+        tiny_Si = tiny_C_d * SiCmax
 
         !-------------------------------------------------------------------------------
         ! Coccolithophore and Phaeocystis Thresholds (Optional)
