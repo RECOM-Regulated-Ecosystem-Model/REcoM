@@ -75,6 +75,13 @@ contains
         integer :: n_transit_tracers ! number of active transit tracers
         integer :: bgc_start, bgc_end ! first/last slot of the BGC-only block
 
+        if (mype == 0) then
+            write(*, *)
+            write(*, '(a)') ' ------------------------------------------------------------'
+            write(*, '(a)') '  REcoM initialisation'
+            write(*, '(a)') ' ------------------------------------------------------------'
+        end if
+
         call initialize_memory(myDim_nod2D + eDim_nod2D, nl, num_tracers)
 
         call initialize_ciso(myDim_nod2D + eDim_nod2D, nl, ocean_area)
@@ -761,7 +768,7 @@ contains
             MPI_COMM_FESOM, mype)
         use REcoM_glovar, only: tracers_info_type
         use recom_config, only: enable_3zoo2det, enable_coccos
-        use recom_declarations, only: WP, is_3zoo2det, is_coccos
+        use recom_declarations, only: WP, is_3zoo2det, is_coccos, tracer_ids
 
         use mpi
 
@@ -772,104 +779,16 @@ contains
         integer, intent(in) :: ulevels_nod2D(:), nlevels_nod2D(:)
         integer, intent(in) :: MPI_COMM_FESOM, mype
 
-        integer :: MPIerr, n
-        real(kind=WP) :: locDINmax, locDINmin, locDICmax, locDICmin, locAlkmax, glo
-        real(kind=WP) :: locAlkmin, locDSimax, locDSimin, locDFemax, locDFemin
-        real(kind=WP) :: locO2max, locO2min
-
-        ! With the fixed T,S | BGC | [age] | [transit] layout, BGC tracers
-        ! always start at slot 3 (right after T,S) regardless of use_transit.
-        ! These fixed slot numbers are therefore now constant and correct:
-        !   DIN (1001) -> slot 3, DIC (1002) -> slot 4, Alk (1003) -> slot 5,
-        !   DSi (1018) -> slot 20, DFe (1019) -> slot 21, O2 (1022) -> slot 24
-        ! (previously these shifted whenever use_transit was active, which was
-        ! a bug: this fixed indexing is now always correct, independent of
-        ! use_transit.)
-        integer, parameter :: din_slot = 3
-        integer, parameter :: dic_slot = 4
-        integer, parameter :: alk_slot = 5
-        integer, parameter :: dsi_slot = 20
-        integer, parameter :: dfe_slot = 21
-        integer, parameter :: o2_slot = 24
-
-        if (mype == 0) write(*, *) 'Tracers have been initialized as spinup from WOA/glodap' // &
-                ' netcdf files'
-        locDINmax = -66666
-        locDINmin = 66666
-        locDICmax = locDINmax
-        locDICmin = locDINmin
-        locAlkmax = locDINmax
-        locAlkmin = locDINmin
-        locDSimax = locDINmax
-        locDSimin = locDINmin
-        locDFemax = locDINmax
-        locDFemin = locDINmin
-        locO2max = locDINmax
-        locO2min = locDINmin
-
-        do n = 1, myDim_nod2d
-            locDINmax = max(locDINmax, maxval(tracers_info%data_pointers(din_slot)%tracer_data(&
-                    ulevels_nod2D(n):nlevels_nod2D(n) - 1, n)))
-            locDINmin = min(locDINmin, minval(tracers_info%data_pointers(din_slot)%tracer_data(&
-                    ulevels_nod2D(n):nlevels_nod2D(n) - 1, n)))
-            locDICmax = max(locDICmax, maxval(tracers_info%data_pointers(dic_slot)%tracer_data(&
-                    ulevels_nod2D(n):nlevels_nod2D(n) - 1, n)))
-            locDICmin = min(locDICmin, minval(tracers_info%data_pointers(dic_slot)%tracer_data(&
-                    ulevels_nod2D(n):nlevels_nod2D(n) - 1, n)))
-            locAlkmax = max(locAlkmax, maxval(tracers_info%data_pointers(alk_slot)%tracer_data(&
-                    ulevels_nod2D(n):nlevels_nod2D(n) - 1, n)))
-            locAlkmin = min(locAlkmin, minval(tracers_info%data_pointers(alk_slot)%tracer_data(&
-                    ulevels_nod2D(n):nlevels_nod2D(n) - 1, n)))
-            locDSimax = max(locDSimax, maxval(tracers_info%data_pointers(dsi_slot)%tracer_data(&
-                    ulevels_nod2D(n):nlevels_nod2D(n) - 1, n)))
-            locDSimin = min(locDSimin, minval(tracers_info%data_pointers(dsi_slot)%tracer_data(&
-                    ulevels_nod2D(n):nlevels_nod2D(n) - 1, n)))
-            locDFemax = max(locDFemax, maxval(tracers_info%data_pointers(dfe_slot)%tracer_data(&
-                    ulevels_nod2D(n):nlevels_nod2D(n) - 1, n)))
-            locDFemin = min(locDFemin, minval(tracers_info%data_pointers(dfe_slot)%tracer_data(&
-                    ulevels_nod2D(n):nlevels_nod2D(n) - 1, n)))
-            locO2max = max(locO2max, maxval(tracers_info%data_pointers(o2_slot)%tracer_data(&
-                    ulevels_nod2D(n):nlevels_nod2D(n) - 1, n)))
-            locO2min = min(locO2min, minval(tracers_info%data_pointers(o2_slot)%tracer_data(&
-                    ulevels_nod2D(n):nlevels_nod2D(n) - 1, n)))
-        end do
-
-        if (mype == 0) write(*, *) "Sanity check for REcoM variables after recom_init call"
-        call MPI_AllREDUCE(locDINmax, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal max init. DIN. =', glo
-        call MPI_AllREDUCE(locDINmin, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal min init. DIN. =', glo
-
-        call MPI_AllREDUCE(locDICmax, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal max init. DIC. =', glo
-        call MPI_AllREDUCE(locDICmin, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal min init. DIC. =', glo
-        call MPI_AllREDUCE(locAlkmax, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal max init. Alk. =', glo
-        call MPI_AllREDUCE(locAlkmin, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal min init. Alk. =', glo
-        call MPI_AllREDUCE(locDSimax, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal max init. DSi. =', glo
-        call MPI_AllREDUCE(locDSimin, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal min init. DSi. =', glo
-        call MPI_AllREDUCE(locDFemax, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal max init. DFe. =', glo
-        call MPI_AllREDUCE(locDFemin, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  `-> gobal min init. DFe. =', glo
-        call MPI_AllREDUCE(locO2max, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal max init. O2. =', glo
-        call MPI_AllREDUCE(locO2min, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, MPIerr)
-        if (mype == 0) write(*, *) '  `-> gobal min init. O2. =', glo
+        ! Global min/max of the initial fields over all wet nodes. Tracers are
+        ! looked up by ID, so the table does not depend on the slot layout.
+        if (mype == 0) write(*, '(3x,a,t43,"min",t57,"max")') 'BGC initial fields (global, wet nodes):'
+        call minmax_row(tracer_ids%dissolved_inorganic_nitrogen, 'DIN      [mmol N/m3]')
+        call minmax_row(tracer_ids%dissolved_inorganic_carbon,   'DIC      [mmol C/m3]')
+        call minmax_row(tracer_ids%alkalinity,                   'Alk      [mmol/m3]')
+        call minmax_row(tracer_ids%silica,                       'DSi      [mmol Si/m3]')
+        call minmax_row(tracer_ids%iron,                         'DFe      [umol Fe/m3]')
+        call minmax_row(tracer_ids%oxygen,                       'O2       [mmol O2/m3]')
+        call minmax_row(tracer_ids%dic_remineralization,         'DICremin [mmol C/m3]')
 
         if (enable_3zoo2det) then
             is_3zoo2det = 1.0_WP
@@ -882,6 +801,38 @@ contains
         else
             is_coccos = 0.0_WP
         end if
+
+
+    contains
+
+        subroutine minmax_row(id, label)
+            integer, intent(in)          :: id
+            character(len=*), intent(in) :: label
+            integer       :: i, n, slot, MPIerr
+            real(kind=WP) :: loc(2), glo(2)
+
+            slot = 0
+            do i = 1, size(tracers_info%ids)
+                if (tracers_info%ids(i) == id) then
+                    slot = i
+                    exit
+                end if
+            end do
+            if (slot == 0) return   ! tracer not part of this configuration
+
+            ! loc(1) = -min so a single MPI_MAX reduction gives both min and max
+            loc = -huge(1.0_WP)
+            do n = 1, myDim_nod2D
+                associate (col => tracers_info%data_pointers(slot)%tracer_data( &
+                        ulevels_nod2D(n):nlevels_nod2D(n) - 1, n))
+                    loc(1) = max(loc(1), -minval(col))
+                    loc(2) = max(loc(2), maxval(col))
+                end associate
+            end do
+            call MPI_AllREDUCE(loc, glo, 2, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
+            if (mype == 0) write(*, '(5x,a,t32,2es14.5)') label, -glo(1), glo(2)
+        end subroutine minmax_row
+
     end subroutine initialization_diagnostics
 
 end module recom_init_interface

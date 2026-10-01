@@ -1409,34 +1409,6 @@ contains
             end if
         end if
 
-        ! ===========================================================================
-        ! Configuration summary
-        ! ===========================================================================
-        if (mype == 0) then
-            write(*, *) ''
-            write(*, *) '=========================================================================='
-            write(*, *) 'REcoM TRACER CONFIGURATION VALIDATION'
-            write(*, *) '=========================================================================='
-            write(*, *) 'Model configuration:'
-            write(*, *) '  enable_3zoo2det = ', enable_3zoo2det
-            write(*, *) '  enable_coccos   = ', enable_coccos
-            write(*, *) '  ciso            = ', ciso
-            write(*, *) '  use_age_tracer  = ', use_age_tracer
-            write(*, *) '  use_transit     = ', use_transit
-            write(*, *) ''
-            write(*, *) 'Tracer layout: T, S | BGC | [age] | [transit]'
-            write(*, *) ''
-            write(*, *) 'Tracer counts:'
-            write(*, *) '  Physical tracers (T, S)           = ', n_base_physical
-            write(*, *) '  Age tracer  (ID=100)              = ', merge(1, 0, use_age_tracer)
-            write(*, *) '  Transit tracers                   = ', n_transit_tracers
-            write(*, *) '  Expected BGC tracers              = ', expected_bgc_num
-            write(*, *) '  Expected TOTAL tracers            = ', expected_total_tracers
-            write(*, *) '  Actual tracers from namelist      = ', num_tracers
-            write(*, *) '  Actual BGC tracers from namelist  = ', actual_bgc_num
-            write(*, *) ''
-        end if
-
         ! Check for inconsistencies
         if (actual_bgc_num /= expected_bgc_num) then
             config_error = .true.
@@ -1447,6 +1419,10 @@ contains
                 write(*, *) 'The number of BGC tracers in the namelist does not match'
                 write(*, *) 'the expected count for the current configuration.'
                 write(*, *) ''
+                write(*, *) '  Tracer layout:        T, S | BGC | [age] | [transit]'
+                write(*, *) '  Tracers in namelist:  ', num_tracers
+                write(*, *) '  Expected in total:    ', expected_total_tracers
+                write(*, *) '  Age / transit:        ', merge(1, 0, use_age_tracer), n_transit_tracers
                 write(*, *) '  Expected BGC tracers: ', expected_bgc_num
                 write(*, *) '  Actual BGC tracers:   ', actual_bgc_num
                 write(*, *) '  Difference:           ', actual_bgc_num - expected_bgc_num
@@ -1522,7 +1498,7 @@ contains
         ! ===========================================================================
         id_error = .false.
 
-        if (mype == 0) then
+        if (config_error .and. mype == 0) then
             write(*, *) '=========================================================================='
             write(*, *) 'EXPECTED TRACER ID SEQUENCE'
             write(*, *) '=========================================================================='
@@ -1603,32 +1579,6 @@ contains
             write(*, *) ''
         end if
 
-        ! ===========================================================================
-        ! Check for tracer ID clashes based on configuration
-        ! ===========================================================================
-        if (mype == 0) then
-            write(*, *) '=========================================================================='
-            write(*, *) 'CHECKING FOR TRACER ID CONFLICTS'
-            write(*, *) '=========================================================================='
-
-            ! Warn about potential clashes between configurations
-            if (enable_3zoo2det .and. enable_coccos) then
-                write(*, *) 'Full model configuration active.'
-            else if (enable_coccos) then
-                write(*, *) 'Coccos-only configuration active.'
-                write(*, *) 'Coccos MUST use IDs 1023-1025 (NOT 1029-1031).'
-                write(*, *) 'Phaeocystis MUST use IDs 1026-1028 (NOT 1032-1034).'
-            else if (enable_3zoo2det) then
-                write(*, *) '3Zoo2Det-only configuration active.'
-                write(*, *) 'Microzoo MUST use IDs 1029-1030 (NOT 1035-1036).'
-            end if
-
-            write(*, *) ''
-            write(*, *) 'Please manually verify your namelist tracer_list against the'
-            write(*, *) 'expected sequence shown above.'
-            write(*, *) '=========================================================================='
-            write(*, *) ''
-        end if
 
         ! ===========================================================================
         ! Stop execution if configuration error detected
@@ -1645,6 +1595,12 @@ contains
             deallocate(expected_tracer_ids, tracer_found)
             call MPI_ABORT(MPI_COMM_WORLD, 1, MPIErr)
             stop
+        end if
+
+        if (mype == 0) then
+            write(*, '(3x,a,t40,": ",i0," = 2 T/S + ",i0," BGC + ",i0," age + ",i0," transit  [OK]")') &
+                    'tracer count', num_tracers, actual_bgc_num, merge(1, 0, use_age_tracer), &
+                    n_transit_tracers
         end if
 
         ! Clean up
@@ -1778,13 +1734,6 @@ contains
         ! ===========================================================================
         ! Check 1: Compare actual vs expected tracer IDs
         ! ===========================================================================
-        if (mype == 0) then
-            write(*, *) ''
-            write(*, *) '=========================================================================='
-            write(*, *) 'VALIDATING TRACER ID SEQUENCE FROM NAMELIST'
-            write(*, *) '=========================================================================='
-            write(*, *) 'Expected layout: T, S | BGC | [age] | [transit]'
-        end if
 
         do i = 1, num_tracers
             if (tracer_ids(i) /= expected_ids(i)) then
@@ -1828,7 +1777,7 @@ contains
         if (error_found .or. duplicate_found) then
             if (mype == 0) then
                 write(*, *) '=========================================================================='
-                write(*, *) 'TRACER ID VALIDATION FAILED!'
+                write(*, *) 'TRACER ID VALIDATION FAILED!  (layout: T, S | BGC | [age] | [transit])'
                 write(*, *) '=========================================================================='
                 write(*, *) 'Expected tracer ID sequence for current configuration:'
                 write(*, *) expected_ids
@@ -1859,17 +1808,8 @@ contains
             stop
         else
             if (mype == 0) then
-                write(*, *) '=========================================================================='
-                write(*, *) 'TRACER ID VALIDATION PASSED!'
-                write(*, *) 'All tracer IDs match expected sequence - no duplicates detected.'
-                if (use_age_tracer) &
-                        write(*, *) '  Age tracer (ID=100) correctly placed at slot ', &
-                        n_base_physical + bgc_num_local + 1
-                if (use_transit) &
-                        write(*, *) '  Transit tracers (', n_transit_tracers, ') correctly' // &
-                        ' placed at tail'
-                write(*, *) '=========================================================================='
-                write(*, *) ''
+                write(*, '(3x,a,t40,": ",a)') 'tracer ID sequence', &
+                        'matches expected order, no duplicates  [OK]'
             end if
         end if
 
