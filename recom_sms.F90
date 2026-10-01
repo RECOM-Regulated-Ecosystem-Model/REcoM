@@ -3143,7 +3143,7 @@ contains
                             ! Total assimilated grazing (with efficiency applied)
                             vertgrazmicro_tot(k) = vertgrazmicro_tot(k) + ( &
                             ! Small phytoplankton
-                                    +grazingFlux_phy3 * recipQuota * grazEff3 &
+                                    + grazingFlux_phy3 * recipQuota * grazEff3 &
                                     + grazingFlux_Dia3 * recipQuota_Dia * grazEff3 & ! Diatoms
                                     ) * recipbiostep
 
@@ -3561,11 +3561,13 @@ contains
                 ! This overrides all internal benthic calculations
                 !---------------------------------------------------------------------------
 
+                if (mstep == 1) then
+
                 if (mype == 0) then
                     ! Print message only on master processor (parallel computing)
                     write(*, *) ' --> Sedimentary input of nutrients through MEDUSA'
                 end if
-
+                end if
                 ! Note: MEDUSA fluxes are applied elsewhere in the code
                 ! This section simply skips internal benthic calculations
 
@@ -3609,21 +3611,21 @@ contains
                 ! ----------------------------------------------------------------
                 ! Diagnostic: benthic N remineralization > 10 mmolN/m2/d
                 ! ----------------------------------------------------------------
-                if (abs(decayBenthos(1)) > 10.0_wp .and. &
-                        ((nzmin > 1 .and. n_locbenthos_diag_prints_cav < n_locbenthos_diag_prints_max) .or. &
-                         (nzmin == 1 .and. n_locbenthos_diag_prints_open < n_locbenthos_diag_prints_max))) then
-                    if (nzmin > 1) then
-                        n_locbenthos_diag_prints_cav = n_locbenthos_diag_prints_cav + 1
-                    else
-                        n_locbenthos_diag_prints_open = n_locbenthos_diag_prints_open + 1
-                    end if
-                    print *, 'diag: LocBenthos runaway at n=', n, ' nzmin=', nzmin, &
-                            ' (cavity=', (nzmin > 1), ')  mstep=', mstep
-                    print *, '  lat, lon              =', Latd(1), geo_coord_nod2D(1, n) * rad2deg_diag
-                    print *, '  LocBenthos(1) [assumed mmolN/m2] =', LocBenthos(1)
-                    print *, '  decayRateBenN [1/d]    =', decayRateBenN
-                    print *, '  decayBenthos(1) [assumed mmolN/m2/d] =', decayBenthos(1)
-                end if
+                !if (abs(decayBenthos(1)) > 10.0_wp .and. &
+                !        ((nzmin > 1 .and. n_locbenthos_diag_prints_cav < n_locbenthos_diag_prints_max) .or. &
+                !         (nzmin == 1 .and. n_locbenthos_diag_prints_open < n_locbenthos_diag_prints_max))) then
+                !    if (nzmin > 1) then
+                !        n_locbenthos_diag_prints_cav = n_locbenthos_diag_prints_cav + 1
+                !    else
+                !        n_locbenthos_diag_prints_open = n_locbenthos_diag_prints_open + 1
+                !    end if
+                !    print *, 'diag: LocBenthos runaway at n=', n, ' nzmin=', nzmin, &
+                !            ' (cavity=', (nzmin > 1), ')  mstep=', mstep
+                !    print *, '  lat, lon              =', Latd(1), geo_coord_nod2D(1, n) * rad2deg_diag
+                !    print *, '  LocBenthos(1) [assumed mmolN/m2] =', LocBenthos(1)
+                !    print *, '  decayRateBenN [1/d]    =', decayRateBenN
+                !    print *, '  decayBenthos(1) [assumed mmolN/m2/d] =', decayBenthos(1)
+                !end if
 
                 ! Update benthic N pool (remove remineralized N)
                 LocBenthos(1) = LocBenthos(1) - decayBenthos(1) * dt_b
@@ -3690,21 +3692,21 @@ contains
                 ! ----------------------------------------------------------------
                 ! Diagnostic: same for benthic Si
                 ! ----------------------------------------------------------------
-                if (abs(decayBenthos(3)) > 10.0_wp .and. &
-                        ((nzmin > 1 .and. n_locbenthos_si_diag_prints_cav < n_locbenthos_si_diag_prints_max) .or. &
-                         (nzmin == 1 .and. n_locbenthos_si_diag_prints_open < n_locbenthos_si_diag_prints_max))) then
-                    if (nzmin > 1) then
-                        n_locbenthos_si_diag_prints_cav = n_locbenthos_si_diag_prints_cav + 1
-                    else
-                        n_locbenthos_si_diag_prints_open = n_locbenthos_si_diag_prints_open + 1
-                    end if
-                    print *, 'diag: LocBenthos(Si) runaway at n=', n, ' nzmin=', nzmin, &
-                            ' (cavity=', (nzmin > 1), ')  mstep=', mstep
-                    print *, '  lat, lon               =', Latd(1), geo_coord_nod2D(1, n) * rad2deg_diag
-                    print *, '  LocBenthos(3) [assumed mmolSi/m2] =', LocBenthos(3)
-                    print *, '  decayRateBenSi [1/d]    =', decayRateBenSi
-                    print *, '  decayBenthos(3) [assumed mmolSi/m2/d] =', decayBenthos(3)
-                end if
+                !if (abs(decayBenthos(3)) > 10.0_wp .and. &
+                !        ((nzmin > 1 .and. n_locbenthos_si_diag_prints_cav < n_locbenthos_si_diag_prints_max) .or. &
+                !         (nzmin == 1 .and. n_locbenthos_si_diag_prints_open < n_locbenthos_si_diag_prints_max))) then
+                !    if (nzmin > 1) then
+                !        n_locbenthos_si_diag_prints_cav = n_locbenthos_si_diag_prints_cav + 1
+                !    else
+                !        n_locbenthos_si_diag_prints_open = n_locbenthos_si_diag_prints_open + 1
+                !    end if
+                !    print *, 'diag: LocBenthos(Si) runaway at n=', n, ' nzmin=', nzmin, &
+                !            ' (cavity=', (nzmin > 1), ')  mstep=', mstep
+                !    print *, '  lat, lon               =', Latd(1), geo_coord_nod2D(1, n) * rad2deg_diag
+                !    print *, '  LocBenthos(3) [assumed mmolSi/m2] =', LocBenthos(3)
+                !    print *, '  decayRateBenSi [1/d]    =', decayRateBenSi
+                !    print *, '  decayBenthos(3) [assumed mmolSi/m2/d] =', decayBenthos(3)
+                !end if
 
                 ! Update benthic Si pool
                 LocBenthos(3) = LocBenthos(3) - decayBenthos(3) * dt_b
