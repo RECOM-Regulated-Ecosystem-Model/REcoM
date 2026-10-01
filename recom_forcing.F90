@@ -40,7 +40,7 @@ contains
 
         use recom_config, only: bgc_num, chl2n_max, chl2n_max_c, chl2n_max_d, chl2n_max_p, ciso, &
                 diags, enable_3zoo2det, enable_coccos, grazing_detritus, ialk, icchl, icocc, &
-                idchl, idiac, idian, idiasi, idic, idin, imiczooc, imiczoon, ioxy, idicremin, ipchl, &
+                idchl, idetsi, idetz2si, idiac, idian, idiasi, idic, idin, imiczooc, imiczoon, ioxy, idicremin, ipchl, &
                 iphac, iphachl, iphan, iphyc, iphyn, isi, ncmax, ncmax_c, ncmax_d, ncmax_p, nmocsy, &
                 one, pa2atm, recom_debug, secondsperday, sicmax, tiny, tiny_chl, icocn
 
@@ -319,7 +319,15 @@ contains
         !---------------------------------------------------------------------------
         ! Apply SMS tendency and enforce lower concentration bounds
         !---------------------------------------------------------------------------
-        state(nzmin:nn, :) = max(tiny, state(nzmin:nn, :) + sms(nzmin:nn, :))
+        state(nzmin:nn, :) = state(nzmin:nn, :) + sms(nzmin:nn, :)
+
+        ! Si pools: what the lower bounds add is taken from DSi of the same cell,
+        ! so the bounds do not create Si
+        call clip_from_donor(idiasi, tiny_Si, isi)
+        call clip_from_donor(idetsi, tiny,    isi)
+        if (enable_3zoo2det) call clip_from_donor(idetz2si, tiny, isi)
+
+        state(nzmin:nn, :) = max(tiny, state(nzmin:nn, :))
 
         ! Per-species lower bounds (tighter than the generic 'tiny')
         state(nzmin:nn, ipchl)  = max(tiny_chl, state(nzmin:nn, ipchl))
@@ -507,6 +515,20 @@ contains
             end if
 
         end if
+
+    contains
+
+        ! raise tracer itr to at least lo and take the added amount from tracer
+        ! idonor (dissolved inorganic pool of the same element) in the same cell
+        subroutine clip_from_donor(itr, lo, idonor)
+            integer,       intent(in) :: itr, idonor
+            real(kind=wp), intent(in) :: lo
+            real(kind=wp)             :: deficit(nzmin:nn)
+            deficit = max(0.0_wp, lo - state(nzmin:nn, itr))
+            state(nzmin:nn, itr)    = state(nzmin:nn, itr)    + deficit
+            state(nzmin:nn, idonor) = state(nzmin:nn, idonor) - deficit
+        end subroutine clip_from_donor
+
     end subroutine REcoM_Forcing
 
 end module recom_forcing_module
