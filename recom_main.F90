@@ -135,10 +135,9 @@ contains
 
         use recom_ciso, only: locatmco2_13, locatmco2_14, r_atm_13, r_atm_14, ciso_14, &
                 gloco2flux_13, gloco2flux_14, glopco2surf_13, glopco2surf_14, lat_val, &
-                production_rate_to_flux_14, x_co2atm_13, x_co2atm_14, x_co2atm_13, x_co2atm_14, &
+                production_rate_to_flux_14, x_co2atm_13, x_co2atm_14, &
                 atmco2_13, gloco2flux_seaicemask_13, co2flux_seaicemask_13, cosmic_14, &
-                co2flux_seaicemask_14, gloco2flux_seaicemask_13, gloco2flux_seaicemask_14, &
-                gloco2flux_seaicemask_14, lat_zone, atmco2_14
+                co2flux_seaicemask_14, gloco2flux_seaicemask_14, lat_zone, atmco2_14
 
         use recom_glovar, only: tracers_info_type, benthos, co23d, ph3d, pco23d, hco33d, co33d, &
                 omegac3d, kspc3d, rhosw3d, glodecaybenthos, par3d, chldegc, chldegd, chldegn, &
@@ -147,10 +146,9 @@ contains
                 grazmeso_d, grazmeso_det, grazmeso_det2, grazmeso_mic, grazmeso_n, grazmeso_p, &
                 grazmeso_tot, grazmicro_c, grazmicro_d, grazmicro_n, grazmicro_p, grazmicro_tot, &
                 nnac, nnad, nnan, nnap, nppc, nppd, nppn, nppp, x_co2atm, glohplus, atmco2, &
-                glofedust, glondust, atmfeinput, atmninput, glohplus, pistonvelocity, alphaco2, &
+                glofedust, glondust, atmfeinput, atmninput, pistonvelocity, alphaco2, &
                 glopco2surf, glodpco2surf, gloco2flux, gloco2flux_seaicemask, &
-                gloo2flux, glopco2surf, glodpco2surf, gloco2flux, gloco2flux_seaicemask, &
-                gloo2flux_seaicemask, glohplus, atmfeinput, atmninput, chldegp
+                gloo2flux, gloo2flux_seaicemask, chldegp
 
         use recom_diags_management, only: allocate_and_init_diags, update_2d_diags, &
                 update_3d_diags, deallocate_diags

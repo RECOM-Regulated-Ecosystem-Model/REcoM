@@ -38,11 +38,11 @@ contains
                 locNNAn, vertChldegc, vertgrazmeso_c, locgrazmacro_tot, locgrazmacro_det2, &
                 vertgrazmacro_p
 
-        use recom_config, only: bgc_num, chl2n_max, chl2n_max_c, chl2n_max_d, chl2n_max_p, ciso, &
+        use recom_config, only: bgc_num, ciso, &
                 diags, enable_3zoo2det, enable_coccos, grazing_detritus, ialk, icchl, icocc, &
-                idchl, idiac, idian, idiasi, idic, idin, imiczooc, imiczoon, ioxy, idicremin, ipchl, &
-                iphac, iphachl, iphan, iphyc, iphyn, isi, ncmax, ncmax_c, ncmax_d, ncmax_p, nmocsy, &
-                one, pa2atm, recom_debug, secondsperday, sicmax, tiny, tiny_chl, icocn
+                idchl, idiac, idian, idiasi, idic, idin, ioxy, ipchl, &
+                iphac, iphachl, iphan, iphyc, iphyn, isi, nmocsy, &
+                one, pa2atm, recom_debug, secondsperday, tiny, tiny_chl, icocn
 
         use recom_ciso, only: alpha_aq_13, alpha_aq_14, alpha_dic_13, alpha_dic_14, alpha_k_13, &
                 alpha_k_14, alpha_p_13, alpha_p_14, alpha_p_dia_13, alpha_p_dia_14, ciso_14, &
@@ -324,13 +324,6 @@ contains
             state(nzmin:nn, iphan)   = max(tiny_N_p, state(nzmin:nn, iphan))
             state(nzmin:nn, iphac)   = max(tiny_C_p, state(nzmin:nn, iphac))
         end if
-
-        if (enable_3zoo2det) then
-            state(nzmin:nn, imiczoon) = max(tiny, state(nzmin:nn, imiczoon))
-            state(nzmin:nn, imiczooc) = max(tiny, state(nzmin:nn, imiczooc))
-        end if
-
-        state(nzmin:nn, idicremin) = max(tiny, state(nzmin:nn, idicremin))
 
         if (recom_debug .and. mype == 0) print *, achar(27) // '[36m' // '     --> ciso after' // &
                 ' REcoM_Forcing' // achar(27) // '[0m'
