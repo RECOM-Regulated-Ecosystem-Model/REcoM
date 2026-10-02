@@ -2841,7 +2841,7 @@ contains
     ! ==============================================================================
     subroutine allocate_and_init_diags(nl)
 
-        use REcoM_declarations, only: vertcalcdiss, vertcalcif
+        use REcoM_declarations, only: vertcalcdiss, vertcalcif, vertrespmeso
 
         implicit none
 
@@ -2861,6 +2861,10 @@ contains
         allocate(vertcalcdiss(nl - 1), vertcalcif(nl - 1))
         vertcalcdiss = 0.d0
         vertcalcif = 0.d0
+
+        ! original: only allocated with enable_3zoo2det but needed when Diags = true
+        allocate(vertrespmeso(nl - 1))
+        vertrespmeso = 0.d0
 
         ! --------------------------------------------------------------------------
         ! Zooplankton grazing (optional)
@@ -3048,7 +3052,6 @@ contains
             ! Mesozooplankton
             allocate(vertgrazmeso_tot(nl - 1), vertgrazmeso_n(nl - 1), vertgrazmeso_d(nl - 1))
             allocate(vertgrazmeso_det(nl - 1), vertgrazmeso_mic(nl - 1), vertgrazmeso_det2(nl - 1))
-            allocate(vertrespmeso(nl - 1))
 
             vertgrazmeso_tot = 0.d0
             vertgrazmeso_n = 0.d0
@@ -3056,7 +3059,6 @@ contains
             vertgrazmeso_det = 0.d0
             vertgrazmeso_mic = 0.d0
             vertgrazmeso_det2 = 0.d0
-            vertrespmeso = 0.d0
 
             if (enable_coccos) then
                 allocate(vertgrazmicro_c(nl - 1), vertgrazmicro_p(nl - 1))
