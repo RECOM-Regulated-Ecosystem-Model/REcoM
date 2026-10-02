@@ -784,6 +784,7 @@ contains
                     ! ----------------------------------------------------------------
                     ! Cap the sinking CFL at cfl_safety: the DST3/TVD limiter below needs
                     ! cfl <= 1, which thin cells (e.g. at cavity ice drafts) can exceed.
+                    ! todo: disable test
                     if (dz_trr(nz) > 0.0d0) then
                         Wvel_flux(nz) = sign(min(abs(Wvel_flux(nz)), &
                                 cfl_safety * dz_trr(nz) / dt), Wvel_flux(nz))
