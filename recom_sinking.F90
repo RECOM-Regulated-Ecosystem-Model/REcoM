@@ -46,7 +46,7 @@ contains
     !         recom_declarations throughout this file.
     !===============================================================================
     subroutine ver_sinking_recom_benthos(tr_num, nl, ulevels_nod2D, nlevels_nod2D, zbar_3d_n, &
-            nod_in_elem2D_num, nod_in_elem2D, nlevels, area, areasvol, tracer_id, tracer_data_values, &
+            nod_in_elem2D_num, nod_in_elem2D, nlevels, elem_area, area, areasvol, tracer_id, tracer_data_values, &
             myDim_nod2d, str_bf, mype, MPI_COMM_FESOM, npes, sn, rn, s_mpitype_nod2D, &
             r_mpitype_nod2D, s_mpitype_nod3D, r_mpitype_nod3D, sPE, rPE, requests, nreq, dt)
 
@@ -69,6 +69,7 @@ contains
         integer, intent(in), dimension(:) :: nod_in_elem2D_num, nlevels
         integer, intent(in), dimension(:, :) :: nod_in_elem2D
         real(kind=WP), intent(in) :: dt
+        real(kind=WP), intent(in), dimension(:) :: elem_area
         real(kind=WP), intent(in), dimension(:, :) :: zbar_3d_n, area, areasvol, tracer_data_values
         real(kind=WP), intent(inout), dimension(:, :) :: str_bf
 
@@ -80,10 +81,10 @@ contains
         integer, intent(in), dimension(:), pointer :: s_mpitype_nod2D, r_mpitype_nod2D
         integer, intent(in), dimension(:, :, :), pointer :: s_mpitype_nod3D, r_mpitype_nod3D
 
-        integer :: k
+        integer :: j, e
         integer :: nl1, ul1, nz, n
         real(kind=WP) :: Vben(nl), aux(nl - 1), add_benthos_2d(myDim_nod2D)
-        integer :: nlevels_nod2D_minimum
+        real(kind=WP) :: seafloor(nl) ! seafloor area [m2] under each layer of node n
         real(kind=WP) :: tv
         ! Print caps per MPI rank (cavity/open ocean separately)
         integer, parameter :: n_si_deposit_diag_prints_max = 5
@@ -138,22 +139,21 @@ contains
             ! conversion [m/d] --> [m/s] (vertical velocity, note that it is positive here)
             Vben = Vben / SecondsPerDay
 
-            k = nod_in_elem2D_num(n)
-
-            ! Screen minimum depth among neighbouring nodes around node n, so that
-            ! the flux loop below does not run below the shallowest shared bottom.
-            nlevels_nod2D_minimum = minval(nlevels(nod_in_elem2D(1:k, n)) - 1)
-
             ! ----------------------------------------------------------------
-            ! Downward mass flux through each layer, weighted by the change in
-            ! cross-sectional area between adjacent layer interfaces.
-            !
-            ! max(.., ul1): don't start under the ice at cavity nodes.
+            ! Seafloor area under layer nz: 1/3 of every surrounding element whose
+            ! deepest wet layer is nz (as area(nz,n), but ice-base area not counted).
+            ! In the open ocean identical to area(nz,n) - area(nz+1,n).
             ! ----------------------------------------------------------------
-            do nz = max(nlevels_nod2D_minimum, ul1), nl1
+            seafloor = 0._WP
+            do j = 1, nod_in_elem2D_num(n)
+                e = nod_in_elem2D(j, n)
+                seafloor(nlevels(e) - 1) = seafloor(nlevels(e) - 1) + elem_area(e) / 3.0_WP
+            end do
+
+            ! Downward mass flux intercepted by the seafloor under each layer
+            do nz = ul1, nl1
                 tv = tracer_data_values(nz, n) * Vben(nz)
-                ! Clamped at 0: cavities can widen with depth (spurious negative capture)
-                aux(nz) = -tv * max(area(nz, n) - area(nz + 1, n), 0.0_WP)
+                aux(nz) = -tv * seafloor(nz)
             end do
 
             do nz = ul1, nl1
@@ -441,7 +441,7 @@ contains
     !   flux into a per-volume concentration tendency for cell nz.
     !===============================================================================
     subroutine diff_ver_recom_expl(nl, ulevels_nod2D, nlevels_nod2D, nod_in_elem2D_num, &
-            nod_in_elem2D, nlevels, area, areasvol, hnode_new, tracer_id, myDim_nod2d, &
+            nod_in_elem2D, nlevels, elem_area, area, areasvol, hnode_new, tracer_id, myDim_nod2d, &
             eDim_nod2D, mype, MPI_COMM_FESOM, dtr_bf, dt)
 
         use recom_declarations, only: wp, tracer_ids
@@ -456,13 +456,14 @@ contains
         integer, intent(in), dimension(:) :: nod_in_elem2D_num, nlevels
         real(kind=WP), intent(in) :: dt
         integer, intent(in), dimension(:, :) :: nod_in_elem2D
+        real(kind=WP), intent(in), dimension(:) :: elem_area
         real(kind=WP), intent(in), dimension(:, :) :: area, areasvol, hnode_new
         real(kind=WP), intent(inout), dimension(:, :) :: dtr_bf
 
-        integer :: k
+        integer :: j, e
         integer :: nl1, nz, n, ul1
         real(kind=WP) :: vd_flux(nl)
-        integer :: nlevels_nod2D_minimum
+        real(kind=WP) :: seafloor(nl) ! seafloor area [m2] under each layer of node n
         real(kind=WP) :: bottom_flux(myDim_nod2D + eDim_nod2D)
         real(kind=WP) :: tot_flux
         logical :: areal_flux
@@ -553,32 +554,22 @@ contains
 
             vd_flux = 0._WP
 
-            k = nod_in_elem2D_num(n)
-            ! Screen minimum depth among neighbouring nodes around node n
-            nlevels_nod2D_minimum = minval(nlevels(nod_in_elem2D(1:k, n)) - 1)
-
             !_______________________________________________________________________
-            ! Bottom flux, distributed across layers proportional to the change
-            ! in cross-sectional area between interfaces, then normalized by the
-            ! surface-layer volume-area.
-            !
-            ! NOTE / NEEDS CONFIRMATION: every layer nz here divides by
-            ! areasvol(ul1, n) -- the *surface* (ul1) layer's volume-area -- not
-            ! areasvol(nz, n), the volume-area of the layer the flux is actually
-            ! being assigned to. This was already flagged by OG
-            ! (see "CHECK" comment above on the GloSed DIN line) as needing review.
-            ! Left unchanged; verify against the intended discretization before
-            ! trusting sub-surface benthic flux distribution.
-            !
-            ! max(.., ul1) and clamp at 0: cavity fixes as in ver_sinking_recom_benthos.
+            ! Bottom flux, distributed over the layers in proportion to the seafloor
+            ! area under each layer (see ver_sinking_recom_benthos).
             ! GlodecayBenthos is per area: make it a total flux like MEDUSA's.
             tot_flux = bottom_flux(n)
             if (areal_flux) tot_flux = tot_flux * area(ul1, n)
-            do nz = max(nlevels_nod2D_minimum, ul1), nl1
-                vd_flux(nz) = max(area(nz, n) - area(nz + 1, n), 0.0_WP) * tot_flux / (area(ul1, n))
+            seafloor = 0._WP
+            do j = 1, nod_in_elem2D_num(n)
+                e = nod_in_elem2D(j, n)
+                seafloor(nlevels(e) - 1) = seafloor(nlevels(e) - 1) + elem_area(e) / 3.0_WP
             end do
-            nz = nl1
-            vd_flux(nz + 1) = (area(nz + 1, n)) * tot_flux / (area(ul1, n))
+            ! seafloor under layer nz is its bottom face, vd_flux(nz+1), which cell nz
+            ! receives below; weights sum to 1, so the return equals the benthic loss
+            do nz = ul1, nl1
+                vd_flux(nz + 1) = seafloor(nz) * tot_flux / sum(seafloor(ul1:nl1))
+            end do
 
             !_______________________________________________________________________
             ! Add bottom flux into the tracer tendency (rhs). Each cell nz only

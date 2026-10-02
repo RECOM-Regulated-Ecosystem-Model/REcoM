@@ -81,7 +81,11 @@ contains
         call integrate_nod_2D_recom(relax_alk, net, MPI_COMM_FESOM, myDim_nod2D, &
                 ulevels_nod2D, areasvol)
 
-        relax_alk = relax_alk - net / ocean_area
+        ! only at open-ocean nodes: ocean_area excludes cavities, and the surface BC is
+        ! applied at nzmin, so cavity nodes must keep relax_alk = 0 (else it accumulates)
+        do n = 1, myDim_nod2D + eDim_nod2D
+            if (ulevels_nod2d(n) == 1) relax_alk(n) = relax_alk(n) - net / ocean_area
+        end do
 
     end subroutine bio_fluxes
 end module bio_fluxes_interface
@@ -401,7 +405,7 @@ contains
             Temp(nzmin:nzmax) = tracers_info%data_pointers(1)%tracer_data(nzmin:nzmax, n)
 
             !!---- Surface salinity
-            Sali = tracers_info%data_pointers(2)%tracer_data(1, n)
+            Sali = tracers_info%data_pointers(2)%tracer_data(nzmin, n) ! top wet level (ice base at cavity nodes)
             Sali_depth(nzmin:nzmax) = tracers_info%data_pointers(2)%tracer_data(nzmin:nzmax, n)
 
             !-----------------------------------------------------------------------
