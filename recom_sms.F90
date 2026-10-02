@@ -104,6 +104,7 @@ contains
                 ncuptakeratio, ncuptakeratio_c, pzcocco3, pzdet, pzdet2, pzdetz2, pzdetz22, &
                 pzdia, pzdia2, pzdia3, pzhet, pzmiczoo
 
+        use recoM_ciso, only: lambda_14
         use recoM_ciso, only: alpha_calc_13, alpha_calc_14, alpha_dcal_13, alpha_dcal_14, &
                 calc_diss_13, calc_diss_14, calc_loss_agg_13, calc_loss_agg_14, calc_loss_gra_13, &
                 calc_loss_gra_14, calcification_13, calcification_14, ciso_14, ciso_organic_14, &
@@ -2623,7 +2624,7 @@ contains
 
                         ! Calcification with 14C fractionation
                         ! 14C fractionation is approximately twice that of 13C
-                        calcification_14 = calc_prod_ratio * Cphot * PhyC_14 * alpha_calc_14
+                        calcification_14 = calcification * alpha_calc_14
 
                         ! 14C losses through aggregation
                         calc_loss_agg_14 = aggregationRate * PhyCalc_14
@@ -3833,6 +3834,8 @@ contains
 
                             ! Update benthic 14C-calcite pool
                             LocBenthos(8) = LocBenthos(8) - decayBenthos(8) * dt_b
+
+                            LocBenthos(7:8) = LocBenthos(7:8) * (1 - lambda_14 * dt_b * SecondsPerDay)
 
                         else
                             !---------------------------------------------------------------

@@ -25,6 +25,7 @@ contains
                 tiny_n, tiny_n_c, tiny_n_d, tiny_n_p, tiny_si, vttemp_phyto, vttemp_diatoms, &
                 vttemp_cocco, vttemp_phaeo, chl_lower, chl_upper
 
+        use recom_config, only: use_DICremin
         use recom_config, only: a_chl, ae, beta_phaeo, c2k, chl2n_max, chl2n_max_c, chl2n_max_d, &
                 chl2n_max_p, enable_3zoo2det, enable_coccos, expon_cocco, expon_d, expon_phy, &
                 grazing_detritus, ialk, icchl, icocc, icocn, idchl, idetc, idetcal, idetn, &
@@ -97,7 +98,7 @@ contains
         DIC = max(tiny, state(k, idic) + sms(k, idic))
         ALK = max(tiny, state(k, ialk) + sms(k, ialk))
         O2 = max(tiny, state(k, ioxy) + sms(k, ioxy))
-        DICremin = max(tiny, state(k, idicremin) + sms(k, idicremin))
+        if (use_DICremin) DICremin = max(tiny, state(k, idicremin) + sms(k, idicremin))
 
         !-----------------------------------------------------------------------
         ! DISSOLVED ORGANIC MATTER
@@ -1077,6 +1078,7 @@ contains
                 recipdet, recipdet2, recipqzoo, recipqzoo2, recipqzoo3, &
                 is_coccos, is_3zoo2det, si_assim, reminsit, qsin
 
+        use recom_config, only: use_DICremin
         use recom_config, only: &
                 idin, idic, ialk, iphyn, iphyc, ipchl, iphycal, &
                 idian, idiac, idchl, idiasi, &
@@ -1095,7 +1097,6 @@ contains
                 fe2n, kscavfe, kscavfe2, redo2c, calc_diss_guts, &
                 grazeff2, grazeff3, ciso, tiny
 
-        use recom_locvar, only: locriverdoc
 
         use recoM_ciso, only: ciso_14, ciso_organic_14, &
                 calc_diss_13, calc_diss_14, &
@@ -1114,7 +1115,6 @@ contains
                 recipquota_dia_13, recipquota_dia_14, &
                 recipqzoo_13, recipqzoo_14, &
                 hetrespflux_13, hetrespflux_14, &
-                r_iorg_13, r_iorg_14, &
                 r_phyc_13, r_phyc_14, r_diac_13, r_diac_14
 
         implicit none
@@ -3058,9 +3058,11 @@ contains
         ! 37. DIC remineralzation tracer to track remineralization as an diagnostics
         !===============================================================================
         !   idicremin       : Tracer for remineralization diagnostics (added by Sina)
-        sms(k, idicremin) = (                 &
-            + rho_c1 * arrFunc * O2Func * EOC &
-            ) * dt_b + sms(k,idicremin)
+        if (use_DICremin) then
+            sms(k, idicremin) = (                 &
+                + rho_c1 * arrFunc * O2Func * EOC &
+                ) * dt_b + sms(k,idicremin)
+        end if
 
         if (ciso) then
 
@@ -3124,7 +3126,7 @@ contains
             !-----------------------------------------------------------------------
                     + phyRespRate * PhyC_13 & ! Small phyto respiration
                     + phyRespRate_Dia * DiaC_13 & ! Diatom respiration
-                    + rho_C1 * arrFunc * EOC_13 & ! DOC remineralization
+                    + rho_C1 * arrFunc * O2Func * EOC_13 & ! DOC remineralization
                     + HetRespFlux_13 & ! Heterotroph respiration
             !
             !-----------------------------------------------------------------------
@@ -3230,7 +3232,7 @@ contains
             !-----------------------------------------------------------------------
             ! SINKS: Remineralization
             !-----------------------------------------------------------------------
-                    - reminC * arrFunc * DetC_13 & ! Aerobic respiration
+                    - reminC * arrFunc * O2Func * DetC_13 & ! Aerobic respiration
             !
                     ) * dt_b + sms(k, idetc_13)
 
@@ -3290,8 +3292,6 @@ contains
             ! Variables:
             !   lossC, lossC_d    : Exudation rate constants [day-1]
             !   limitFacN         : Nutrient limitation factors [0-1]
-            !   LocRiverDOC       : River DOC input flux [mmolC m-3 day-1]
-            !   r_iorg_13         : River 13C:12C ratio (isotopic signature) [-]
             !
             ! DOC Pool Characteristics:
             !   - Labile fraction: Days to weeks turnover
@@ -3310,18 +3310,17 @@ contains
             !-----------------------------------------------------------------------
                     +lossC * limitFacN * phyC_13 & ! Small phyto exudation
                     + lossC_d * limitFacN_dia * DiaC_13 & ! Diatom exudation
-                    + reminC * arrFunc * DetC_13 & ! Detritus solubilization
+                    + reminC * arrFunc * O2Func * DetC_13 & ! Detritus solubilization
                     + lossC_z * HetC_13 & ! Heterotroph exudation
             !
             !-----------------------------------------------------------------------
             ! SOURCES: River input (terrestrial DOC)
             !-----------------------------------------------------------------------
-                    + LocRiverDOC * r_iorg_13 & ! River 13C input
             !
             !-----------------------------------------------------------------------
             ! SINKS: Remineralization
             !-----------------------------------------------------------------------
-                    - rho_c1 * arrFunc * EOC_13 & ! Microbial respiration
+                    - rho_c1 * arrFunc * O2Func * EOC_13 & ! Microbial respiration
             !
                     ) * dt_b + sms(k, idoc_13)
 
@@ -3472,7 +3471,7 @@ contains
                             + phyRespRate * PhyC_14 &
                             - Cphot_Dia * r_diac_14 * DiaC &
                             + phyRespRate_Dia * DiaC_14 &
-                            + rho_C1 * arrFunc * EOC_14 &
+                            + rho_C1 * arrFunc * O2Func * EOC_14 &
                             + HetRespFlux_14 &
                             + calc_diss_14 * DetCalc_14 &
                             + calc_loss_gra_14 * calc_diss_guts &
@@ -3502,7 +3501,7 @@ contains
                             + aggregationRate * phyC_14 &
                             + aggregationRate * DiaC_14 &
                             + hetLossFlux * recipQZoo_14 &
-                            - reminC * arrFunc * DetC_14 &
+                            - reminC * arrFunc * O2Func * DetC_14 &
                             ) * dt_b + sms(k, idetc_14)
 
                     !===================================================================
@@ -3522,10 +3521,9 @@ contains
                     sms(k, idoc_14) = ( &
                             +lossC * limitFacN * phyC_14 &
                             + lossC_d * limitFacN_dia * DiaC_14 &
-                            + reminC * arrFunc * DetC_14 &
+                            + reminC * arrFunc * O2Func * DetC_14 &
                             + lossC_z * HetC_14 &
-                            - rho_c1 * arrFunc * EOC_14 &
-                            + LocRiverDOC * r_iorg_14 &
+                            - rho_c1 * arrFunc * O2Func * EOC_14 &
                             ) * dt_b + sms(k, idoc_14)
 
                     !===================================================================

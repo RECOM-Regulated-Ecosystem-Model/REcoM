@@ -130,7 +130,7 @@ contains
                 oflux
 
         use recom_ciso, only: locatmco2_13, locatmco2_14, r_atm_13, r_atm_14, ciso_14, &
-                gloco2flux_13, gloco2flux_14, glopco2surf_13, glopco2surf_14, lat_val, &
+                lat_val, &
                 production_rate_to_flux_14, x_co2atm_13, x_co2atm_14, x_co2atm_13, x_co2atm_14, &
                 atmco2_13, gloco2flux_seaicemask_13, co2flux_seaicemask_13, cosmic_14, &
                 co2flux_seaicemask_14, gloco2flux_seaicemask_13, gloco2flux_seaicemask_14, &
@@ -586,25 +586,25 @@ contains
                 npes, sn, rn, MPI_COMM_FESOM, mype, s_mpitype_nod2D, &
                 r_mpitype_nod2D, sPE, rPE, requests, nreq)
         if (ciso) then
-            call recom_exchange_nod(GloPCO2surf_13, &
-                    npes, sn, rn, MPI_COMM_FESOM, mype, s_mpitype_nod2D, &
-                    r_mpitype_nod2D, sPE, rPE, requests, nreq)
+            !call recom_exchange_nod(GloPCO2surf_13, &
+                    !npes, sn, rn, MPI_COMM_FESOM, mype, s_mpitype_nod2D, &
+                    !r_mpitype_nod2D, sPE, rPE, requests, nreq)
 
-            call recom_exchange_nod(GloCO2flux_13, &
-                    npes, sn, rn, MPI_COMM_FESOM, mype, s_mpitype_nod2D, &
-                    r_mpitype_nod2D, sPE, rPE, requests, nreq)
+            !call recom_exchange_nod(GloCO2flux_13, &
+                    !npes, sn, rn, MPI_COMM_FESOM, mype, s_mpitype_nod2D, &
+                    !r_mpitype_nod2D, sPE, rPE, requests, nreq)
 
             call recom_exchange_nod(GloCO2flux_seaicemask_13, &
                     npes, sn, rn, MPI_COMM_FESOM, mype, s_mpitype_nod2D, &
                     r_mpitype_nod2D, sPE, rPE, requests, nreq)
             if (ciso_14) then
-                call recom_exchange_nod(GloPCO2surf_14, &
-                        npes, sn, rn, MPI_COMM_FESOM, mype, s_mpitype_nod2D, &
-                        r_mpitype_nod2D, sPE, rPE, requests, nreq)
+                !call recom_exchange_nod(GloPCO2surf_14, &
+                        !npes, sn, rn, MPI_COMM_FESOM, mype, s_mpitype_nod2D, &
+                        !r_mpitype_nod2D, sPE, rPE, requests, nreq)
 
-                call recom_exchange_nod(GloCO2flux_14, &
-                        npes, sn, rn, MPI_COMM_FESOM, mype, s_mpitype_nod2D, &
-                        r_mpitype_nod2D, sPE, rPE, requests, nreq)
+                !call recom_exchange_nod(GloCO2flux_14, &
+                        !npes, sn, rn, MPI_COMM_FESOM, mype, s_mpitype_nod2D, &
+                        !r_mpitype_nod2D, sPE, rPE, requests, nreq)
 
                 call recom_exchange_nod(GloCO2flux_seaicemask_14, &
                         npes, sn, rn, MPI_COMM_FESOM, mype, s_mpitype_nod2D, &

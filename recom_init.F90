@@ -53,6 +53,9 @@ contains
         use REcoM_GloVar, only: tracers_info_type
         use recom_config, only: validate_recom_tracers, initialize_tracer_indices, &
                 validate_tracer_id_sequence, bgc_num
+        use recom_ciso, only: idic_13, iphyc_13, idetc_13, ihetc_13, idoc_13, idiac_13, &
+                iphycal_13, idetcal_13, idic_14, iphyc_14, idetc_14, ihetc_14, idoc_14, &
+                idiac_14, iphycal_14, idetcal_14
 
         implicit none
 
@@ -86,12 +89,12 @@ contains
 
         ! Validation check here
         call validate_recom_tracers(num_tracers, use_age_tracer, use_transit, l_sf6, l_f11, l_f12, &
-                l_r14c, l_r39ar, mype)
+                l_r14c, l_r39ar, mype, ciso_tracer_ids())
 
         ! After reading tracer namelist - validate actual IDs
         call validate_tracer_id_sequence(tracers_info%ids(1:num_tracers), num_tracers, &
                 use_age_tracer, use_transit, &
-                l_sf6, l_f11, l_f12, l_r14c, l_r39ar, mype)
+                l_sf6, l_f11, l_f12, l_r14c, l_r39ar, mype, ciso_tracer_ids())
 
         ! T,S | BGC | [age] | [transit] num_physical_tracers
         ! is always just T,S (=2): BGC tracers start right after them, regardless
@@ -118,6 +121,25 @@ contains
         do i = bgc_start, bgc_end
             tracer_id = tracers_info%ids(i)
 
+            select case (tracer_id)
+            case (1302); idic_13 = i - num_physical_tracers
+            case (1305); iphyc_13 = i - num_physical_tracers
+            case (1308); idetc_13 = i - num_physical_tracers
+            case (1310); ihetc_13 = i - num_physical_tracers
+            case (1312); idoc_13 = i - num_physical_tracers
+            case (1314); idiac_13 = i - num_physical_tracers
+            case (1320); iphycal_13 = i - num_physical_tracers
+            case (1321); idetcal_13 = i - num_physical_tracers
+            case (1402); idic_14 = i - num_physical_tracers
+            case (1405); iphyc_14 = i - num_physical_tracers
+            case (1408); idetc_14 = i - num_physical_tracers
+            case (1410); ihetc_14 = i - num_physical_tracers
+            case (1412); idoc_14 = i - num_physical_tracers
+            case (1414); idiac_14 = i - num_physical_tracers
+            case (1420); iphycal_14 = i - num_physical_tracers
+            case (1421); idetcal_14 = i - num_physical_tracers
+            end select
+
             !Iron (unit conversion: mol/L => umol/m3)
             if (tracer_id == tracer_ids%iron) then
 
@@ -127,7 +149,7 @@ contains
                 ! Avoids tracers 1001, 1002, 1003, 1018, 1022 and DICremin (read from gen_ic3d)
             else if (tracer_id > 1003 .and. tracer_id /= 1018 .and. tracer_id /= 1022 .and. &
                     tracer_id /= tracer_ids%dic_remineralization) then  ! allowed since call initialize_tracer_ids happens earlier
-                tracers_info%data_pointers(i)%tracer_data(:, :) = get_tracer_init_value(tracer_id)
+                tracers_info%data_pointers(i)%tracer_data(:, :) = get_tracer_init_value(tracer_id, mype)
             end if
         end do
 
@@ -373,17 +395,30 @@ contains
     ! they were originally used to set isotopically-informed initial DIC_13/DIC_14 profiles;
     ! that usage was ported into initialize_ciso_tracers below, sized locally to match.
     !===============================================================================
+    function ciso_tracer_ids() result(ids)
+        use recom_config, only: ciso
+        use recom_ciso, only: ciso_14, ciso_organic_14
+
+        implicit none
+
+        integer, allocatable :: ids(:)
+
+        allocate(ids(0))
+        if (.not. ciso) return
+        ids = [1302, 1305, 1308, 1310, 1312, 1314, 1320, 1321]
+        if (.not. ciso_14) return
+        ids = [ids, 1402]
+        if (ciso_organic_14) ids = [ids, 1405, 1408, 1410, 1412, 1414, 1420, 1421]
+    end function ciso_tracer_ids
+
     subroutine initialize_ciso(node_size, nl, ocean_area)
         use recom_declarations, only: wp
-        use recom_config, only: ciso, bgc_base_num, CO2_for_spinup, use_atbox
+        use recom_config, only: ciso, CO2_for_spinup, use_atbox
         use recom_ciso, only: ciso_14, ciso_organic_14, delta_co2_13, &
                 big_delta_co2_14, cosmic_14_init, delta_co2_14, r_atm_spinup_13, &
                 r_atm_spinup_14, production_rate_to_flux_14, cosmic_14, x_co2atm_13, &
-                x_co2atm_14, idic_13, iphyc_13, idetc_13, ihetc_13, idoc_13, idiac_13, &
-                iphycal_13, idetcal_13, idic_14, iphyc_14, idetc_14, ihetc_14, idoc_14, &
-                idiac_14, iphycal_14, idetcal_14, delta_dic_13_init, delta_dic_14_init, &
-                big_delta_dic_14_init, GloPCO2surf_13, GloPCO2surf_14, GloCO2flux_13, &
-                GloCO2flux_14, GloCO2flux_seaicemask_13, GloCO2flux_seaicemask_14
+                x_co2atm_14, delta_dic_13_init, delta_dic_14_init, &
+                big_delta_dic_14_init, GloCO2flux_seaicemask_13, GloCO2flux_seaicemask_14
         use recom_glovar, only: x_co2atm
 
         implicit none
@@ -424,42 +459,17 @@ contains
             end if
         end if
 
-        ! --- ciso tracer indices and surface diagnostic fields ---
-        ! MERGE-REVIEW: bgc_base_num is a fixed count for the base 2-phytoplankton/1-zoo/1-det
-        ! configuration (see its declaration in recom_config); int_recom's own comment on
-        ! bgc_base_num confirms this. These offsets do not account for the variable tracer
-        ! count when enable_3zoo2det/enable_coccos are also active, so combining ciso with
-        ! those config options would misindex these tracers in both int_recom and here. Ported
-        ! as-is; re-derive these offsets first if ciso needs to work alongside
-        ! enable_3zoo2det/enable_coccos.
         if (ciso) then
-            idic_13 = bgc_base_num + 1
-            iphyc_13 = bgc_base_num + 2
-            idetc_13 = bgc_base_num + 3
-            ihetc_13 = bgc_base_num + 4
-            idoc_13 = bgc_base_num + 5
-            idiac_13 = bgc_base_num + 6
-            iphycal_13 = bgc_base_num + 7
-            idetcal_13 = bgc_base_num + 8
-            idic_14 = bgc_base_num + 9
-            iphyc_14 = bgc_base_num + 10
-            idetc_14 = bgc_base_num + 11
-            ihetc_14 = bgc_base_num + 12
-            idoc_14 = bgc_base_num + 13
-            idiac_14 = bgc_base_num + 14
-            iphycal_14 = bgc_base_num + 15
-            idetcal_14 = bgc_base_num + 16
-
-            allocate(GloPCO2surf_13(node_size), source=0.d0)
-            allocate(GloCO2flux_13(node_size), source=0.d0)
+            !allocate(GloPCO2surf_13(node_size), source=0.d0)
+            !allocate(GloCO2flux_13(node_size), source=0.d0)
             allocate(GloCO2flux_seaicemask_13(node_size), source=0.d0)
 
             ! Auxiliary initial delta13C_DIC field, used by initialize_ciso_tracers below
             allocate(delta_dic_13_init(nl - 1, node_size))
 
             if (ciso_14) then
-                allocate(GloPCO2surf_14(node_size), source=0.d0)
-                allocate(GloCO2flux_14(node_size), source=0.d0)
+                !allocate(GloPCO2surf_14(node_size), source=0.d0)
+                !allocate(GloCO2flux_14(node_size), source=0.d0)
                 allocate(GloCO2flux_seaicemask_14(node_size), source=0.d0)
 
                 ! Auxiliary initial d|Delta14C_DIC fields, used by initialize_ciso_tracers below
@@ -640,12 +650,12 @@ contains
 
     end subroutine initialize_tracer_ids
 
-    function get_tracer_init_value(tracer_id) result(init_value)
+    function get_tracer_init_value(tracer_id, mype) result(init_value)
         use recom_declarations, only: tracer_ids, wp
         use REcoM_config, only: tiny, tiny_chl, chl2N_max, NCmax, chl2N_max_d, NCmax_d, SiCmax, &
                 Redfield
 
-        integer, intent(in) :: tracer_id
+        integer, intent(in) :: tracer_id, mype
         real(kind=wp) :: init_value
 
         if (tracer_id == tracer_ids%phytoplankton_nitrogen .or. &
@@ -698,7 +708,7 @@ contains
 
         else
             init_value = 0.0_wp
-            write(*, *) 'Warning: No initial value defined for tracer ID ', tracer_id, '.' // &
+            if (mype == 0) write(*, *) 'Warning: No initial value defined for tracer ID ', tracer_id, '.' // &
                     ' Setting to 0'
         end if
     end function get_tracer_init_value

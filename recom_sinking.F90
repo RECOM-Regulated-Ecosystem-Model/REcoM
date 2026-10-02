@@ -333,10 +333,6 @@ contains
                         tracer_id == 1321) then !idetcal_13
 
 #if defined(__usetp)
-                    ! kh 25.03.22 buffer sums per tracer index to avoid non bit identical
-                    ! results regarding global sums when running the tracer loop in parallel;
-                    ! summed into Benthos across tr_num by oce_ale_tracer.F90 after the
-                    ! tracer loop
                     Benthos_tr(n, 6, tr_num) = Benthos_tr(n, 6, tr_num) + add_benthos_2d(n)
 
                     if (use_MEDUSA) then

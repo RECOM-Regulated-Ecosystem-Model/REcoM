@@ -38,6 +38,7 @@ contains
                 locNNAn, vertChldegc, vertgrazmeso_c, locgrazmacro_tot, locgrazmacro_det2, &
                 vertgrazmacro_p
 
+        use recom_config, only: use_DICremin
         use recom_config, only: bgc_num, chl2n_max, chl2n_max_c, chl2n_max_d, chl2n_max_p, ciso, &
                 diags, enable_3zoo2det, enable_coccos, grazing_detritus, ialk, icchl, icocc, &
                 idchl, idiac, idian, idiasi, idic, idin, imiczooc, imiczoon, ioxy, idicremin, ipchl, &
@@ -341,7 +342,7 @@ contains
             state(nzmin:nn, imiczooc) = max(tiny, state(nzmin:nn, imiczooc))
         end if
 
-        state(nzmin:nn, idicremin) = max(tiny, state(nzmin:nn, idicremin))
+        if (use_DICremin) state(nzmin:nn, idicremin) = max(tiny, state(nzmin:nn, idicremin))
 
         if (recom_debug .and. mype == 0) print *, achar(27) // '[36m' // '     --> ciso after' // &
                 ' REcoM_Forcing' // achar(27) // '[0m'
@@ -384,8 +385,8 @@ contains
             ! pool against its own previous value rather than recomputing it from total C times
             ! the current isotope ratio, which the commit switched away from. Previous (NEW/pre-
             ! merge) formula kept below for reference:
-            state(nzmin:nn, iphyc_13) = max((tiny_C * r_phyc_13), (state(nzmin:nn, iphyc) * r_phyc_13))
-            state(nzmin:nn, idiac_13) = max((tiny_C_d * r_diac_13), (state(nzmin:nn, idiac) * r_diac_13))
+            !state(nzmin:nn, iphyc_13) = max((tiny_C * r_phyc_13), (state(nzmin:nn, iphyc) * r_phyc_13))
+            !state(nzmin:nn, idiac_13) = max((tiny_C_d * r_diac_13), (state(nzmin:nn, idiac) * r_diac_13))
             state(nzmin:nn, iphyc_13) = max((tiny_C * r_phyc_13), state(nzmin:nn, iphyc_13))
             state(nzmin:nn, idiac_13) = max((tiny_C_d * r_diac_13), state(nzmin:nn, idiac_13))
 
