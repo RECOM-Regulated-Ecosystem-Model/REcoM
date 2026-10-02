@@ -662,18 +662,22 @@ contains
         if (tracer_id == tracer_ids%detrital_nitrogen .or. & ! idetn
                 tracer_id == tracer_ids%detrital_carbon .or. & ! idetc
                 tracer_id == tracer_ids%detrital_silica .or. & ! idetsi
-                tracer_id == tracer_ids%detrital_calcite) then ! idetcal
+                tracer_id == tracer_ids%detrital_calcite .or. & ! idetcal
+                tracer_id == 1308 .or. tracer_id == 1321 .or. &
+                tracer_id == 1408 .or. tracer_id == 1421) then
             Vsink = VDet
 
         elseif (tracer_id == tracer_ids%phytoplankton_nitrogen .or. & ! iphyn
                     tracer_id == tracer_ids%phytoplankton_carbon .or. & ! iphyc
-                    tracer_id == tracer_ids%phytoplankton_chlorophyll) then ! ipchl
+                    tracer_id == tracer_ids%phytoplankton_chlorophyll .or. & ! ipchl
+                    tracer_id == 1305 .or. tracer_id == 1405) then
             Vsink = VPhy
 
         elseif (tracer_id == tracer_ids%diatom_nitrogen .or. & ! idian
                     tracer_id == tracer_ids%diatom_carbon .or. & ! idiac
                     tracer_id == tracer_ids%diatom_silica .or. & ! idiasi
-                    tracer_id == tracer_ids%diatom_chlorophyll) then ! idchl
+                    tracer_id == tracer_ids%diatom_chlorophyll .or. & ! idchl
+                    tracer_id == 1314 .or. tracer_id == 1414) then
             Vsink = VDia
 
         elseif (enable_coccos .and. &
@@ -688,7 +692,8 @@ contains
                     tracer_id == tracer_ids%phaeocystis_chlorophyll)) then ! iphachl
             Vsink = VPhaeo
 
-        elseif (tracer_id == tracer_ids%phytoplankton_calcite) then ! iphycal
+        elseif (tracer_id == tracer_ids%phytoplankton_calcite .or. & ! iphycal
+                    tracer_id == 1320 .or. tracer_id == 1420) then
             ! Calcite is produced by either coccolithophores or (in simpler
             ! configs without coccos) generic phytoplankton, so it inherits
             ! whichever group's sinking speed applies.
@@ -750,7 +755,9 @@ contains
                             if (tracer_id == tracer_ids%detrital_nitrogen .or. & !idetn
                                     tracer_id == tracer_ids%detrital_carbon .or. & !idetc
                                     tracer_id == tracer_ids%detrital_silica .or. & !idetsi
-                                    tracer_id == tracer_ids%detrital_calcite) then !idetcal
+                                    tracer_id == tracer_ids%detrital_calcite .or. & !idetcal
+                                    tracer_id == 1308 .or. tracer_id == 1321 .or. &
+                                    tracer_id == 1408 .or. tracer_id == 1421) then
                                 Wvel_flux(nz) = w_ref1 * scaling_density1_3D(nz, n) &
                                         * scaling_visc_3D(nz, n)
 
