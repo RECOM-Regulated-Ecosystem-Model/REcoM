@@ -495,13 +495,16 @@ contains
             end do
 
             !-----------------------------------------------------------------------
-            ! Sources-minus-sinks (SMS) tendency for diagnostic tracers
+            ! Sources-minus-sinks (SMS) tendency for diagnostic tracers, as a
+            ! layer-integrated rate [mmol/m2/s] like the other ltra_diag budget terms.
+            ! hnode is the layer thickness at the time REcoM runs (the start of the
+            ! ocean step, where hnode = hnode_new of the previous step).
             !-----------------------------------------------------------------------
             do tr_num = 1, num_tracers
                 if (tracers_info%ltra_diag(tr_num)) then
-                    tra_recom_sms(1:nzmax, n, tr_num) = &
-                            tracers_info%data_pointers(tr_num)%tracer_data(1:nzmax, n) &
-                            - ttf_rhs_bak(1:nzmax, tr_num)
+                    tra_recom_sms(nzmin:nzmax, n, tr_num) = &
+                            (tracers_info%data_pointers(tr_num)%tracer_data(nzmin:nzmax, n) &
+                            - ttf_rhs_bak(nzmin:nzmax, tr_num)) * hnode(nzmin:nzmax, n) / dt
                     !if (mype==0)  print *,  tra_recom_sms(:,:,tr_num)
                 end if
 
