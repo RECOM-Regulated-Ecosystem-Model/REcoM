@@ -273,112 +273,8 @@ contains
         ! Sets all biogeochemical fluxes to zero at start of time step
         sms = zero
 
-        !===============================================================================
-        ! MINIMUM THRESHOLD VALUES
-        !===============================================================================
-        ! Calculates minimum allowable concentrations for all biological state variables.
-        ! Prevents division by zero and ensures numerical stability.
-        !
-        ! Threshold Calculation Strategy:
-        !   - Based on physiological maximum ratios
-        !   - Works backward from minimum chlorophyll
-        !   - Ensures stoichiometric consistency
-        !   - Species-specific values
-        !
-        ! Rationale for Minimum Thresholds:
-        !   - Division by zero prevention in quota calculations
-        !   - Numerical stability in resource limitation terms
-        !   - Prevents spurious negative values
-        !   - Represents detection limits or "ghost populations"
-        !
-        ! Typical Minimum Values:
-        !   - Chlorophyll: ~0.001-0.01 mgChl m-3
-        !   - Nitrogen: ~0.001-0.01 mmolN m-3
-        !   - Carbon: ~0.01-0.1 mmolC m-3
-        !-------------------------------------------------------------------------------
-
-        !-------------------------------------------------------------------------------
-        ! Small Phytoplankton Thresholds
-        !-------------------------------------------------------------------------------
-        ! Variables:
-        !   tiny_N      : Minimum small phyto nitrogen [mmolN m-3]
-        !   tiny_C      : Minimum small phyto carbon [mmolC m-3]
-        !   tiny_chl    : Minimum chlorophyll (set externally) [mgChl m-3]
-        !   chl2N_max   : Maximum Chlorophyll:Nitrogen ratio [mgChl mmolN-1]
-        !   NCmax       : Maximum Nitrogen:Carbon quota [mmolN mmolC-1]
-        !
-        ! Calculation Logic:
-        !   1. Start with minimum observable Chl (tiny_chl)
-        !   2. Calculate minimum N using maximum Chl:N ratio
-        !   3. Calculate minimum C using maximum N:C quota
-        !
-        ! Typical Values:
-        !   chl2N_max = 3.15 mgChl/mmolN (high Chl per N, low light acclimation)
-        !   NCmax = 0.2 mmolN/mmolC (luxury N consumption maximum)
-
-        ! Minimum nitrogen based on minimum chlorophyll and maximum Chl:N ratio
-        tiny_N = tiny_chl / chl2N_max
-
-        ! Minimum carbon based on minimum nitrogen and maximum N:C quota
-        tiny_C = tiny_N / NCmax
-
-        !-------------------------------------------------------------------------------
-        ! Diatom Thresholds
-        !-------------------------------------------------------------------------------
-        ! Variables:
-        !   tiny_N_d    : Minimum diatom nitrogen [mmolN m-3]
-        !   tiny_C_d    : Minimum diatom carbon [mmolC m-3]
-        !   tiny_Si     : Minimum diatom silicate [mmolSi m-3]
-        !   chl2N_max_d : Maximum diatom Chl:N ratio [mgChl mmolN-1]
-        !   NCmax_d     : Maximum diatom N:C quota [mmolN mmolC-1]
-        !   SiCmax      : Maximum diatom Si:C quota [mmolSi mmolC-1]
-        !
-        ! Typical Values:
-        !   chl2N_max_d = 4.2 mgChl/mmolN (diatoms can have higher Chl:N)
-        !   NCmax_d = 0.2 mmolN/mmolC
-        !   SiCmax = 0.8 mmolSi/mmolC (heavily silicified frustules)
-        !
-        ! Silicon Requirement:
-        !   - Unique to diatoms (frustule formation)
-        !   - Calculated from minimum carbon and maximum Si:C ratio
-
-        ! Minimum diatom nitrogen
-        tiny_N_d = tiny_chl / chl2N_max_d
-
-        ! Minimum diatom carbon
-        tiny_C_d = tiny_N_d / NCmax_d
-
-        ! Minimum silicate (based on diatom carbon and maximum Si:C quota)
-        tiny_Si = tiny_C_d / SiCmax
-
-        !-------------------------------------------------------------------------------
-        ! Coccolithophore and Phaeocystis Thresholds (Optional)
-        !-------------------------------------------------------------------------------
-        ! Only calculated when 4-plankton functional type model is enabled
-
-        if (enable_coccos) then
-
-            ! Coccolithophore thresholds
-            ! Variables:
-            !   tiny_N_c    : Minimum cocco nitrogen [mmolN m-3]
-            !   tiny_C_c    : Minimum cocco carbon [mmolC m-3]
-            !   chl2N_max_c : Maximum cocco Chl:N ratio [mgChl mmolN-1]
-            !   NCmax_c     : Maximum cocco N:C quota [mmolN mmolC-1]
-
-            tiny_N_c = tiny_chl / chl2N_max_c
-            tiny_C_c = tiny_N_c / NCmax_c
-
-            ! Phaeocystis thresholds
-            ! Variables:
-            !   tiny_N_p    : Minimum Phaeo nitrogen [mmolN m-3]
-            !   tiny_C_p    : Minimum Phaeo carbon [mmolC m-3]
-            !   chl2N_max_p : Maximum Phaeo Chl:N ratio [mgChl mmolN-1]
-            !   NCmax_p     : Maximum Phaeo N:C quota [mmolN mmolC-1]
-
-            tiny_N_p = tiny_chl / chl2N_max_p
-            tiny_C_p = tiny_N_p / NCmax_p
-
-        end if
+        ! Minimum thresholds tiny_N, tiny_C, tiny_N_d, tiny_C_d, tiny_Si (and cocco/phaeo):
+        ! computed once from the namelist parameters in initialize_tiny_thresholds (recom_init.F90)
 
         ! Reciprocal of heterotroph respiration rate
         ! Used in Redfield-based respiration calculations
@@ -3702,7 +3598,6 @@ contains
                             ' (cavity=', (nzmin > 1), ')  mstep=', mstep
                     print *, '  lat, lon               =', Latd(1), geo_coord_nod2D(1, n) * rad2deg_diag
                     print *, '  LocBenthos(3) [assumed mmolSi/m2] =', LocBenthos(3)
-                    print *, '  decayRateBenSi [1/d]    =', decayRateBenSi
                     print *, '  decayBenthos(3) [assumed mmolSi/m2/d] =', decayBenthos(3)
                 end if
 
