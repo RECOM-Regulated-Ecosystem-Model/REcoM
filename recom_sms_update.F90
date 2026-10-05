@@ -3114,10 +3114,8 @@ contains
             !-----------------------------------------------------------------------
             ! SINKS: Carbon fixation (removes 13C-DIC)
             !-----------------------------------------------------------------------
-            ! Fixation flux uses the isotope ratio of the source DIC pool
-            ! (r_phyc_13/r_diac_13) applied to the bulk photosynthesis flux, rather
-            ! than the phyto 13C pool itself -- corr fix eb707e35 "changes wrt. C
-            ! isotopes"
+            ! Fixation flux: isotope ratio of the source DIC pool (r_phyc_13/r_diac_13)
+            ! times the bulk photosynthesis flux
                     -Cphot * r_phyc_13 * PhyC & ! Small phyto photosynthesis
                     - Cphot_Dia * r_diac_13 * DiaC & ! Diatom photosynthesis
             !
@@ -3170,8 +3168,7 @@ contains
             !-----------------------------------------------------------------------
             ! SOURCES: Photosynthetic production
             !-----------------------------------------------------------------------
-            ! corr fix eb707e35: fixation uses r_phyc_13 * PhyC (source-pool ratio),
-            ! not Cphot * PhyC_13
+            ! Fixation: source-pool ratio r_phyc_13 times bulk PhyC
                     +Cphot * r_phyc_13 * PhyC & ! 13C fixation
             !
             !-----------------------------------------------------------------------
@@ -3337,8 +3334,7 @@ contains
             !-----------------------------------------------------------------------
             ! SOURCES: Photosynthetic production
             !-----------------------------------------------------------------------
-            ! corr fix eb707e35: fixation uses r_diac_13 * DiaC (source-pool ratio),
-            ! not Cphot_dia * DiaC_13
+            ! Fixation: source-pool ratio r_diac_13 times bulk DiaC
                     +Cphot_dia * r_diac_13 * DiaC & ! 13C fixation
             !
             !-----------------------------------------------------------------------
@@ -3465,8 +3461,7 @@ contains
                     ! DIC_14
                     !===================================================================
                     sms(k, idic_14) = ( &
-                            ! corr fix eb707e35: r_phyc_14/r_diac_14 * bulk C, not
-                            ! Cphot * PhyC_14
+                            ! Fixation: source-pool ratios r_phyc_14/r_diac_14 times bulk C
                             -Cphot * r_phyc_14 * PhyC &
                             + phyRespRate * PhyC_14 &
                             - Cphot_Dia * r_diac_14 * DiaC &
@@ -3482,7 +3477,7 @@ contains
                     ! PhyC_14
                     !===================================================================
                     sms(k, iphyc_14) = ( &
-                            ! corr fix eb707e35: r_phyc_14 * PhyC (source-pool ratio)
+                            ! Fixation: source-pool ratio r_phyc_14 times bulk PhyC
                             +Cphot * r_phyc_14 * PhyC &
                             - lossC * limitFacN * PhyC_14 &
                             - phyRespRate * PhyC_14 &
@@ -3530,7 +3525,7 @@ contains
                     ! DiaC_14
                     !===================================================================
                     sms(k, idiac_14) = ( &
-                            ! corr fix eb707e35: r_diac_14 * DiaC (source-pool ratio)
+                            ! Fixation: source-pool ratio r_diac_14 times bulk DiaC
                             +Cphot_dia * r_diac_14 * DiaC &
                             - lossC_d * limitFacN_dia * DiaC_14 &
                             - phyRespRate_dia * DiaC_14 &

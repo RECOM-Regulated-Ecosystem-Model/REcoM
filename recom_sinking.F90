@@ -831,8 +831,8 @@ contains
 
                 ! ----------------------------------------------------------------
                 ! 3rd-order DST (Direct Space Time) advection scheme with a TVD
-                ! flux limiter (ported from the original REcoM code). Computes
-                ! the advective flux vd_flux(nz) through each interface nz.
+                ! flux limiter. Computes the advective flux vd_flux(nz) through
+                ! each interface nz.
                 ! ----------------------------------------------------------------
                 k = nod_in_elem2D_num(n)
                 ! Screen minimum depth among neighbouring nodes around node n.
@@ -1018,16 +1018,9 @@ contains
                 scaling_density1_3D(k, row) = 1.0_WP
                 scaling_density2_3D(k, row) = 1.0_WP
 
-                ! MERGE-REVIEW: int_recom's ballast only recomputed scaling_density1_3D/
-                ! scaling_density2_3D from their 1.0 default when the detrital-carbon tracer's
-                ! own concentration exceeded a 0.001 guard (tracers%data(tr_num)%values(k,row)
-                ! > 0.001), avoiding wild scaling ratios from near-zero detrital carbon -- see
-                ! the commented-out remnants of that guard directly below. This subroutine no
-                ! longer receives per-tracer identity/concentration (it's now called once per
-                ! timestep with T/S, from oce_ale_tracer.F90, not per-tracer with a tr_num as
-                ! in int_recom), so restoring the guard's intent would mean threading DetC/
-                ! DetZ2C concentration into this subroutine's argument list -- left unresolved
-                ! rather than guessing at that redesign.
+                ! Open issue: the density scaling is applied without the guard DetC > 0.001
+                ! (commented out below), so near-zero detrital carbon can give extreme scaling
+                ! ratios; DetC/DetZ2C are not passed to this routine.
                 if (use_density_scaling) then
                     ! Ratio of the particle's excess density (relative to local
                     ! seawater) to the reference excess density used to define

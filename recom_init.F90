@@ -62,10 +62,8 @@ contains
         integer, intent(in) :: nl, mydim_nod2d, edim_nod2d, mype, num_tracers
         integer, intent(in) :: mpi_comm_fesom, mydim_elem2d, edim_elem2d
         real(kind=WP), intent(in) :: rad
-        ! [m2] Total ocean surface area; only used to convert the initial cosmogenic 14C
-        ! production rate into a flux (see initialize_ciso). Ported from recom, where this
-        ! was pulled in implicitly via unrestricted `use MOD_MESH` instead of being passed in --
-        ! this decoupled build has no such module to draw it from, so it must be an argument.
+        ! [m2] Total ocean surface area; used to convert the initial cosmogenic 14C
+        ! production rate into a flux (see initialize_ciso).
         real(kind=WP), intent(in) :: ocean_area
         logical, intent(in) :: use_age_tracer, use_transit, l_sf6, l_f11, l_f12, l_r14c, l_r39ar
         integer, intent(in), dimension(:) :: ulevels_nod2d, nlevels_nod2d
@@ -378,21 +376,6 @@ contains
         end if
     end subroutine initialize_memory
 
-    !===============================================================================
-    ! Ported from int_recom's recom_init (OLD: "Atmospheric box model" section and the
-    ! "if (ciso) then" block that followed it). Both were entirely absent from this file even
-    ! though recom_atbox.F90/recom_main.F90 read and write these arrays and tracer indices
-    ! whenever ciso is enabled -- without this, a ciso run would reference unallocated
-    ! allocatable arrays and tracer indices left at their default (0) value.
-    !
-    ! delta_dic_13_init/delta_dic_14_init/big_delta_dic_14_init are also allocated here, sized
-    ! to the *local* partition (node_size) like every other REcoM per-node field -- the
-    ! "awiesm-2.6-recom-corr" lineage this file was otherwise merged against still allocated
-    ! them too, but at (nl-1, nod2D), FESOM's *global* node count, and never actually used
-    ! them (dead code by that point). Tracing further back to fesom-2.1's recom_init.F90 shows
-    ! they were originally used to set isotopically-informed initial DIC_13/DIC_14 profiles;
-    ! that usage was ported into initialize_ciso_tracers below, sized locally to match.
-    !===============================================================================
     function ciso_tracer_ids() result(ids)
         use recom_config, only: ciso
         use recom_ciso, only: ciso_14, ciso_organic_14
@@ -409,6 +392,10 @@ contains
         if (ciso_organic_14) ids = [ids, 1405, 1408, 1410, 1412, 1414, 1420, 1421]
     end function ciso_tracer_ids
 
+    !===============================================================================
+    ! Allocates the atmospheric box-model fields and the 13C/14C air-sea flux and initial
+    ! profile fields used with ciso.
+    !===============================================================================
     subroutine initialize_ciso(node_size, nl, ocean_area)
         use recom_declarations, only: wp
         use recom_config, only: ciso, CO2_for_spinup, use_atbox
@@ -478,19 +465,10 @@ contains
     end subroutine initialize_ciso
 
     !===============================================================================
-    ! Ported from fesom-2.1's recom_init.F90: sets isotopically-informed initial DIC_13/DIC_14
-    ! and POC_13/POC_14 (PhyC/DetC/HetC/DOC/DiaC/PhyCalc/DetCalc isotope variants) tracer
-    ! values, instead of letting them fall through to the generic tiny/Redfield defaults that
-    ! get_tracer_init_value assigns to every other tracer. Must run after the main tracer
-    ! initialization loop in recom_init, since it reads the already-initialized DIN/DIC/PhyC/
-    ! DetC/HetC/DOC/DiaC/DSi/PhyCalc/DetCalc values. fesom-2.1 also had a related ciso_warp
-    ! feature (tra04-tra30, trall, tr_arr_warp); confirmed no longer needed, not ported.
-    !
-    ! MERGE-REVIEW: the final DIC_14 rescale below uses delta_co2_14, which both here and in
-    ! the fesom-2.1 source this was ported from is only ever assigned inside initialize_ciso's
-    ! `if (use_atbox)` branch. Running with ciso_14=.true. and use_atbox=.false. would read it
-    ! uninitialized -- a pre-existing latent bug carried forward faithfully, not something this
-    ! port introduced.
+    ! Sets the initial DIC_13/DIC_14 profiles and copies the bulk carbon pools into their
+    ! 13C/14C counterparts. Must run after the main tracer initialization loop in recom_init.
+    ! Open issue: the DIC_14 rescale uses delta_co2_14, which is only set in initialize_ciso
+    ! with use_atbox = .true.
     !===============================================================================
     subroutine initialize_ciso_tracers(tracers_info, num_physical_tracers)
         use recom_declarations, only: wp

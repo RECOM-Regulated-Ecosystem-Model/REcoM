@@ -1462,10 +1462,8 @@ contains
                 !   C_flux = Σ(grazingFlux_i × C:N_ratio_i × grazEff)
                 !-------------------------------------------------------------------------------
 
-                ! Calculate food-dependent grazing efficiency
-                ! Increases with food availability, representing improved assimilation at higher
-                ! constant efficiency by REcoM_Grazing_Variable_Efficiency (ported from old
-                ! recom).
+                ! Grazing efficiency: food-dependent with REcoM_Grazing_Variable_Efficiency,
+                ! otherwise constant (gfin)
                 if (REcoM_Grazing_Variable_Efficiency) then
                     grazEff = gfin + 1.0 / (0.2 * food + 2.0)
                 else

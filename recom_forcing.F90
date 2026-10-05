@@ -381,10 +381,8 @@ contains
             call recom_ciso_photo(co2(1)) ! -> alpha_p
             r_phyc_13 = r_co2s_13 / alpha_p_13
             r_diac_13 = r_co2s_13 / alpha_p_dia_13
-            ! Ported from int_recom commit eb707e35 ("changes wrt. C isotopes"): floor the 13C
-            ! pool against its own previous value rather than recomputing it from total C times
-            ! the current isotope ratio, which the commit switched away from. Previous (NEW/pre-
-            ! merge) formula kept below for reference:
+            ! Floor the 13C pools against their own value; previous formula (bulk C times the
+            ! isotope ratio) kept for reference:
             !state(nzmin:nn, iphyc_13) = max((tiny_C * r_phyc_13), (state(nzmin:nn, iphyc) * r_phyc_13))
             !state(nzmin:nn, idiac_13) = max((tiny_C_d * r_diac_13), (state(nzmin:nn, idiac) * r_diac_13))
             state(nzmin:nn, iphyc_13) = max((tiny_C * r_phyc_13), state(nzmin:nn, iphyc_13))
@@ -406,9 +404,7 @@ contains
                 if (ciso_organic_14) then
                     r_phyc_14 = r_co2s_14 / alpha_p_14
                     r_diac_14 = r_co2s_14 / alpha_p_dia_14
-                    ! Ported from int_recom commit eb707e35 ("changes wrt. C isotopes"); see the
-                    ! matching note on the 13C floor above. Previous (NEW/pre-merge) formula kept
-                    ! below for reference:
+                    ! Same floor as for 13C; previous formula kept for reference:
                     !state(nzmin:nn, iphyc_14) = max((tiny_C * r_phyc_14), (state(nzmin:nn, iphyc) &
                     !        * r_phyc_14))
                     !state(nzmin:nn, idiac_14) = max((tiny_C_d * r_diac_14), (state(nzmin:nn, idiac) &
