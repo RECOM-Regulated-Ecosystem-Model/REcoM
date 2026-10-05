@@ -335,6 +335,12 @@ contains
             !!      atmospheric pCO2 slightly negative and the O2 saturation zero, and
             !!      the ocean outgasses both without limit.
             Loc_slp = pa2atm
+#if defined(__oifs)
+            !!      With use_atm_mslp FESOM receives the mean sea-level pressure of
+            !!      OpenIFS in press_air. It is zero until the first coupling step and
+            !!      whenever the field is not coupled; keep one atmosphere then.
+            if (press_air(n) > 0.0_wp) Loc_slp = press_air(n)
+#endif
 #else
             Loc_slp = press_air(n)
 #endif
