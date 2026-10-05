@@ -567,7 +567,6 @@ module recom_config
     integer :: lastyearoffesomcycle = 2023 ! Last year of the actual physical forcing used
     integer :: numofCO2cycles = 1 ! Number of cycles of the forcing planned
     integer :: currentCO2cycle = 1 ! Which CO2 cycle we are currently running
-    logical :: DIC_PI = .true.
     integer :: Nmocsy = 1 ! Length of the vector that is passed to mocsy (always one for recom)
     logical :: recom_debug = .false.
     logical :: ciso = .false. !MB main switch to enable/disable carbon isotopes (13|14C)
@@ -603,7 +602,7 @@ module recom_config
             restore_alkalinity, useRivers, useRivFe, &
             useErosion, NitrogenSS, useAeolianN, &
             firstyearoffesomcycle, lastyearoffesomcycle, numofCO2cycles, &
-            currentCO2cycle, DIC_PI, Nmocsy, &
+            currentCO2cycle, Nmocsy, &
             recom_debug, ciso, benthos_num, &
             use_MEDUSA, sedflx_num, bottflx_num, &
             add_loopback, lb_tscale, use_atbox, use_virt_tracers
