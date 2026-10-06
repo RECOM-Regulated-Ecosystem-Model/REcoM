@@ -127,7 +127,7 @@ contains
 
         use recom_config, only: benthos_num, bgc_num, ciso, diags, dust_sol, enable_3zoo2det, &
                 enable_coccos, ialk, parfrac, recom_debug, restore_alkalinity, secondsperday, &
-                use_atbox, tiny
+                use_atbox, tiny, pa2atm
 
         use recom_locvar, only: LocBenthos, locatmco2, fedust, hplus, loc_ice_conc, ndust, uloc, &
                 ph, kw660, k0, pco2surf, dpco2surf, dflux, co2flux_seaicemask, o2flux_seaicemask, &
@@ -325,10 +325,22 @@ contains
             Loc_ice_conc = ice_data_values(n)
 
             !!---- Mean sea level pressure
-#if defined(__oasis)
+#if defined(__oasis) || defined(__oifs)
             !!      MB: This is an ad-hoc patch for AWIESM-2.1 and needs to be improved:
             !!      We should consider air pressure provided by ECHAM.
+            !!      The OpenIFS-coupled build needs it as well, and has to be named here:
+            !!      this library is compiled with __oifs but without __oasis
+            !!      (CMakeLists.txt), and FESOM fills press_air only from the standalone
+            !!      forcing, so in a coupled run it stays zero. A zero pressure makes the
+            !!      atmospheric pCO2 slightly negative and the O2 saturation zero, and
+            !!      the ocean outgasses both without limit.
             Loc_slp = pa2atm
+#if defined(__oifs)
+            !!      With use_atm_mslp FESOM receives the mean sea-level pressure of
+            !!      OpenIFS in press_air. It is zero until the first coupling step and
+            !!      whenever the field is not coupled; keep one atmosphere then.
+            if (press_air(n) > 0.0_wp) Loc_slp = press_air(n)
+#endif
 #else
             Loc_slp = press_air(n)
 #endif
