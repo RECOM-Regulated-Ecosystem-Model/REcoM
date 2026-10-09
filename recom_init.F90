@@ -53,6 +53,11 @@ contains
         use REcoM_GloVar, only: tracers_info_type
         use recom_config, only: validate_recom_tracers, initialize_tracer_indices, &
                 validate_tracer_id_sequence, bgc_num, validate_grazing_preference
+                validate_tracer_id_sequence, bgc_num
+#if defined(__oifs)
+        use recom_config, only: use_atbox
+        use mpi, only: MPI_Abort, MPI_COMM_WORLD
+#endif
 
         implicit none
 
@@ -74,6 +79,26 @@ contains
         integer :: num_physical_tracers
         integer :: n_transit_tracers ! number of active transit tracers
         integer :: bgc_start, bgc_end ! first/last slot of the BGC-only block
+#if defined(__oifs)
+        integer :: MPIErr
+
+        ! Coupled to OpenIFS, x_co2atm is received from the atmosphere every coupling step.
+        ! The atmospheric box model would use the same array as its prognostic state: the
+        ! coupler overwrites the box, and the box starts from x_co2atm(1), a different node
+        ! on every rank.
+        if (use_atbox) then
+            if (mype == 0) then
+                write(*, *) ''
+                write(*, *) '******************************************************************'
+                write(*, *) '***  FATAL ERROR: use_atbox = .true. in a run coupled to OpenIFS ***'
+                write(*, *) '***  atmospheric CO2 comes from OpenIFS; set use_atbox = .false. ***'
+                write(*, *) '******************************************************************'
+                write(*, *) ''
+            end if
+            call MPI_Abort(MPI_COMM_WORLD, 1, MPIErr)
+            stop
+        end if
+#endif
 
         call initialize_memory(myDim_nod2D + eDim_nod2D, nl, num_tracers)
 

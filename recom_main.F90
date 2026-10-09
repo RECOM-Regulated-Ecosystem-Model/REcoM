@@ -324,26 +324,24 @@ contains
             !-----------------------------------------------------------------------
             Loc_ice_conc = ice_data_values(n)
 
-            !!---- Mean sea level pressure
-#if defined(__oasis) || defined(__oifs)
-            !!      MB: This is an ad-hoc patch for AWIESM-2.1 and needs to be improved:
-            !!      We should consider air pressure provided by ECHAM.
-            !!      The OpenIFS-coupled build needs it as well, and has to be named here:
-            !!      this library is compiled with __oifs but without __oasis
-            !!      (CMakeLists.txt), and FESOM fills press_air only from the standalone
-            !!      forcing, so in a coupled run it stays zero. A zero pressure makes the
-            !!      atmospheric pCO2 slightly negative and the O2 saturation zero, and
-            !!      the ocean outgasses both without limit.
-            Loc_slp = pa2atm
+            !-----------------------------------------------------------------------
+            ! Mean sea level pressure
+            !-----------------------------------------------------------------------
+            Loc_slp = pa2atm ! default: constant 1 atm
+#if !defined(__oasis) /* not coupled */
+            Loc_slp = press_air(n) ! prescribed
+#else /* coupled */
 #if defined(__oifs)
-            !!      With use_atm_mslp FESOM receives the mean sea-level pressure of
-            !!      OpenIFS in press_air. It is zero until the first coupling step and
-            !!      whenever the field is not coupled; keep one atmosphere then.
+            ! With use_atm_mslp FESOM receives the mean sea-level pressure of
+            ! OpenIFS in press_air. It is zero until the first coupling step and
+            ! whenever the field is not coupled; keep one atmosphere then.
             if (press_air(n) > 0.0_wp) Loc_slp = press_air(n)
-#endif
-#else
-            Loc_slp = press_air(n)
-#endif
+#else /* if not coupled to oifs */
+            ! MB: This is an ad-hoc patch for AWIESM-2.1 and needs to be improved:
+            ! We should consider air pressure provided by ECHAM.
+            ! --> default constant pa2atm will be used
+#endif /* coupled to oifs or not */
+#endif /* coupled or not */
 
             !-----------------------------------------------------------------------
             ! Benthic layer state for this column
@@ -360,19 +358,23 @@ contains
             !   Cavity nodes: wind is excluded from surface forcing inside
             !   REcoM_Forcing, but ULoc is still set here for code simplicity.
             !-----------------------------------------------------------------------
-#if defined(__oasis)
-            !! Derive 10m-wind speed from wind stress fields, see module recom_ciso.
-            !! This is an ad-hoc solution as long as 10m-winds are not handled from OASIS.
-            Uloc = wind_10(stress_atmoce_x(n), stress_atmoce_y(n))
-#else
-            ULoc = sqrt(u_wind(n) ** 2 + v_wind(n) ** 2)
+            ULoc = sqrt(u_wind(n) ** 2 + v_wind(n) ** 2) ! m/s prescribed or oifs
+#if defined(__oasis) && !defined(__oifs)
+            ! Derive 10m-wind speed from wind stress fields, see module recom_ciso.
+            ! This is an ad-hoc solution as long as 10m-winds are not handled from OASIS.
+            ! Not for OpenIFS: it sends 10 m winds (u10w_oce, v10w_oce) into u_wind, v_wind.
+            ! Coupled to ECHAM, FESOM receives 10 m winds only with icebergs, but the stress
+            ! is not passed to recom() since REcoM became a separate library: stop at compile
+            ! time until it is.
+#error "REcoM coupled (__oasis) but not to OIFS (__oifs) is not supported: 10m wind calculation from wind stress needs stress_atmoce_x/y passed to recom()"
+            ! Uloc = wind_10(stress_atmoce_x(n), stress_atmoce_y(n))
 #endif
 
-
-#if defined(__oifs)
-                LocAtmCO2 = x_co2atm(n)        ! ppm, received from OpenIFS
-#else
-                LocAtmCO2 = AtmCO2(month)      ! ppm, prescribed (standalone)
+            !-----------------------------------------------------------------------
+            ! Atmospheric CO2 concentration
+            LocAtmCO2 = AtmCO2(month) ! ppm, prescribed (standalone)
+#if defined(__oasis) && defined(__oifs)
+            LocAtmCO2 = x_co2atm(n) ! ppm, received from OpenIFS
 #endif
 
             ! Update of prognostic atmospheric CO2 values
