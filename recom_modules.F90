@@ -144,15 +144,10 @@ module REcoM_declarations
     real(kind=wp) :: logK1, logK2, Klig1, Klig2
     !!------------------------------------------------------------------------------
     !! *** Zooplankton ***
-    real(kind=wp) :: DiaNsq
     real(kind=wp) :: varpzdia, fDiaN ! Part of Diatoms available for food
-    real(kind=wp) :: PhyNsq
     real(kind=wp) :: varpzPhy, fPhyN ! Part of Small phytoplankton available for food
-    real(kind=wp) :: CoccoNsq
     real(kind=wp) :: varpzCocco, fCoccoN
-    real(kind=wp) :: PhaeoNsq
     real(kind=wp) :: varpzPhaeo, fPhaeoN
-    real(kind=wp) :: MicZooNsq ! NEW 3Zoo
     real(kind=wp) :: varpzMicZoo, fMicZooN ! NEW 3Zoo Part of microzooplankton available for food
     real(kind=wp) :: food, foodsq ! [(mmol N)2/m6]
     ! [mmol N / (m3 * day)] (NEW changed term)
@@ -164,10 +159,8 @@ module REcoM_declarations
     real(kind=wp) :: HetLossFlux ! [(mmol N)2/(m6 * day)] Zooplankton mortality (quadratic loss)
     !!------------------------------------------------------------------------------
     !! *** Second Zooplankton  ***
-    real(kind=wp) :: DiaNsq2, PhyNsq2, CoccoNsq2, PhaeoNsq2, HetNsq ! NEW (changed term)
     real(kind=wp) :: varpzDia2, fDiaN2, varpzPhy2, fPhyN2, varpzCocco2, fCoccoN2, varpzPhaeo2, &
             fPhaeoN2, varpzHet, fHetN ! Part of Diatoms available for food
-    real(kind=wp) :: MicZooNsq2 ! NEW Zoo3
     real(kind=wp) :: varpzMicZoo2, fMicZooN2 ! NEW Zoo3
     real(kind=wp) :: food2, foodsq2 ! [(mmol N)2/m6]
     real(kind=wp) :: grazingFlux_phy2, grazingFlux_Dia2, grazingFlux_Cocco2, grazingFlux_Phaeo2, &
@@ -183,7 +176,6 @@ module REcoM_declarations
     real(kind=wp) :: recip_res_zoo22
     !!------------------------------------------------------------------------------
     !! *** Grazing Detritus  ***
-    real(kind=wp) :: DetNsq, DetZ2Nsq, DetNsq2, DetZ2Nsq2
     ! Part of Diatoms available for food
     real(kind=wp) :: varpzDet, varpzDetZ2, varpzDet2, varpzDetZ22
     real(kind=wp) :: fDetN, fDetZ2N, fDetN2, fDetZ2N2
@@ -191,14 +183,10 @@ module REcoM_declarations
     real(kind=wp) :: grazingFlux_Det2, grazingFlux_DetZ22 ! [mmol N / (m3 * day)]
     !!------------------------------------------------------------------------------
     !! *** Third zooplankton  ***       ! NEW 3Zoo
-    real(kind=wp) :: DiaNsq3
     real(kind=wp) :: varpzDia3, fDiaN3 ! Part of diatoms available for food
     real(kind=wp) :: loss_hetfd
-    real(kind=wp) :: PhyNsq3
     real(kind=wp) :: varpzPhy3, fPhyN3 ! Part of small phytoplankton available for food
-    real(kind=wp) :: CoccoNsq3
     real(kind=wp) :: varpzCocco3, fCoccoN3 ! Part of coccolithophores available for food
-    real(kind=wp) :: PhaeoNsq3
     real(kind=wp) :: varpzPhaeo3, fPhaeoN3 ! Part of phaeocystis available for food
     real(kind=wp) :: food3, foodsq3 ! [(mmol N)2/m6]
     ! [mmol N / (m3 * day)]
@@ -524,6 +512,12 @@ module recom_config
 
     ! Decides if grazing should have preference for phyN or DiaN
     logical :: REcoM_Grazing_Variable_Preference = .true.
+    ! Form of the variable preference (only used if REcoM_Grazing_Variable_Preference):
+    !   'fasham'  : varpz_i = pz_i*N_i / sum_j(pz_j*N_j)       (default, current model)
+    !   'sigmoid' : varpz_i = pz_i*N_i**2 / (s_i + N_i**2)     (legacy REcoM, uses s*Nsq*)
+    character(len=16) :: REcoM_Grazing_Preference_Form = 'fasham'
+    ! Set once by validate_grazing_preference; avoids a string compare per level
+    logical :: grazing_pref_sigmoid = .false.
     logical :: REcoM_Grazing_Variable_Efficiency = .true. ! allows grazing efficiency to vary
     ! with food availability
     logical :: Grazing_detritus = .false. ! Decides grazing on detritus
@@ -590,6 +584,7 @@ module recom_config
             VPhaeo, &
             allow_var_sinking, biostep, REcoM_Geider_limiter, &
             REcoM_Grazing_Variable_Preference, REcoM_Grazing_Variable_Efficiency, &
+            REcoM_Grazing_Preference_Form, &
             Grazing_detritus, &
             het_resp_noredfield, &
             diatom_mucus, &
@@ -744,6 +739,8 @@ module recom_config
     ! [1/day] Temperature dependent N degradation of extracellular organic N (EON)
     real(kind=wp) :: loss_het = 0.05d0
     real(kind=wp) :: pzDia = 0.5d0 ! Maximum diatom preference
+    ! s*Nsq*: half-saturation of squared prey [(mmol N m-3)**2], used only with
+    ! REcoM_Grazing_Preference_Form = 'sigmoid'; 0 makes that prey's preference fixed
     real(kind=wp) :: sDiaNsq = 0.d0
     real(kind=wp) :: pzPhy = 1.0d0 ! Maximum small phytoplankton preference
     real(kind=wp) :: sPhyNsq = 0.d0
@@ -772,6 +769,8 @@ module recom_config
     real(kind=wp) :: fecal_rate_n_mes = 0.25d0 ! NEW 3Zoo
     real(kind=wp) :: fecal_rate_c_mes = 0.32d0 ! NEW 3Zoo
     real(kind=wp) :: pzDia2 = 1.d0 ! Maximum diatom preference
+    ! s*Nsq*: half-saturation of squared prey [(mmol N m-3)**2], used only with
+    ! REcoM_Grazing_Preference_Form = 'sigmoid'; 0 makes that prey's preference fixed
     real(kind=wp) :: sDiaNsq2 = 0.d0
     real(kind=wp) :: pzPhy2 = 0.5d0 ! Maximum diatom preference
     real(kind=wp) :: sPhyNsq2 = 0.d0
@@ -802,6 +801,8 @@ module recom_config
     ! NEW 3Zoo [1/day] Respiration by heterotrophs and mortality (loss to detritus)
     real(kind=wp) :: res_miczoo = 0.01d0
     real(kind=wp) :: pzDia3 = 0.5d0 ! NEW 3Zoo Maximum diatom preference
+    ! s*Nsq*: half-saturation of squared prey [(mmol N m-3)**2], used only with
+    ! REcoM_Grazing_Preference_Form = 'sigmoid'; 0 makes that prey's preference fixed
     real(kind=wp) :: sDiaNsq3 = 0.d0 ! NEW 3Zoo
     real(kind=wp) :: pzPhy3 = 1.0d0 ! NEW 3Zoo Maximum small phytoplankton preference
     real(kind=wp) :: sPhyNsq3 = 0.d0 ! NEW 3Zoo
@@ -818,6 +819,8 @@ module recom_config
     !-------------------------------------------------------------------------------
     !! *** Detritus Grazing Params ***
     real(kind=wp) :: pzDet = 1.d0 ! Maximum small detritus prefence by first zooplankton
+    ! s*Nsq*: half-saturation of squared prey [(mmol N m-3)**2], used only with
+    ! REcoM_Grazing_Preference_Form = 'sigmoid'; 0 makes that prey's preference fixed
     real(kind=wp) :: sDetNsq = 0.d0
     real(kind=wp) :: pzDetZ2 = 1.d0 ! Maximum large detritus preference by first zooplankton
     real(kind=wp) :: sDetZ2Nsq = 0.d0
@@ -985,11 +988,11 @@ module recom_config
     ! kg m-3; reference seawater density (see Cram et al., 2018)
     real(kind=wp) :: rho_ref_water = 1027.d0
     ! kg m-1 s-1; reference seawater viscosity, at Temp=4 degC (see Cram et al., 2018)
-    real(kind=wp) :: visc_ref_water = 0.d00158
+    real(kind=wp) :: visc_ref_water = 0.00158d0
     real(kind=wp) :: w_ref1 = 10.d0 ! m s-1; reference sinking velocity of small detritus
     real(kind=wp) :: w_ref2 = 200.d0 ! m s-1; reference sinking velocity of large detritus
     ! s-1; factor to increase sinking speed of det1 with depth, set to 0 if not wanted
-    real(kind=wp) :: depth_scaling1 = 0.d015
+    real(kind=wp) :: depth_scaling1 = 0.015d0
     ! s-1; factor to increase sinking speed of det2 with depth, set to 0 if not wanted
     real(kind=wp) :: depth_scaling2 = 0.d0
     ! d-1; for numerical stability, set a maximum possible
@@ -1874,6 +1877,101 @@ contains
 
     end subroutine validate_tracer_id_sequence
 
+    ! ==============================================================================
+    ! SUBROUTINE: validate_grazing_preference
+    ! Purpose: Check REcoM_Grazing_Preference_Form, set grazing_pref_sigmoid, and warn
+    !          about half-saturation constants that have no effect in this setup.
+    !          Call once after the namelists are read.
+    ! ==============================================================================
+    subroutine validate_grazing_preference(mype)
+        use mpi, only: MPI_Abort, MPI_COMM_WORLD
+
+        implicit none
+
+        integer, intent(in) :: mype
+        integer :: MPIErr
+        character(len=16) :: form
+        real(kind=wp) :: s_meso(7), s_macro(8), s_micro(4)
+        logical :: any_s_set
+
+        form = adjustl(REcoM_Grazing_Preference_Form)
+        call to_lower(form)
+
+        select case (trim(form))
+        case ('fasham')
+            grazing_pref_sigmoid = .false.
+        case ('sigmoid')
+            grazing_pref_sigmoid = .true.
+        case default
+            if (mype == 0) then
+                write(*, *) 'ERROR: REcoM_Grazing_Preference_Form = "', &
+                        trim(REcoM_Grazing_Preference_Form), '" is not supported.'
+                write(*, *) '       Use "fasham" or "sigmoid".'
+            end if
+            call MPI_ABORT(MPI_COMM_WORLD, 1, MPIErr)
+            stop
+        end select
+
+        ! Only the constants of grazers/prey that exist in this configuration matter
+        s_meso = [sPhyNsq, sDiaNsq, &
+                merge(sDetNsq, 0.0_wp, Grazing_detritus), &
+                merge(sDetZ2Nsq, 0.0_wp, Grazing_detritus .and. enable_3zoo2det), &
+                merge(sMicZooNsq, 0.0_wp, enable_3zoo2det), &
+                merge(sCoccoNsq, 0.0_wp, enable_coccos), &
+                merge(sPhaeoNsq, 0.0_wp, enable_coccos)]
+        s_macro = 0.0_wp
+        s_micro = 0.0_wp
+        if (enable_3zoo2det) then
+            s_macro = [sPhyNsq2, sDiaNsq2, sHetNsq, sMicZooNsq2, &
+                    merge(sDetNsq2, 0.0_wp, Grazing_detritus), &
+                    merge(sDetZ2Nsq2, 0.0_wp, Grazing_detritus), &
+                    merge(sCoccoNsq2, 0.0_wp, enable_coccos), &
+                    merge(sPhaeoNsq2, 0.0_wp, enable_coccos)]
+            s_micro = [sPhyNsq3, sDiaNsq3, &
+                    merge(sCoccoNsq3, 0.0_wp, enable_coccos), &
+                    merge(sPhaeoNsq3, 0.0_wp, enable_coccos)]
+        end if
+        any_s_set = any(s_meso /= 0.0_wp) .or. any(s_macro /= 0.0_wp) .or. &
+                any(s_micro /= 0.0_wp)
+
+        if (any(s_meso < 0.0_wp) .or. any(s_macro < 0.0_wp) .or. any(s_micro < 0.0_wp)) then
+            if (mype == 0) write(*, *) 'ERROR: s*Nsq* grazing half-saturations must be >= 0.'
+            call MPI_ABORT(MPI_COMM_WORLD, 1, MPIErr)
+            stop
+        end if
+
+        if (mype == 0) then
+            if (.not. REcoM_Grazing_Variable_Preference) then
+                write(*, *) 'Grazing preferences: fixed (pz only)'
+                if (any_s_set) write(*, *) 'WARNING: s*Nsq* are set but have no effect: ', &
+                        'REcoM_Grazing_Variable_Preference = .false.'
+            else if (grazing_pref_sigmoid) then
+                write(*, *) 'Grazing preferences: sigmoid  pz*N**2/(s+N**2)'
+                if (.not. any_s_set) write(*, *) 'WARNING: all active s*Nsq* are 0, so the ', &
+                        'sigmoid form equals fixed preferences.'
+            else
+                write(*, *) 'Grazing preferences: fasham  pz*N/sum(pz*N)'
+                if (any_s_set) write(*, *) 'WARNING: s*Nsq* are set but have no effect: ', &
+                        'REcoM_Grazing_Preference_Form = "fasham"'
+            end if
+        end if
+
+        ! the flag only matters when variable preferences are on
+        grazing_pref_sigmoid = grazing_pref_sigmoid .and. REcoM_Grazing_Variable_Preference
+
+    contains
+
+        subroutine to_lower(str)
+            character(len=*), intent(inout) :: str
+            integer :: i, ic
+            do i = 1, len(str)
+                ic = iachar(str(i:i))
+                if (ic >= iachar('A') .and. ic <= iachar('Z')) str(i:i) = achar(ic + 32)
+            end do
+        end subroutine to_lower
+
+    end subroutine validate_grazing_preference
+
 end module recom_config
 !===============================================================================
 ! For arrays needed for the whole 2D or 3D domain, but only needed in REcoM
@@ -2756,7 +2854,8 @@ contains
     ! ==============================================================================
     subroutine allocate_and_init_diags(nl)
 
-        use REcoM_declarations, only: vertcalcdiss, vertcalcif
+        use REcoM_declarations, only: vertcalcdiss, vertcalcif, &
+                vertrespmeso, vertrespmacro, vertrespmicro
 
         implicit none
 
@@ -2777,6 +2876,16 @@ contains
         vertcalcdiss = 0.d0
         vertcalcif = 0.d0
 
+        ! Zooplankton respiration: used in update_3d_diags / deallocate_diags
+        ! independently of Grazing_detritus
+        allocate(vertrespmeso(nl - 1))
+        vertrespmeso = 0.d0
+        if (enable_3zoo2det) then
+            allocate(vertrespmacro(nl - 1), vertrespmicro(nl - 1))
+            vertrespmacro = 0.d0
+            vertrespmicro = 0.d0
+        end if
+
         ! --------------------------------------------------------------------------
         ! Zooplankton grazing (optional)
         ! --------------------------------------------------------------------------
@@ -2793,7 +2902,9 @@ contains
         use REcoM_declarations, only: vertNPPn, vertGPPn, vertNNAn, vertChldegn, vertrespn, &
                 vertdocexn, vertaggn, vertNPPd, vertGPPd, vertNNAd, vertChldegd, vertrespd, &
                 vertdocexd, vertaggd, VTPhyCO2, VTDiaCO2, VTCphotLigLim_phyto, &
-                VTCphotLigLim_diatoms, VTCphot_phyto, VTCphot_diatoms
+                VTCphotLigLim_diatoms, VTCphot_phyto, VTCphot_diatoms, &
+                VTTemp_diatoms, VTTemp_phyto, VTqlimitFac_phyto, VTqlimitFac_diatoms, &
+                VTSi_assimDia
 
         implicit none
 
@@ -2842,6 +2953,21 @@ contains
         VTCphot_phyto = 0.d0
         VTCphot_diatoms = 0.d0
 
+        ! --------------------------------------------------------------------------
+        ! Temperature / nutrient / Si tracking - Phytoplankton and Diatoms
+        ! (always allocated; may be written in REcoM_sms independent of coccos)
+        ! --------------------------------------------------------------------------
+        allocate(VTTemp_diatoms(nl - 1), VTTemp_phyto(nl - 1))
+        VTTemp_diatoms = 0.d0
+        VTTemp_phyto = 0.d0
+
+        allocate(VTqlimitFac_phyto(nl - 1), VTqlimitFac_diatoms(nl - 1))
+        VTqlimitFac_phyto = 0.d0
+        VTqlimitFac_diatoms = 0.d0
+
+        allocate(VTSi_assimDia(nl - 1))
+        VTSi_assimDia = 0.d0
+
     end subroutine alloc_init_phyto_diags
 
     ! ==============================================================================
@@ -2852,8 +2978,7 @@ contains
 
         use REcoM_declarations, only: vertNPPc, vertGPPc, vertNNAc, vertChldegc, vertrespc, &
                 vertdocexc, vertaggc, vertNPPp, vertGPPp, vertNNAp, vertChldegp, vertrespp, &
-                vertdocexp, vertaggp, VTTemp_diatoms, VTTemp_phyto, VTqlimitFac_phyto, &
-                VTqlimitFac_diatoms, VTSi_assimDia, VTTemp_cocco, VTTemp_phaeo, VTCoccoCO2, &
+                vertdocexp, vertaggp, VTTemp_cocco, VTTemp_phaeo, VTCoccoCO2, &
                 VTPhaeoCO2, VTqlimitFac_cocco, VTqlimitFac_phaeo, VTCphotLigLim_cocco, &
                 VTCphotLigLim_phaeo, VTCphot_cocco, VTCphot_phaeo
 
@@ -2890,21 +3015,6 @@ contains
         vertaggp = 0.d0
 
         ! --------------------------------------------------------------------------
-        ! Temperature / nutrient / light tracking - Phytoplankton and Diatoms
-        ! (only allocated when coccos are enabled, matching original file1 logic)
-        ! --------------------------------------------------------------------------
-        allocate(VTTemp_diatoms(nl - 1), VTTemp_phyto(nl - 1))
-        VTTemp_diatoms = 0.d0
-        VTTemp_phyto = 0.d0
-
-        allocate(VTqlimitFac_phyto(nl - 1), VTqlimitFac_diatoms(nl - 1))
-        VTqlimitFac_phyto = 0.d0
-        VTqlimitFac_diatoms = 0.d0
-
-        allocate(VTSi_assimDia(nl - 1))
-        VTSi_assimDia = 0.d0
-
-        ! --------------------------------------------------------------------------
         ! Temperature / photosynthesis tracking - Coccos and Phaeocystis
         ! --------------------------------------------------------------------------
         allocate(VTTemp_cocco(nl - 1), VTTemp_phaeo(nl - 1))
@@ -2938,7 +3048,7 @@ contains
         use REcoM_declarations, only: vertgrazmicro_tot, vertgrazmicro_n, vertgrazmicro_d, &
                 vertgrazmicro_c, vertgrazmicro_p, vertrespmicro, vertgrazmeso_tot, &
                 vertgrazmeso_n, vertgrazmeso_d, vertgrazmeso_det, vertgrazmeso_mic, &
-                vertgrazmeso_det2, vertrespmeso, vertgrazmeso_c, vertgrazmeso_p, &
+                vertgrazmeso_det2, vertgrazmeso_c, vertgrazmeso_p, &
                 vertgrazmacro_tot, vertgrazmacro_n, vertgrazmacro_d, vertgrazmacro_mes, &
                 vertgrazmacro_det, vertgrazmacro_mic, vertgrazmacro_det2, vertrespmacro, &
                 vertgrazmacro_c, vertgrazmacro_p
@@ -2947,40 +3057,38 @@ contains
 
         integer, intent(in) :: nl
 
+        ! Mesozooplankton (exists in every configuration)
+        allocate(vertgrazmeso_tot(nl - 1), vertgrazmeso_n(nl - 1), vertgrazmeso_d(nl - 1))
+        allocate(vertgrazmeso_det(nl - 1))
+        vertgrazmeso_tot = 0.d0
+        vertgrazmeso_n = 0.d0
+        vertgrazmeso_d = 0.d0
+        vertgrazmeso_det = 0.d0
+
+        if (enable_coccos) then
+            allocate(vertgrazmeso_c(nl - 1), vertgrazmeso_p(nl - 1))
+            vertgrazmeso_c = 0.d0
+            vertgrazmeso_p = 0.d0
+        end if
+
         ! --------------------------------------------------------------------------
         ! Microzooplankton and Mesozooplankton (3-zoo configuration only)
         ! --------------------------------------------------------------------------
         if (enable_3zoo2det) then
-            ! Microzooplankton
-            allocate(vertgrazmicro_tot(nl - 1), vertgrazmicro_n(nl - 1), vertgrazmicro_d(nl - 1))
-            allocate(vertrespmicro(nl - 1))
+            allocate(vertgrazmeso_mic(nl - 1), vertgrazmeso_det2(nl - 1))
+            vertgrazmeso_mic = 0.d0
+            vertgrazmeso_det2 = 0.d0
 
+             ! Microzooplankton
+            allocate(vertgrazmicro_tot(nl - 1), vertgrazmicro_n(nl - 1), vertgrazmicro_d(nl - 1))
             vertgrazmicro_tot = 0.d0
             vertgrazmicro_n = 0.d0
             vertgrazmicro_d = 0.d0
-            vertrespmicro = 0.d0
-
-            ! Mesozooplankton
-            allocate(vertgrazmeso_tot(nl - 1), vertgrazmeso_n(nl - 1), vertgrazmeso_d(nl - 1))
-            allocate(vertgrazmeso_det(nl - 1), vertgrazmeso_mic(nl - 1), vertgrazmeso_det2(nl - 1))
-            allocate(vertrespmeso(nl - 1))
-
-            vertgrazmeso_tot = 0.d0
-            vertgrazmeso_n = 0.d0
-            vertgrazmeso_d = 0.d0
-            vertgrazmeso_det = 0.d0
-            vertgrazmeso_mic = 0.d0
-            vertgrazmeso_det2 = 0.d0
-            vertrespmeso = 0.d0
 
             if (enable_coccos) then
                 allocate(vertgrazmicro_c(nl - 1), vertgrazmicro_p(nl - 1))
-                allocate(vertgrazmeso_c(nl - 1), vertgrazmeso_p(nl - 1))
-
                 vertgrazmicro_c = 0.d0
                 vertgrazmicro_p = 0.d0
-                vertgrazmeso_c = 0.d0
-                vertgrazmeso_p = 0.d0
             end if
         end if
 
@@ -2990,7 +3098,6 @@ contains
         allocate(vertgrazmacro_tot(nl - 1), vertgrazmacro_n(nl - 1), vertgrazmacro_d(nl - 1))
         allocate(vertgrazmacro_mes(nl - 1), vertgrazmacro_det(nl - 1))
         allocate(vertgrazmacro_mic(nl - 1), vertgrazmacro_det2(nl - 1))
-        allocate(vertrespmacro(nl - 1))
 
         vertgrazmacro_tot = 0.d0
         vertgrazmacro_n = 0.d0
@@ -2999,7 +3106,6 @@ contains
         vertgrazmacro_det = 0.d0
         vertgrazmacro_mic = 0.d0
         vertgrazmacro_det2 = 0.d0
-        vertrespmacro = 0.d0
 
         if (enable_coccos) then
             allocate(vertgrazmacro_c(nl - 1), vertgrazmacro_p(nl - 1))
@@ -3181,9 +3287,8 @@ contains
         ! --------------------------------------------------------------------------
         ! Zooplankton Respiration
         ! --------------------------------------------------------------------------
-        respmeso(1:nzmax, n) = vertrespmeso(1:nzmax)
-
         if (enable_3zoo2det) then
+            respmeso(1:nzmax, n)  = vertrespmeso(1:nzmax)
             respmacro(1:nzmax, n) = vertrespmacro(1:nzmax)
             respmicro(1:nzmax, n) = vertrespmicro(1:nzmax)
         end if
@@ -3259,6 +3364,7 @@ contains
         deallocate(vertNPPn, vertGPPn, vertNNAn, vertChldegn)
         deallocate(vertaggn, vertdocexn, vertrespn)
         deallocate(VTPhyCO2, VTCphotLigLim_phyto, VTCphot_phyto)
+        deallocate(VTTemp_phyto, VTqlimitFac_phyto)
 
         ! --------------------------------------------------------------------------
         ! Diatoms
@@ -3266,7 +3372,8 @@ contains
         deallocate(vertNPPd, vertGPPd, vertNNAd, vertChldegd)
         deallocate(vertaggd, vertdocexd, vertrespd)
         deallocate(VTDiaCO2, VTCphotLigLim_diatoms, VTCphot_diatoms)
-
+        deallocate(VTTemp_diatoms, VTqlimitFac_diatoms)
+        deallocate(VTSi_assimDia)
         ! --------------------------------------------------------------------------
         ! Mesozooplankton (base heterotroph group; see matching unconditional
         ! allocation above)
@@ -3274,9 +3381,6 @@ contains
         deallocate(vertrespmeso)
 
         if (enable_coccos) then
-            deallocate(VTTemp_phyto, VTqlimitFac_phyto)
-            deallocate(VTTemp_diatoms, VTqlimitFac_diatoms)
-            deallocate(VTSi_assimDia)
 
             ! --------------------------------------------------------------------------
             ! Coccolithophores and Phaeocystis (if enabled)
@@ -3295,38 +3399,25 @@ contains
             deallocate(vertcalcdiss, vertcalcif)
         end if
 
-        ! --------------------------------------------------------------------------
-        ! Zooplankton Grazing (if enabled)
-        ! --------------------------------------------------------------------------
         if (Grazing_detritus) then
             deallocate(vertgrazmeso_tot, vertgrazmeso_n, vertgrazmeso_d)
             deallocate(vertgrazmeso_det)
+            if (enable_coccos) deallocate(vertgrazmeso_c, vertgrazmeso_p)
 
-            if (enable_coccos) then
-                deallocate(vertgrazmeso_c, vertgrazmeso_p)
-            end if
+            ! macro grazing is allocated whenever Grazing_detritus is on
+            deallocate(vertgrazmacro_tot, vertgrazmacro_n, vertgrazmacro_d)
+            deallocate(vertgrazmacro_mes, vertgrazmacro_det)
+            deallocate(vertgrazmacro_mic, vertgrazmacro_det2)
+            if (enable_coccos) deallocate(vertgrazmacro_c, vertgrazmacro_p)
 
             if (enable_3zoo2det) then
                 deallocate(vertgrazmeso_mic, vertgrazmeso_det2)
-
-                deallocate(vertgrazmacro_tot, vertgrazmacro_n, vertgrazmacro_d)
-                deallocate(vertgrazmacro_mes, vertgrazmacro_det)
-                deallocate(vertgrazmacro_mic, vertgrazmacro_det2)
-                deallocate(vertrespmacro)
-
-                if (enable_coccos) then
-                    deallocate(vertgrazmacro_c, vertgrazmacro_p)
-                end if
-
                 deallocate(vertgrazmicro_tot, vertgrazmicro_n, vertgrazmicro_d)
-                deallocate(vertrespmicro)
-
-                if (enable_coccos) then
-                    deallocate(vertgrazmicro_c, vertgrazmicro_p)
-                end if
+                if (enable_coccos) deallocate(vertgrazmicro_c, vertgrazmicro_p)
             end if
         end if
 
+        if (enable_3zoo2det) deallocate(vertrespmacro, vertrespmicro)
     end subroutine deallocate_diags
 
 end module recom_diags_management
