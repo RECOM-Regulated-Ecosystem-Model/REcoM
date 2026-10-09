@@ -52,7 +52,7 @@ contains
         use REcoM_declarations, only: wp, tracer_ids
         use REcoM_GloVar, only: tracers_info_type
         use recom_config, only: validate_recom_tracers, initialize_tracer_indices, &
-                validate_tracer_id_sequence, bgc_num
+                validate_tracer_id_sequence, bgc_num, validate_grazing_preference
 
         implicit none
 
@@ -94,6 +94,9 @@ contains
         call validate_tracer_id_sequence(tracers_info%ids(1:num_tracers), num_tracers, &
                 use_age_tracer, use_transit, &
                 l_sf6, l_f11, l_f12, l_r14c, l_r39ar, mype)
+
+        ! Grazing preference form (fasham | sigmoid) and s*Nsq* consistency
+        call validate_grazing_preference(mype)
 
         ! T,S | BGC | [age] | [transit] num_physical_tracers
         ! is always just T,S (=2): BGC tracers start right after them, regardless
