@@ -1968,6 +1968,20 @@ contains
                     ! Respirate excess carbon above Redfield C:N ratio
                     !---------------------------------------------------------------------------
 
+                    ! HetRespFlux_plus uses the stabilised form HetC / (HetN + tiny_het) (MB's addition).
+                    ! Legacy REcoM chose between the two forms with HetRespFlux_plus:
+                    !
+                    ! if (HetRespFlux_plus) then
+                    !     HetRespFlux = recip_res_het * arrFunc * (HetC * recip_hetN_plus - redfield) * HetC
+                    ! else
+                    !     ! legacy "default computation scheme"
+                    !     HetRespFlux = recip_res_het * arrFunc * (recipQZoo - redfield) * HetC
+                    ! end if
+                    !
+                    ! The unregularised form HetC/HetN blows up as HetN -> tiny, so it was
+                    ! dropped. HetRespFlux_plus no longer has an effect and
+                    ! removed from the namelist
+
                     ! Calculate respiration based on deviation from Redfield ratio
                     ! When C:N > Redfield, organism has excess carbon that must be respired
                     ! This maintains stoichiometric balance in the organism

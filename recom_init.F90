@@ -53,7 +53,6 @@ contains
         use REcoM_GloVar, only: tracers_info_type
         use recom_config, only: validate_recom_tracers, initialize_tracer_indices, &
                 validate_tracer_id_sequence, bgc_num, validate_grazing_preference
-                validate_tracer_id_sequence, bgc_num
 #if defined(__oifs)
         use recom_config, only: use_atbox
         use mpi, only: MPI_Abort, MPI_COMM_WORLD

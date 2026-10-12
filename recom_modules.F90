@@ -537,15 +537,8 @@ module recom_config
     !CO2 and both, temperature and light
     logical :: Diags = .true. !!!!!!!!!!!!!!!!!!!!!!Change in recom.F90 Diagnostics -> Diags
     logical :: constant_CO2 = .true.
-    logical :: UseFeDust = .true. ! Turns dust input of iron off when set to.false.
-    logical :: UseDustClim = .true.
-    ! Use Albani dustclim field (If it is false Mahowald will be used)
-    logical :: UseDustClimAlbani = .true.
     logical :: use_photodamage = .false. ! use Alvarez et al (2018) for chlorophyll degradation
     !MB More stable computation of zooplankton respiration fluxes adding a small number to HetN
-    logical :: HetRespFlux_plus = .true.
-    character(100) :: REcoMDataPath = &
-            '/albedo/work/projects/MarESys/ogurses/input/mesh_CORE2_finaltopo_mean/'
     logical :: restore_alkalinity = .true.
     logical :: useRivers = .false.
     logical :: useRivFe = .false. ! river input of Fe
@@ -592,8 +585,7 @@ module recom_config
     ! BALL, DISS added OmegaC_diss, added CO2lim
             use_viscosity_scaling, OmegaC_diss, CO2lim, &
             Diags, constant_CO2, &
-            UseFeDust, UseDustClim, UseDustClimAlbani, &
-            use_photodamage, HetRespFlux_plus, REcoMDataPath, &
+            use_photodamage, &
             restore_alkalinity, useRivers, useRivFe, &
             useErosion, NitrogenSS, useAeolianN, &
             firstyearoffesomcycle, lastyearoffesomcycle, numofCO2cycles, &
@@ -608,13 +600,7 @@ module recom_config
     real(kind=wp) :: Vcalc = 0.0216 ! [1/day] depth dependence of calc_diss
 
     namelist /pasinking/ Vdet_a, Vcalc
-    !!------------------------------------------------------------------------------
-    !! *** Initialization ***
-    real(kind=wp) :: cPhyN = 0.2d0
-    real(kind=wp) :: cHetN = 0.2d0
-    real(kind=wp) :: cZoo2N = 0.2d0
 
-    namelist /painitialization_N/ cPhyN, cHetN, cZoo2N
     !!------------------------------------------------------------------------------
     !! *** Temperature and Arrhenius functions ***
     real(kind=wp) :: recom_Tref = 288.15d0 ! [K]
@@ -634,15 +620,15 @@ module recom_config
     real(kind=wp) :: expon_phy = 0.0599d0 ! small phyto exponent
     real(kind=wp) :: ord_cocco = -0.2310d0 ! coccolith ordonnee
     real(kind=wp) :: expon_cocco = 0.0327d0 ! small phyto ordonnee
-    real(kind=wp) :: ord_phaeo = -0.2310d0 ! phaeocystis ordonnee
-    real(kind=wp) :: expon_phaeo = 0.0327d0 ! phaeocystis ordonnee
+    !real(kind=wp) :: ord_phaeo = -0.2310d0 ! phaeocystis ordonnee
+    !real(kind=wp) :: expon_phaeo = 0.0327d0 ! phaeocystis ordonnee
 
     real(kind=wp) :: reminSi = 0.02d0
     ! NEW O2remin mmol m-3; Table 1 in Cram 2018 cites DeVries & Weber 2017
     ! for a range of 0-30 mmol m-3
     real(kind=wp) :: k_o2_remin = 15.d0
     namelist /paArrhenius/ recom_Tref, C2K, Ae, Tmax_phaeo, Topt_phaeo, uopt_phaeo, beta_phaeo, &
-            ord_d, expon_d, ord_phy, expon_phy, ord_cocco, expon_cocco, ord_phaeo, expon_phaeo, &
+            ord_d, expon_d, ord_phy, expon_phy, ord_cocco, expon_cocco, & !ord_phaeo, expon_phaeo, &
             reminSi, k_o2_remin
 
     !!------------------------------------------------------------------------------
@@ -659,12 +645,10 @@ module recom_config
     real(kind=wp) :: k_Fe_c = 0.04 ! NEW
     real(kind=wp) :: k_Fe_p = 0.09 ! Phaeocystis (to be tuned)
     real(kind=wp) :: k_si = 4.d0
-    real(kind=wp) :: P_cm = 3.0d0 ! [1/day]   the rate of C-specific photosynthesis
-    real(kind=wp) :: P_cm_d = 3.5d0
-    real(kind=wp) :: P_cm_c = 3.3d0 ! NEW
-    real(kind=wp) :: P_cm_p = 3.4d0 ! NEW for Phaeocystis ( to be tuned)
+    real(kind=wp) :: P_cm = 3.0d0 ! [1/day]   the rate of C-specific photosynthesis, used only when enable_coccos = .false.
+    real(kind=wp) :: P_cm_d = 3.5d0 ! used only when enable_coccos = .false.
     namelist /palimiter_function/ NMinSlope, SiMinSlope, NCmin, NCmin_d, NCmin_c, NCmin_p, SiCmin, &
-            k_Fe, k_Fe_d, k_Fe_c, k_Fe_p, k_si, P_cm, P_cm_d, P_cm_c, P_cm_p
+            k_Fe, k_Fe_d, k_Fe_c, k_Fe_p, k_si, P_cm, P_cm_d
 
     !!------------------------------------------------------------------------------
     !! *** For light calculations ***
