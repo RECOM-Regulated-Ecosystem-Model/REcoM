@@ -60,6 +60,7 @@ contains
             recom_phy_tracer_id, recom_dia_tracer_id, recom_cocco_tracer_id, recom_phaeo_tracer_id, SecondsPerDay, vdet_a
 
         use recom_ciso, only: ciso_organic_14
+        use recom_log, only: recom_warn, recom_kv, recom_itoa
 
         implicit none
 
@@ -178,10 +179,11 @@ contains
                 else
                     n_si_deposit_diag_prints_open = n_si_deposit_diag_prints_open + 1
                 end if
-                print *, 'diag: Si deposit at mype=', mype, ' n=', n, ' ul1=', ul1, &
-                        ' (cavity=', (ul1 > 1), ')'
-                print *, '  add_benthos_2d(n) [mmolSi/m2, this timestep] =', add_benthos_2d(n)
-                print *, '  area(ul1,n) [m2]                             =', area(ul1, n)
+                call recom_warn('large Si deposit', 'mype=' // recom_itoa(mype) // &
+                        '  n=' // recom_itoa(n) // '  ul1=' // recom_itoa(ul1))
+                call recom_kv('cavity', ul1 > 1)
+                call recom_kv('add_benthos_2d', add_benthos_2d(n), 'mmolSi m-2 (this step)')
+                call recom_kv('area(ul1)', area(ul1, n), 'm2')
             end if
 
             ! ----------------------------------------------------------------
@@ -190,11 +192,12 @@ contains
             if (tracer_id == tracer_ids%detrital_silica .and. add_benthos_2d(n) < -1.0_WP .and. &
                     n_si_negdep_diag_prints < n_si_negdep_diag_prints_max) then
                 n_si_negdep_diag_prints = n_si_negdep_diag_prints + 1
-                print *, 'diag: negative Si deposit area profile at mype=', mype, ' n=', n, &
-                        ' ul1=', ul1, ' nl1=', nl1
+                call recom_warn('negative Si deposit, area profile', 'mype=' // recom_itoa(mype) // &
+                        '  n=' // recom_itoa(n) // '  ul1=' // recom_itoa(ul1) // '  nl1=' // &
+                        recom_itoa(nl1))
                 do nz = ul1, min(ul1 + 5, nl1)
-                    print *, '  nz=', nz, ' area(nz,n) [m2]=', area(nz, n), &
-                            ' aux(nz) [mmol/s]=', aux(nz)
+                    call recom_kv('area(' // recom_itoa(nz) // ')', area(nz, n), 'm2')
+                    call recom_kv('aux(' // recom_itoa(nz) // ')', aux(nz), 'mmol s-1')
                 end do
             end if
 
@@ -447,6 +450,7 @@ contains
         use recom_declarations, only: wp, tracer_ids
         use recom_glovar, only: GloSed, glodecayBenthos
         use recom_config, only: ciso, use_MEDUSA, sedflx_num, redO2C, Fe2N_benthos
+        use recom_log, only: recom_error, recom_info, recom_itoa
 
         implicit none
 
@@ -502,8 +506,9 @@ contains
                 end if
             case default
                 if (mype == 0) then
-                    write(*, *) 'check specified in boundary conditions'
-                    write(*, *) 'the model will stop!'
+                    call recom_error('no bottom boundary condition for this tracer', &
+                            'ID=' // recom_itoa(tracer_id))
+                    call recom_info('check the specified boundary conditions; model execution stopped')
                 end if
                 call MPI_ABORT(MPI_COMM_FESOM, 1)
                 stop
@@ -538,8 +543,9 @@ contains
                 end if
             case default
                 if (mype == 0) then
-                    write(*, *) 'check specified in boundary conditions'
-                    write(*, *) 'the model will stop!'
+                    call recom_error('no bottom boundary condition for this tracer', &
+                            'ID=' // recom_itoa(tracer_id))
+                    call recom_info('check the specified boundary conditions; model execution stopped')
                 end if
                 call MPI_ABORT(MPI_COMM_FESOM, 1)
                 stop

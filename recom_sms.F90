@@ -125,6 +125,7 @@ contains
         use recom_sms_update, only: sms_update_state, sms_update_tracer_scalars
         use recom_carbonate_chemistry, only: calculate_carbonate_chemistry
         use recom_sms_init
+        use recom_log, only: recom_warn, recom_info, recom_kv, recom_itoa
 
         implicit none
 
@@ -2293,13 +2294,15 @@ contains
                 ! Diagnostic: aggregationrate > 5/d (DetN runaway)
                 if (aggregationrate > 5.0_wp .and. n_agg_diag_prints < n_agg_diag_prints_max) then
                     n_agg_diag_prints = n_agg_diag_prints + 1
-                    print *, 'warning: aggregationrate runaway at n=', n, ' k=', k, ' mstep=', mstep
-                    print *, '  lat, lon        =', Latd(1), geo_coord_nod2D(1, n) * rad2deg_diag
-                    print *, '  aggregationrate [1/d] =', aggregationrate
-                    print *, '  DetN  [mmolN/m3] =', DetN
-                    print *, '  PhyC  [mmolC/m3] =', PhyC
-                    print *, '  DiaN  [mmolN/m3] =', DiaN
-                    print *, '  DiaC  [mmolC/m3] =', DiaC
+                    call recom_warn('aggregationrate runaway', 'n=' // recom_itoa(n) // &
+                            '  k=' // recom_itoa(k) // '  mstep=' // recom_itoa(mstep))
+                    call recom_kv('lat', Latd(1), 'deg')
+                    call recom_kv('lon', geo_coord_nod2D(1, n) * rad2deg_diag, 'deg')
+                    call recom_kv('aggregationrate', aggregationrate, 'd-1')
+                    call recom_kv('DetN', DetN, 'mmolN m-3')
+                    call recom_kv('PhyC', PhyC, 'mmolC m-3')
+                    call recom_kv('DiaN', DiaN, 'mmolN m-3')
+                    call recom_kv('DiaC', DiaC, 'mmolC m-3')
                 end if
 
                 !===============================================================================
@@ -3537,7 +3540,7 @@ contains
 
                 if (mype == 0) then
                     ! Print message only on master processor (parallel computing)
-                    write(*, *) ' --> Sedimentary input of nutrients through MEDUSA'
+                    call recom_info('sedimentary input of nutrients through MEDUSA')
                 end if
 
                 ! Note: MEDUSA fluxes are applied elsewhere in the code
@@ -3591,12 +3594,14 @@ contains
                     else
                         n_locbenthos_diag_prints_open = n_locbenthos_diag_prints_open + 1
                     end if
-                    print *, 'diag: LocBenthos runaway at n=', n, ' nzmin=', nzmin, &
-                            ' (cavity=', (nzmin > 1), ')  mstep=', mstep
-                    print *, '  lat, lon              =', Latd(1), geo_coord_nod2D(1, n) * rad2deg_diag
-                    print *, '  LocBenthos(1) [assumed mmolN/m2] =', LocBenthos(1)
-                    print *, '  decayRateBenN [1/d]    =', decayRateBenN
-                    print *, '  decayBenthos(1) [assumed mmolN/m2/d] =', decayBenthos(1)
+                    call recom_warn('LocBenthos(N) runaway', 'n=' // recom_itoa(n) // &
+                            '  nzmin=' // recom_itoa(nzmin) // '  mstep=' // recom_itoa(mstep))
+                    call recom_kv('cavity', nzmin > 1)
+                    call recom_kv('lat', Latd(1), 'deg')
+                    call recom_kv('lon', geo_coord_nod2D(1, n) * rad2deg_diag, 'deg')
+                    call recom_kv('LocBenthos(1)', LocBenthos(1), 'mmolN m-2 (assumed)')
+                    call recom_kv('decayRateBenN', decayRateBenN, 'd-1')
+                    call recom_kv('decayBenthos(1)', decayBenthos(1), 'mmolN m-2 d-1 (assumed)')
                 end if
 
                 ! Update benthic N pool (remove remineralized N)
@@ -3672,11 +3677,13 @@ contains
                     else
                         n_locbenthos_si_diag_prints_open = n_locbenthos_si_diag_prints_open + 1
                     end if
-                    print *, 'diag: LocBenthos(Si) runaway at n=', n, ' nzmin=', nzmin, &
-                            ' (cavity=', (nzmin > 1), ')  mstep=', mstep
-                    print *, '  lat, lon               =', Latd(1), geo_coord_nod2D(1, n) * rad2deg_diag
-                    print *, '  LocBenthos(3) [assumed mmolSi/m2] =', LocBenthos(3)
-                    print *, '  decayBenthos(3) [assumed mmolSi/m2/d] =', decayBenthos(3)
+                    call recom_warn('LocBenthos(Si) runaway', 'n=' // recom_itoa(n) // &
+                            '  nzmin=' // recom_itoa(nzmin) // '  mstep=' // recom_itoa(mstep))
+                    call recom_kv('cavity', nzmin > 1)
+                    call recom_kv('lat', Latd(1), 'deg')
+                    call recom_kv('lon', geo_coord_nod2D(1, n) * rad2deg_diag, 'deg')
+                    call recom_kv('LocBenthos(3)', LocBenthos(3), 'mmolSi m-2 (assumed)')
+                    call recom_kv('decayBenthos(3)', decayBenthos(3), 'mmolSi m-2 d-1 (assumed)')
                 end if
 
                 ! Update benthic Si pool
