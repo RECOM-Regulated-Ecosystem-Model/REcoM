@@ -56,6 +56,7 @@ contains
 #if defined(__oifs)
         use recom_config, only: use_atbox
         use mpi, only: MPI_Abort, MPI_COMM_WORLD
+        use recom_log, only: recom_error, recom_info
 #endif
 
         implicit none
@@ -87,12 +88,9 @@ contains
         ! on every rank.
         if (use_atbox) then
             if (mype == 0) then
-                write(*, *) ''
-                write(*, *) '******************************************************************'
-                write(*, *) '***  FATAL ERROR: use_atbox = .true. in a run coupled to OpenIFS ***'
-                write(*, *) '***  atmospheric CO2 comes from OpenIFS; set use_atbox = .false. ***'
-                write(*, *) '******************************************************************'
-                write(*, *) ''
+                call recom_error('use_atbox = .true. in a run coupled to OpenIFS')
+                call recom_info('atmospheric CO2 comes from OpenIFS: set use_atbox = .false.')
+                call recom_info('model execution stopped')
             end if
             call MPI_Abort(MPI_COMM_WORLD, 1, MPIErr)
             stop
@@ -673,6 +671,7 @@ contains
 
     function get_tracer_init_value(tracer_id) result(init_value)
         use recom_declarations, only: tracer_ids, wp
+        use recom_log, only: recom_warn, recom_itoa
         use REcoM_config, only: tiny, tiny_chl, chl2N_max, NCmax, chl2N_max_d, NCmax_d, SiCmax, &
                 Redfield
 
@@ -729,8 +728,8 @@ contains
 
         else
             init_value = 0.0_wp
-            write(*, *) 'Warning: No initial value defined for tracer ID ', tracer_id, '.' // &
-                    ' Setting to 0'
+            call recom_warn('no initial value defined for tracer, set to 0', &
+                    'ID=' // recom_itoa(tracer_id))
         end if
     end function get_tracer_init_value
 
@@ -785,6 +784,7 @@ contains
         use REcoM_glovar, only: tracers_info_type
         use recom_config, only: enable_3zoo2det, enable_coccos
         use recom_declarations, only: WP, is_3zoo2det, is_coccos
+        use recom_log, only: recom_section, recom_info, recom_range, recom_ok
 
         use mpi
 
@@ -796,9 +796,10 @@ contains
         integer, intent(in) :: MPI_COMM_FESOM, mype
 
         integer :: MPIerr, n
-        real(kind=WP) :: locDINmax, locDINmin, locDICmax, locDICmin, locAlkmax, glo
+        real(kind=WP) :: locDINmax, locDINmin, locDICmax, locDICmin, locAlkmax
         real(kind=WP) :: locAlkmin, locDSimax, locDSimin, locDFemax, locDFemin
         real(kind=WP) :: locO2max, locO2min
+        real(kind=WP) :: gmin, gmax
 
         ! With the fixed T,S | BGC | [age] | [transit] layout, BGC tracers
         ! always start at slot 3 (right after T,S) regardless of use_transit.
@@ -815,8 +816,6 @@ contains
         integer, parameter :: dfe_slot = 21
         integer, parameter :: o2_slot = 24
 
-        if (mype == 0) write(*, *) 'Tracers have been initialized as spinup from WOA/glodap' // &
-                ' netcdf files'
         locDINmax = -66666
         locDINmin = 66666
         locDICmax = locDINmax
@@ -857,42 +856,37 @@ contains
                     ulevels_nod2D(n):nlevels_nod2D(n) - 1, n)))
         end do
 
-        if (mype == 0) write(*, *) "Sanity check for REcoM variables after recom_init call"
-        call MPI_AllREDUCE(locDINmax, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal max init. DIN. =', glo
-        call MPI_AllREDUCE(locDINmin, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal min init. DIN. =', glo
+        ! Global range of the initial fields (sanity check after recom_init)
+        if (mype == 0) then
+            call recom_section('REcoM init')
+            call recom_info('tracers initialised as spinup from WOA/GLODAP netcdf files')
+        end if
 
-        call MPI_AllREDUCE(locDICmax, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal max init. DIC. =', glo
-        call MPI_AllREDUCE(locDICmin, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal min init. DIC. =', glo
-        call MPI_AllREDUCE(locAlkmax, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal max init. Alk. =', glo
-        call MPI_AllREDUCE(locAlkmin, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal min init. Alk. =', glo
-        call MPI_AllREDUCE(locDSimax, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal max init. DSi. =', glo
-        call MPI_AllREDUCE(locDSimin, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal min init. DSi. =', glo
-        call MPI_AllREDUCE(locDFemax, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal max init. DFe. =', glo
-        call MPI_AllREDUCE(locDFemin, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  `-> gobal min init. DFe. =', glo
-        call MPI_AllREDUCE(locO2max, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal max init. O2. =', glo
-        call MPI_AllREDUCE(locO2min, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, MPIerr)
-        if (mype == 0) write(*, *) '  `-> gobal min init. O2. =', glo
+        call MPI_AllREDUCE(locDINmin, gmin, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, MPIerr)
+        call MPI_AllREDUCE(locDINmax, gmax, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
+        if (mype == 0) call recom_range('DIN', gmin, gmax, 'mmol m-3')
+
+        call MPI_AllREDUCE(locDICmin, gmin, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, MPIerr)
+        call MPI_AllREDUCE(locDICmax, gmax, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
+        if (mype == 0) call recom_range('DIC', gmin, gmax, 'mmol m-3')
+
+        call MPI_AllREDUCE(locAlkmin, gmin, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, MPIerr)
+        call MPI_AllREDUCE(locAlkmax, gmax, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
+        if (mype == 0) call recom_range('Alk', gmin, gmax, 'mmol m-3')
+
+        call MPI_AllREDUCE(locDSimin, gmin, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, MPIerr)
+        call MPI_AllREDUCE(locDSimax, gmax, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
+        if (mype == 0) call recom_range('DSi', gmin, gmax, 'mmol m-3')
+
+        call MPI_AllREDUCE(locDFemin, gmin, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, MPIerr)
+        call MPI_AllREDUCE(locDFemax, gmax, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
+        if (mype == 0) call recom_range('DFe', gmin, gmax, 'umol m-3')
+
+        call MPI_AllREDUCE(locO2min, gmin, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, MPIerr)
+        call MPI_AllREDUCE(locO2max, gmax, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
+        if (mype == 0) call recom_range('O2', gmin, gmax, 'mmol m-3')
+
+        if (mype == 0) call recom_ok('initialisation done')
 
         if (enable_3zoo2det) then
             is_3zoo2det = 1.0_WP

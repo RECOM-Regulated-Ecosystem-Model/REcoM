@@ -155,6 +155,7 @@ contains
 
         use recom_forcing_module, only: recom_forcing
         use recom_atbox_module, only: recom_atbox
+        use recom_log, only: recom_trace, recom_section, recom_kv
 
         implicit none
 
@@ -273,9 +274,7 @@ contains
                     MPI_COMM_FESOM, myDim_nod2D, eDim_nod2D, ocean_area, ulevels_nod2D, areasvol)
         end if
 
-        if (recom_debug .and. mype == 0) then
-            print *, achar(27) // '[36m' // '     --> bio_fluxes' // achar(27) // '[0m'
-        end if
+        if (recom_debug .and. mype == 0) call recom_trace('bio_fluxes')
 
         !---------------------------------------------------------------------------
         ! Prognostic atmospheric CO2 box (use_atbox)
@@ -292,10 +291,15 @@ contains
                 ! OG: Alternative
                 !call annual_event(do_update)
 
-                if (do_update .and. mype == 0) write(*, fmt = '(a50,2x,i6,4(2x,f6.2))') &
-                        'Year, xCO2 (ppm), cosmic 14C flux (at / cm² / s):', &
-                        yearold, x_co2atm(1), x_co2atm_13(1), x_co2atm_14(1), cosmic_14(1) * &
-                        production_rate_to_flux_14
+                if (do_update .and. mype == 0) then
+                    call recom_section('atmospheric CO2 box, end of year')
+                    call recom_kv('year', yearold)
+                    call recom_kv('xCO2', x_co2atm(1), 'ppm')
+                    call recom_kv('xCO2 13C', x_co2atm_13(1))
+                    call recom_kv('xCO2 14C', x_co2atm_14(1))
+                    call recom_kv('cosmic 14C flux', cosmic_14(1) * production_rate_to_flux_14, &
+                            'atoms cm-2 s-1')
+                end if
             end if
         end if
 
@@ -481,10 +485,7 @@ contains
                 call allocate_and_init_diags(nl)
             end if
 
-            if (recom_debug .and. mype == 0) then
-                print *, achar(27) // '[36m' // '     -->' // &
-                        ' REcoM_Forcing' // achar(27) // '[0m'
-            end if
+            if (recom_debug .and. mype == 0) call recom_trace('REcoM_Forcing')
 
             ! ======================================================================================
             !******************************** RECOM FORCING ****************************************
@@ -531,8 +532,8 @@ contains
                 decayBenthos(1:benthos_num) / SecondsPerDay
 
 
-            if (recom_debug .and. mype == 0) print *, achar(27) // '[36m' // '     --> ciso' // &
-                    ' after REcoM_Forcing' // achar(27) // '[0m'
+            if (recom_debug .and. mype == 0) call recom_trace('benthos + diagnostics', 2, &
+                    last=.true.)
 
             !-----------------------------------------------------------------------
             ! Accumulate 2D/3D diagnostics and deallocate column arrays
