@@ -1,0 +1,186 @@
+!===============================================================================
+! MODULE: recom4_dump
+!   Reference dumps for RECOM4 (https://github.com/RECOM-Regulated-Ecosystem-Model/RECOM4,
+!   milestone M1, issue #8). Records, for a few chosen water columns and step
+!   windows, everything REcoM receives and returns, so that RECOM4 can be
+!   compared with FESOM2-REcoM column by column, bit for bit.
+!
+!   Switched on only by an optional file `namelist.recom4dump` in the run
+!   directory. Without that file nothing happens. The dump only reads model
+!   variables; it never changes them.
+!
+!   namelist.recom4dump, example:
+!     &dump_settings
+!       dump_dir  = './recom4_dump/'          ! must exist, ends with '/'
+!       col_name  = 'tropical', 'polar', 'shelf'
+!       col_lon   = -140.0, -40.0, 4.0        ! degrees east
+!       col_lat   =    0.0, -65.0, 55.0       ! degrees north
+!       win_first = 1, 1081                   ! step windows (mstep), inclusive
+!       win_last  = 10, 1090
+!     /
+!
+!   Step 1 (this commit): read the namelist, choose the nodes, report them.
+!   Writing the records follows in the next commits.
+!===============================================================================
+module recom4_dump
+    use recom_declarations, only: wp
+    use mpi
+    implicit none
+    private
+
+    public :: recom4_dump_init, recom4_dump_step, recom4_dump_column
+
+    integer, parameter :: maxcol = 8
+    integer, parameter :: maxwin = 4
+
+    logical, save, public :: dump_enabled = .false.
+
+    character(len=512), save :: dump_dir = ''
+    integer, save            :: ncol = 0
+    integer, save            :: nwin = 0
+    character(len=32), save  :: col_name(maxcol) = ''
+    real(kind=wp), save      :: col_lon(maxcol) = 0.0_wp
+    real(kind=wp), save      :: col_lat(maxcol) = 0.0_wp
+    integer, save            :: win_first(maxwin) = 0
+    integer, save            :: win_last(maxwin) = 0
+
+    ! Per column: owning MPI rank and local node index on that rank
+    integer, save :: col_owner(maxcol) = -1
+    integer, save :: col_node(maxcol) = 0
+    integer, save :: my_rank = -1
+
+contains
+
+    !===========================================================================
+    ! recom4_dump_init
+    !   Called once at the end of recom_init. Reads namelist.recom4dump if it
+    !   exists and chooses, per column, the open-ocean node (no cavity) nearest
+    !   to the given coordinates over all ranks.
+    !===========================================================================
+    subroutine recom4_dump_init(ulevels_nod2D, nlevels_nod2D, geo_coord_nod2D, &
+            myDim_nod2D, mype, comm)
+        integer, intent(in)       :: ulevels_nod2D(:), nlevels_nod2D(:)
+        real(kind=wp), intent(in) :: geo_coord_nod2D(:, :)   ! (lon, lat) in radians
+        integer, intent(in)       :: myDim_nod2D, mype, comm
+
+        namelist /dump_settings/ dump_dir, col_name, col_lon, col_lat, win_first, win_last
+
+        character(len=*), parameter :: nml_file = 'namelist.recom4dump'
+        real(kind=wp), parameter :: deg = 180.0_wp / (4.0_wp * atan(1.0_wp))
+        real(kind=wp), parameter :: earth_radius_km = 6371.0_wp
+
+        logical :: exists
+        integer :: unit, ios, ierr, i, n
+        real(kind=wp) :: lon0, lat0, dist, dmin
+        real(kind=wp) :: pair_in(2), pair_out(2)
+        integer :: nbest
+
+        my_rank = mype
+        dump_enabled = .false.
+
+        inquire(file=nml_file, exist=exists)
+        if (.not. exists) return
+
+        open(newunit=unit, file=nml_file, status='old', action='read', iostat=ios)
+        if (ios == 0) read(unit, nml=dump_settings, iostat=ios)
+        if (ios /= 0) then
+            if (mype == 0) write(*, '(a,i0)') 'recom4_dump: ERROR reading ' // nml_file // ', iostat = ', ios
+            call MPI_Abort(comm, 1, ierr)
+        end if
+        close(unit)
+
+        ncol = count(len_trim(col_name) > 0)
+        nwin = count(win_first > 0)
+        if (ncol == 0 .or. nwin == 0) then
+            if (mype == 0) write(*, '(a)') 'recom4_dump: no columns or no step windows, dump off'
+            return
+        end if
+
+        do i = 1, ncol
+            lon0 = col_lon(i) / deg
+            lat0 = col_lat(i) / deg
+
+            dmin = huge(1.0_wp)
+            nbest = 0
+            do n = 1, myDim_nod2D
+                if (ulevels_nod2D(n) /= 1) cycle              ! cavity node
+                if (nlevels_nod2D(n) - 1 < 1) cycle           ! no wet level
+                dist = great_circle(lon0, lat0, geo_coord_nod2D(1, n), geo_coord_nod2D(2, n))
+                if (dist < dmin) then
+                    dmin = dist
+                    nbest = n
+                end if
+            end do
+
+            ! Overall nearest node; on equal distance the lowest rank wins
+            pair_in(1) = dmin
+            pair_in(2) = real(mype, wp)
+            call MPI_Allreduce(pair_in, pair_out, 1, MPI_2DOUBLE_PRECISION, MPI_MINLOC, comm, ierr)
+            col_owner(i) = nint(pair_out(2))
+
+            if (mype == col_owner(i)) then
+                col_node(i) = nbest
+                write(*, '(a,a,a,f10.4,a,f9.4,a,i0,a,f10.3,a,i0,a,i0)') &
+                    'recom4_dump: column ', trim(col_name(i)), &
+                    ' -> node at lon ', geo_coord_nod2D(1, nbest) * deg, &
+                    ' lat ', geo_coord_nod2D(2, nbest) * deg, &
+                    ', levels ', nlevels_nod2D(nbest) - 1, &
+                    ', distance ', dmin * earth_radius_km, ' km, rank ', mype, &
+                    ', local node ', nbest
+            end if
+        end do
+
+        dump_enabled = .true.
+        if (mype == 0) then
+            write(*, '(a,a)') 'recom4_dump: output directory ', trim(dump_dir)
+            do i = 1, nwin
+                write(*, '(a,i0,a,i0)') 'recom4_dump: steps ', win_first(i), ' to ', win_last(i)
+            end do
+        end if
+    end subroutine recom4_dump_init
+
+    !===========================================================================
+    ! recom4_dump_step: .true. if step mstep lies in one of the windows
+    !===========================================================================
+    logical function recom4_dump_step(mstep)
+        integer, intent(in) :: mstep
+        integer :: w
+
+        recom4_dump_step = .false.
+        if (.not. dump_enabled) return
+        do w = 1, nwin
+            if (mstep >= win_first(w) .and. mstep <= win_last(w)) recom4_dump_step = .true.
+        end do
+    end function recom4_dump_step
+
+    !===========================================================================
+    ! recom4_dump_column: index of the column whose node is local node n on
+    ! this rank, 0 if none
+    !===========================================================================
+    integer function recom4_dump_column(n)
+        integer, intent(in) :: n
+        integer :: i
+
+        recom4_dump_column = 0
+        if (.not. dump_enabled) return
+        do i = 1, ncol
+            if (col_owner(i) == my_rank .and. col_node(i) == n) then
+                recom4_dump_column = i
+                return
+            end if
+        end do
+    end function recom4_dump_column
+
+    !===========================================================================
+    ! Great-circle angle between two points (radians in, radians out)
+    !===========================================================================
+    pure real(kind=wp) function great_circle(lon1, lat1, lon2, lat2)
+        real(kind=wp), intent(in) :: lon1, lat1, lon2, lat2
+        real(kind=wp) :: a
+
+        a = sin(0.5_wp * (lat2 - lat1))**2 &
+            + cos(lat1) * cos(lat2) * sin(0.5_wp * (lon2 - lon1))**2
+        great_circle = 2.0_wp * asin(sqrt(min(1.0_wp, a)))
+    end function great_circle
+
+end module recom4_dump

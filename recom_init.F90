@@ -51,6 +51,7 @@ contains
 
         use REcoM_declarations, only: wp, tracer_ids
         use REcoM_GloVar, only: tracers_info_type
+        use recom4_dump, only: recom4_dump_init
         use recom_config, only: validate_recom_tracers, initialize_tracer_indices, &
                 validate_tracer_id_sequence, bgc_num, validate_grazing_preference
 #if defined(__oifs)
@@ -166,6 +167,10 @@ contains
                 nlevels_nod2D, geo_coord_nod2D, Z_3d_n, rad)
         call initialization_diagnostics(tracers_info, myDim_nod2D, ulevels_nod2D, nlevels_nod2D, &
                 MPI_COMM_FESOM, mype)
+
+        ! RECOM4 reference dumps: off unless namelist.recom4dump exists
+        call recom4_dump_init(ulevels_nod2D, nlevels_nod2D, geo_coord_nod2D, myDim_nod2d, &
+                mype, MPI_COMM_FESOM)
     end subroutine recom_init
 
     subroutine initialize_memory(node_size, nl, num_tracers)
