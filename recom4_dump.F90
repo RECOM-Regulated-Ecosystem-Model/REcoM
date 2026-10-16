@@ -37,9 +37,14 @@
 !
 !   Step 1: read the namelist, choose the nodes, report them.
 !   Step 2: field records around REcoM_Forcing.
+!   Step 3: field records around the REcoM part of FESOM's tracer step
+!           (benthic return, sinking, sinking into the benthos), per tracer.
+!           Per-tracer names carry the tracer ID, e.g. 'in_tr_1001'.
 !===============================================================================
 module recom4_dump
     use recom_declarations, only: wp
+    use recom_config, only: benthos_num
+    use recom_glovar, only: Benthos, GlodecayBenthos
     use iso_fortran_env, only: int32, real64
     use mpi
     implicit none
@@ -47,6 +52,7 @@ module recom4_dump
 
     public :: recom4_dump_init, recom4_dump_step, recom4_dump_column
     public :: recom4_dump_open, recom4_dump_close, recom4_dump_write
+    public :: recom4_dump_transport_in, recom4_dump_transport_bf, recom4_dump_transport_sink
 
     ! Recording points
     integer, parameter, public :: DUMP_STEP = 1, DUMP_TRANSPORT = 2, DUMP_SURFACE = 3
@@ -80,6 +86,8 @@ module recom4_dump
     integer, save :: cur_unit = -1
     integer, save :: cur_step = 0
     logical, save :: started(maxcol, nphase) = .false.
+    ! Last step for which the per-step records of a column were written
+    integer, save :: last_step(maxcol, nphase) = -1
 
 contains
 
@@ -276,6 +284,137 @@ contains
         call write_header(name, size(a, 1), size(a, 2))
         write(cur_unit) real(a, real64)
     end subroutine write_r2
+
+    !===========================================================================
+    ! Step 3: the REcoM part of FESOM's tracer step (diff_tracers_ale).
+    !   Called for REcoM tracers only, with FESOM's whole arrays (level, node);
+    !   each routine picks the dumped nodes owned by this rank. No MPI calls,
+    !   so ranks without a dumped node simply return.
+    !
+    !   recom4_dump_transport_in   before the REcoM block. On the first REcoM
+    !       tracer of a step it also writes the column geometry, temperature,
+    !       salinity, the benthos and its decay (what recom4_transport gets
+    !       besides the tracer). Then in_tr_<ID>.
+    !   recom4_dump_transport_bf   after the benthic return was added:
+    !       out_dtr_bf_<ID>, out_tr_bf_<ID>
+    !   recom4_dump_transport_sink after sinking was added:
+    !       out_vert_sink_<ID>, out_str_bf_<ID>, out_tr_sink_<ID>,
+    !       out_benthos_<ID> (sinking into the benthos changes it per tracer)
+    !===========================================================================
+    subroutine recom4_dump_transport_in(tr_id, mstep, dt, ulevels_nod2D, nlevels_nod2D, &
+            nod_in_elem2D_num, nod_in_elem2D, nlevels, elem_area, area, areasvol, &
+            hnode, hnode_new, zbar_3d_n, z_3d_n, geo_coord_nod2D, temp, salt, tr)
+        integer, intent(in)       :: tr_id, mstep
+        real(kind=wp), intent(in) :: dt
+        integer, intent(in)       :: ulevels_nod2D(:), nlevels_nod2D(:)
+        integer, intent(in)       :: nod_in_elem2D_num(:), nod_in_elem2D(:, :), nlevels(:)
+        real(kind=wp), intent(in) :: elem_area(:), area(:, :), areasvol(:, :)
+        real(kind=wp), intent(in) :: hnode(:, :), hnode_new(:, :), zbar_3d_n(:, :), z_3d_n(:, :)
+        real(kind=wp), intent(in) :: geo_coord_nod2D(:, :), temp(:, :), salt(:, :), tr(:, :)
+
+        integer :: icol, n, nzmin, nzmax, j, e
+        real(kind=wp) :: seafloor(size(area, 1))
+
+        if (.not. recom4_dump_step(mstep)) return
+        do icol = 1, ncol
+            n = local_node(icol)
+            if (n == 0) cycle
+            nzmin = ulevels_nod2D(n)
+            nzmax = nlevels_nod2D(n) - 1
+            call recom4_dump_open(icol, DUMP_TRANSPORT, mstep)
+            if (last_step(icol, DUMP_TRANSPORT) /= mstep) then
+                last_step(icol, DUMP_TRANSPORT) = mstep
+                ! seafloor area under each layer, as in diff_ver_recom_expl
+                seafloor = 0.0_wp
+                do j = 1, nod_in_elem2D_num(n)
+                    e = nod_in_elem2D(j, n)
+                    seafloor(nlevels(e) - 1) = seafloor(nlevels(e) - 1) + elem_area(e) / 3.0_wp
+                end do
+                call recom4_dump_write('in_nzmin', nzmin)
+                call recom4_dump_write('in_nzmax', nzmax)
+                call recom4_dump_write('in_mstep', mstep)
+                call recom4_dump_write('in_dt', dt)
+                call recom4_dump_write('in_lat', geo_coord_nod2D(2, n))
+                call recom4_dump_write('in_hnode', hnode(nzmin:nzmax, n))
+                call recom4_dump_write('in_hnode_new', hnode_new(nzmin:nzmax, n))
+                call recom4_dump_write('in_zbar', zbar_3d_n(nzmin:nzmax + 1, n))
+                call recom4_dump_write('in_zmid', z_3d_n(nzmin:nzmax, n))
+                call recom4_dump_write('in_area', area(nzmin:nzmax + 1, n))
+                call recom4_dump_write('in_areasvol', areasvol(nzmin:nzmax, n))
+                call recom4_dump_write('in_seafloor', seafloor(nzmin:nzmax))
+                call recom4_dump_write('in_temp', temp(nzmin:nzmax, n))
+                call recom4_dump_write('in_salt', salt(nzmin:nzmax, n))
+                call recom4_dump_write('in_benthos', Benthos(n, 1:benthos_num))
+                call recom4_dump_write('in_decay_benthos', GlodecayBenthos(n, 1:benthos_num))
+            end if
+            call recom4_dump_write(tagged('in_tr', tr_id), tr(nzmin:nzmax, n))
+            call recom4_dump_close()
+        end do
+    end subroutine recom4_dump_transport_in
+
+    subroutine recom4_dump_transport_bf(tr_id, mstep, ulevels_nod2D, nlevels_nod2D, dtr_bf, tr)
+        integer, intent(in)       :: tr_id, mstep
+        integer, intent(in)       :: ulevels_nod2D(:), nlevels_nod2D(:)
+        real(kind=wp), intent(in) :: dtr_bf(:, :), tr(:, :)
+
+        integer :: icol, n, nzmin, nzmax
+
+        if (.not. recom4_dump_step(mstep)) return
+        do icol = 1, ncol
+            n = local_node(icol)
+            if (n == 0) cycle
+            nzmin = ulevels_nod2D(n)
+            nzmax = nlevels_nod2D(n) - 1
+            call recom4_dump_open(icol, DUMP_TRANSPORT, mstep)
+            call recom4_dump_write(tagged('out_dtr_bf', tr_id), dtr_bf(nzmin:nzmax, n))
+            call recom4_dump_write(tagged('out_tr_bf', tr_id), tr(nzmin:nzmax, n))
+            call recom4_dump_close()
+        end do
+    end subroutine recom4_dump_transport_bf
+
+    subroutine recom4_dump_transport_sink(tr_id, mstep, ulevels_nod2D, nlevels_nod2D, &
+            vert_sink, str_bf, tr)
+        integer, intent(in)       :: tr_id, mstep
+        integer, intent(in)       :: ulevels_nod2D(:), nlevels_nod2D(:)
+        real(kind=wp), intent(in) :: vert_sink(:, :), str_bf(:, :), tr(:, :)
+
+        integer :: icol, n, nzmin, nzmax
+
+        if (.not. recom4_dump_step(mstep)) return
+        do icol = 1, ncol
+            n = local_node(icol)
+            if (n == 0) cycle
+            nzmin = ulevels_nod2D(n)
+            nzmax = nlevels_nod2D(n) - 1
+            call recom4_dump_open(icol, DUMP_TRANSPORT, mstep)
+            call recom4_dump_write(tagged('out_vert_sink', tr_id), vert_sink(nzmin:nzmax, n))
+            call recom4_dump_write(tagged('out_str_bf', tr_id), str_bf(nzmin:nzmax, n))
+            call recom4_dump_write(tagged('out_tr_sink', tr_id), tr(nzmin:nzmax, n))
+            call recom4_dump_write(tagged('out_benthos', tr_id), Benthos(n, 1:benthos_num))
+            call recom4_dump_close()
+        end do
+    end subroutine recom4_dump_transport_sink
+
+    !===========================================================================
+    ! local_node: local node index of column icol if this rank owns it, else 0
+    !===========================================================================
+    integer function local_node(icol)
+        integer, intent(in) :: icol
+        local_node = 0
+        if (col_owner(icol) == my_rank) local_node = col_node(icol)
+    end function local_node
+
+    !===========================================================================
+    ! tagged: record name with the tracer ID appended, e.g. 'in_tr_1001'
+    !===========================================================================
+    function tagged(base, id) result(name)
+        character(len=*), intent(in) :: base
+        integer, intent(in) :: id
+        character(len=32) :: name
+        character(len=12) :: num
+        write(num, '(i0)') id
+        name = trim(base) // '_' // trim(num)
+    end function tagged
 
     !===========================================================================
     ! Great-circle angle between two points (radians in, radians out)
