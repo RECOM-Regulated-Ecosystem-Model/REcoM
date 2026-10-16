@@ -19,16 +19,43 @@
 !       win_last  = 10, 1090
 !     /
 !
-!   Step 1 (this commit): read the namelist, choose the nodes, report them.
-!   Writing the records follows in the next commits.
+!   File format
+!   -----------
+!   One binary stream file per column and recording point:
+!     <dump_dir><column>_step.bin       around REcoM_Forcing (recom4_step)
+!     <dump_dir><column>_transport.bin  around the transport calls (later step)
+!     <dump_dir><column>_surface.bin    surface boundary condition (later step)
+!   Each file is a sequence of self-describing field records, appended step
+!   by step, in native byte order (little-endian on albedo):
+!     name    32 characters, blank padded (e.g. 'in_temp')
+!     mstep   int32, the step of this record
+!     n1, n2  int32, the shape of the field (scalars: 1, 1)
+!     data    n1*n2 float64, column-major (Fortran) order
+!   Integers (levels, day of year) are stored as float64; they are exact.
+!   Python: name = f.read(32); mstep, n1, n2 = np.fromfile(f, '<i4', 3);
+!           data = np.fromfile(f, '<f8', n1*n2).reshape((n1, n2), order='F')
+!
+!   Step 1: read the namelist, choose the nodes, report them.
+!   Step 2: field records around REcoM_Forcing.
 !===============================================================================
 module recom4_dump
     use recom_declarations, only: wp
+    use iso_fortran_env, only: int32, real64
     use mpi
     implicit none
     private
 
     public :: recom4_dump_init, recom4_dump_step, recom4_dump_column
+    public :: recom4_dump_open, recom4_dump_close, recom4_dump_write
+
+    ! Recording points
+    integer, parameter, public :: DUMP_STEP = 1, DUMP_TRANSPORT = 2, DUMP_SURFACE = 3
+    integer, parameter :: nphase = 3
+    character(len=*), parameter :: phase_name(nphase) = [character(len=9) :: 'step', 'transport', 'surface']
+
+    interface recom4_dump_write
+        module procedure write_r0, write_r1, write_r2, write_i0
+    end interface recom4_dump_write
 
     integer, parameter :: maxcol = 8
     integer, parameter :: maxwin = 4
@@ -48,6 +75,11 @@ module recom4_dump
     integer, save :: col_owner(maxcol) = -1
     integer, save :: col_node(maxcol) = 0
     integer, save :: my_rank = -1
+
+    ! File currently open for writing, and whether a file was started yet
+    integer, save :: cur_unit = -1
+    integer, save :: cur_step = 0
+    logical, save :: started(maxcol, nphase) = .false.
 
 contains
 
@@ -170,6 +202,80 @@ contains
             end if
         end do
     end function recom4_dump_column
+
+    !===========================================================================
+    ! recom4_dump_open: start writing records of step mstep for column icol at
+    ! recording point iphase. The first call per column and point creates the
+    ! file (replacing an old one); later calls append.
+    !===========================================================================
+    subroutine recom4_dump_open(icol, iphase, mstep)
+        integer, intent(in) :: icol, iphase, mstep
+
+        character(len=1024) :: path
+        integer :: ios
+
+        path = trim(dump_dir) // trim(col_name(icol)) // '_' // trim(phase_name(iphase)) // '.bin'
+        if (.not. started(icol, iphase)) then
+            open(newunit=cur_unit, file=path, access='stream', form='unformatted', &
+                 status='replace', action='write', iostat=ios)
+            started(icol, iphase) = .true.
+            write(*, '(a,a,a,i0)') 'recom4_dump: writing ', trim(path), ' from step ', mstep
+        else
+            open(newunit=cur_unit, file=path, access='stream', form='unformatted', &
+                 status='old', position='append', action='write', iostat=ios)
+        end if
+        if (ios /= 0) then
+            write(*, '(a,a,a,i0)') 'recom4_dump: ERROR opening ', trim(path), ', iostat = ', ios
+            write(*, '(a)') 'recom4_dump: does dump_dir exist and end with / ?'
+            call MPI_Abort(MPI_COMM_WORLD, 1, ios)
+        end if
+        cur_step = mstep
+    end subroutine recom4_dump_open
+
+    subroutine recom4_dump_close()
+        if (cur_unit >= 0) close(cur_unit)
+        cur_unit = -1
+    end subroutine recom4_dump_close
+
+    !===========================================================================
+    ! Field records: name, step, shape, float64 data (see the file format above)
+    !===========================================================================
+    subroutine write_header(name, n1, n2)
+        character(len=*), intent(in) :: name
+        integer, intent(in) :: n1, n2
+        character(len=32) :: tag
+
+        tag = name
+        write(cur_unit) tag, int(cur_step, int32), int(n1, int32), int(n2, int32)
+    end subroutine write_header
+
+    subroutine write_r0(name, x)
+        character(len=*), intent(in) :: name
+        real(kind=wp), intent(in) :: x
+        call write_header(name, 1, 1)
+        write(cur_unit) real(x, real64)
+    end subroutine write_r0
+
+    subroutine write_i0(name, i)
+        character(len=*), intent(in) :: name
+        integer, intent(in) :: i
+        call write_header(name, 1, 1)
+        write(cur_unit) real(i, real64)
+    end subroutine write_i0
+
+    subroutine write_r1(name, a)
+        character(len=*), intent(in) :: name
+        real(kind=wp), intent(in) :: a(:)
+        call write_header(name, size(a), 1)
+        write(cur_unit) real(a, real64)
+    end subroutine write_r1
+
+    subroutine write_r2(name, a)
+        character(len=*), intent(in) :: name
+        real(kind=wp), intent(in) :: a(:, :)
+        call write_header(name, size(a, 1), size(a, 2))
+        write(cur_unit) real(a, real64)
+    end subroutine write_r2
 
     !===========================================================================
     ! Great-circle angle between two points (radians in, radians out)

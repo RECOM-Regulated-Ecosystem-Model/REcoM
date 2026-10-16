@@ -154,6 +154,9 @@ contains
                 update_3d_diags, deallocate_diags
 
         use recom_forcing_module, only: recom_forcing
+        use recom4_dump, only: recom4_dump_column, recom4_dump_step, recom4_dump_open, &
+                recom4_dump_close, recom4_dump_write, DUMP_STEP
+        use recom_declarations, only: vertNPPn, vertGPPn, vertNPPd, vertGPPd
         use recom_atbox_module, only: recom_atbox
         use recom_log, only: recom_trace, recom_section, recom_kv
 
@@ -200,6 +203,7 @@ contains
         ! Loop indices and node-level counters
         integer :: tr_num, tracer_id
         integer :: n, nzmin, nzmax
+        integer :: idump   ! RECOM4 dump: column index of node n, 0 if not dumped
 
         ! Scalar local state
         real(kind=wp) :: SW           ! Photosynthetically active shortwave [W/m2]
@@ -492,6 +496,58 @@ contains
             !-----------------------------------------------------------------------
             ! BGC time step <E2><80><94> updates C, PAR, carbonate chemistry, and surface fluxes
             !-----------------------------------------------------------------------
+            !-----------------------------------------------------------------------
+            ! RECOM4 reference dump: everything REcoM_Forcing receives
+            !-----------------------------------------------------------------------
+            idump = recom4_dump_column(n)
+            if (idump > 0) then
+                if (.not. recom4_dump_step(mstep)) idump = 0
+            end if
+            if (idump > 0) then
+                call recom4_dump_open(idump, DUMP_STEP, mstep)
+                call recom4_dump_write('in_nzmin', nzmin)
+                call recom4_dump_write('in_nzmax', nzmax)
+                call recom4_dump_write('in_mstep', mstep)
+                call recom4_dump_write('in_daynew', daynew)
+                call recom4_dump_write('in_ndpyr', ndpyr)
+                call recom4_dump_write('in_month', month)
+                call recom4_dump_write('in_dt', dt)
+                call recom4_dump_write('in_rad', rad)
+                call recom4_dump_write('in_lon', geo_coord_nod2D(1, n))
+                call recom4_dump_write('in_lat', geo_coord_nod2D(2, n))
+                call recom4_dump_write('in_hnode', hnode(nzmin:nzmax, n))
+                call recom4_dump_write('in_zbar', zbar_3d_n(nzmin:nzmax + 1, n))
+                call recom4_dump_write('in_zmid', Z_3d_n(nzmin:nzmax, n))
+                call recom4_dump_write('in_temp', Temp(nzmin:nzmax))
+                call recom4_dump_write('in_salt', Sali_depth(nzmin:nzmax))
+                call recom4_dump_write('in_salt_surf', Sali)
+                call recom4_dump_write('in_shortwave_raw', shortwave(n))
+                call recom4_dump_write('in_sw', SW)
+                call recom4_dump_write('in_ice_frac', ice_data_values(n))
+                call recom4_dump_write('in_ice_conc', Loc_ice_conc)
+                call recom4_dump_write('in_press_air', press_air(n))
+                call recom4_dump_write('in_slp', Loc_slp)
+                call recom4_dump_write('in_u_wind', u_wind(n))
+                call recom4_dump_write('in_v_wind', v_wind(n))
+                call recom4_dump_write('in_wind10', ULoc)
+                call recom4_dump_write('in_atm_co2', LocAtmCO2)
+                call recom4_dump_write('in_dust_fe_raw', GloFeDust(n))
+                call recom4_dump_write('in_dust_n_raw', GloNDust(n))
+                call recom4_dump_write('in_dust_fe', FeDust)
+                call recom4_dump_write('in_dust_n', NDust)
+                call recom4_dump_write('in_benthos', LocBenthos(1:benthos_num))
+                call recom4_dump_write('in_hplus', Hplus)
+                call recom4_dump_write('in_co2', CO2_watercolumn(nzmin:nzmax))
+                call recom4_dump_write('in_ph', pH_watercolumn(nzmin:nzmax))
+                call recom4_dump_write('in_pco2', pCO2_watercolumn(nzmin:nzmax))
+                call recom4_dump_write('in_hco3', HCO3_watercolumn(nzmin:nzmax))
+                call recom4_dump_write('in_co3', CO3_watercolumn(nzmin:nzmax))
+                call recom4_dump_write('in_omegac', OmegaC_watercolumn(nzmin:nzmax))
+                call recom4_dump_write('in_kspc', kspc_watercolumn(nzmin:nzmax))
+                call recom4_dump_write('in_rhosw', rhoSW_watercolumn(nzmin:nzmax))
+                call recom4_dump_write('in_tr', C(nzmin:nzmax, :))
+                call recom4_dump_close()
+            end if
             call REcoM_Forcing(n, nzmin, nzmax, C, SW, Loc_slp, Temp, Sali, Sali_depth, &
                     CO2_watercolumn, & ! NEW MOCSY CO2 for the whole watercolumn
                     pH_watercolumn, & ! NEW MOCSY pH for the whole watercolumn
@@ -504,6 +560,40 @@ contains
                     PAR, MPI_COMM_FESOM, mype, myDim_nod2D, &
                     eDim_nod2D, nl, hnode, zbar_3d_n, &
                     geo_coord_nod2D, daynew, ndpyr, dt, kappa, mstep, rad)
+            !-----------------------------------------------------------------------
+            ! RECOM4 reference dump: everything REcoM_Forcing returns
+            !-----------------------------------------------------------------------
+            if (idump > 0) then
+                call recom4_dump_open(idump, DUMP_STEP, mstep)
+                call recom4_dump_write('out_tr', C(nzmin:nzmax, :))
+                call recom4_dump_write('out_benthos', LocBenthos(1:benthos_num))
+                call recom4_dump_write('out_decay_benthos', decayBenthos(1:benthos_num))
+                call recom4_dump_write('out_par', PAR(nzmin:nzmax))
+                call recom4_dump_write('out_co2', CO2_watercolumn(nzmin:nzmax))
+                call recom4_dump_write('out_ph', pH_watercolumn(nzmin:nzmax))
+                call recom4_dump_write('out_pco2', pCO2_watercolumn(nzmin:nzmax))
+                call recom4_dump_write('out_hco3', HCO3_watercolumn(nzmin:nzmax))
+                call recom4_dump_write('out_co3', CO3_watercolumn(nzmin:nzmax))
+                call recom4_dump_write('out_omegac', OmegaC_watercolumn(nzmin:nzmax))
+                call recom4_dump_write('out_kspc', kspc_watercolumn(nzmin:nzmax))
+                call recom4_dump_write('out_rhosw', rhoSW_watercolumn(nzmin:nzmax))
+                call recom4_dump_write('out_ph_surf', ph)
+                call recom4_dump_write('out_kw660', kw660)
+                call recom4_dump_write('out_k0', K0)
+                call recom4_dump_write('out_pco2surf', pco2surf)
+                call recom4_dump_write('out_dpco2surf', dpco2surf)
+                call recom4_dump_write('out_co2flux_day', dflux)
+                call recom4_dump_write('out_co2flux', co2flux_seaicemask)
+                call recom4_dump_write('out_o2flux_day', oflux)
+                call recom4_dump_write('out_o2flux', o2flux_seaicemask)
+                if (Diags) then
+                    call recom4_dump_write('out_npp_phy', vertNPPn(nzmin:nzmax))
+                    call recom4_dump_write('out_gpp_phy', vertGPPn(nzmin:nzmax))
+                    call recom4_dump_write('out_npp_dia', vertNPPd(nzmin:nzmax))
+                    call recom4_dump_write('out_gpp_dia', vertGPPd(nzmin:nzmax))
+                end if
+                call recom4_dump_close()
+            end if
 
             do tr_num = bgc_start, bgc_end
                 tracers_info%data_pointers(tr_num)%tracer_data(nzmin:nzmax, n) = C(nzmin:nzmax, tr_num-num_physical_tracers)
