@@ -40,6 +40,8 @@
 !   Step 3: field records around the REcoM part of FESOM's tracer step
 !           (benthic return, sinking, sinking into the benthos), per tracer.
 !           Per-tracer names carry the tracer ID, e.g. 'in_tr_1001'.
+!   Step 4: surface boundary condition per REcoM tracer (bc_surface),
+!           split into the terms recom4_step receives, 'surf_<ID>'.
 !===============================================================================
 module recom4_dump
     use recom_declarations, only: wp
@@ -53,6 +55,7 @@ module recom4_dump
     public :: recom4_dump_init, recom4_dump_step, recom4_dump_column
     public :: recom4_dump_open, recom4_dump_close, recom4_dump_write
     public :: recom4_dump_transport_in, recom4_dump_transport_bf, recom4_dump_transport_sink
+    public :: recom4_dump_surface
 
     ! Recording points
     integer, parameter, public :: DUMP_STEP = 1, DUMP_TRANSPORT = 2, DUMP_SURFACE = 3
@@ -394,6 +397,27 @@ contains
             call recom4_dump_close()
         end do
     end subroutine recom4_dump_transport_sink
+
+    !===========================================================================
+    ! Step 4: surface boundary condition of one REcoM tracer at node n
+    !   terms = own, virtual, restoring, river, erosion (each per second, the
+    !   factors is_riverinput / is_erosioninput / useRivFe already applied),
+    !   then FESOM's bc_surface (= dt * their sum). Record 'surf_<ID>', 6 values.
+    !===========================================================================
+    subroutine recom4_dump_surface(n, mstep, tr_id, terms)
+        integer, intent(in)       :: n, mstep, tr_id
+        real(kind=wp), intent(in) :: terms(6)
+
+        integer :: icol
+
+        if (.not. dump_enabled) return
+        icol = recom4_dump_column(n)
+        if (icol == 0) return
+        if (.not. recom4_dump_step(mstep)) return
+        call recom4_dump_open(icol, DUMP_SURFACE, mstep)
+        call recom4_dump_write(tagged('surf', tr_id), terms)
+        call recom4_dump_close()
+    end subroutine recom4_dump_surface
 
     !===========================================================================
     ! local_node: local node index of column icol if this rank owns it, else 0
