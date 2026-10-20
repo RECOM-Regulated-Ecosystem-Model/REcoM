@@ -144,15 +144,10 @@ module REcoM_declarations
     real(kind=wp) :: logK1, logK2, Klig1, Klig2
     !!------------------------------------------------------------------------------
     !! *** Zooplankton ***
-    real(kind=wp) :: DiaNsq
     real(kind=wp) :: varpzdia, fDiaN ! Part of Diatoms available for food
-    real(kind=wp) :: PhyNsq
     real(kind=wp) :: varpzPhy, fPhyN ! Part of Small phytoplankton available for food
-    real(kind=wp) :: CoccoNsq
     real(kind=wp) :: varpzCocco, fCoccoN
-    real(kind=wp) :: PhaeoNsq
     real(kind=wp) :: varpzPhaeo, fPhaeoN
-    real(kind=wp) :: MicZooNsq ! NEW 3Zoo
     real(kind=wp) :: varpzMicZoo, fMicZooN ! NEW 3Zoo Part of microzooplankton available for food
     real(kind=wp) :: food, foodsq ! [(mmol N)2/m6]
     ! [mmol N / (m3 * day)] (NEW changed term)
@@ -164,10 +159,8 @@ module REcoM_declarations
     real(kind=wp) :: HetLossFlux ! [(mmol N)2/(m6 * day)] Zooplankton mortality (quadratic loss)
     !!------------------------------------------------------------------------------
     !! *** Second Zooplankton  ***
-    real(kind=wp) :: DiaNsq2, PhyNsq2, CoccoNsq2, PhaeoNsq2, HetNsq ! NEW (changed term)
     real(kind=wp) :: varpzDia2, fDiaN2, varpzPhy2, fPhyN2, varpzCocco2, fCoccoN2, varpzPhaeo2, &
             fPhaeoN2, varpzHet, fHetN ! Part of Diatoms available for food
-    real(kind=wp) :: MicZooNsq2 ! NEW Zoo3
     real(kind=wp) :: varpzMicZoo2, fMicZooN2 ! NEW Zoo3
     real(kind=wp) :: food2, foodsq2 ! [(mmol N)2/m6]
     real(kind=wp) :: grazingFlux_phy2, grazingFlux_Dia2, grazingFlux_Cocco2, grazingFlux_Phaeo2, &
@@ -183,7 +176,6 @@ module REcoM_declarations
     real(kind=wp) :: recip_res_zoo22
     !!------------------------------------------------------------------------------
     !! *** Grazing Detritus  ***
-    real(kind=wp) :: DetNsq, DetZ2Nsq, DetNsq2, DetZ2Nsq2
     ! Part of Diatoms available for food
     real(kind=wp) :: varpzDet, varpzDetZ2, varpzDet2, varpzDetZ22
     real(kind=wp) :: fDetN, fDetZ2N, fDetN2, fDetZ2N2
@@ -191,14 +183,10 @@ module REcoM_declarations
     real(kind=wp) :: grazingFlux_Det2, grazingFlux_DetZ22 ! [mmol N / (m3 * day)]
     !!------------------------------------------------------------------------------
     !! *** Third zooplankton  ***       ! NEW 3Zoo
-    real(kind=wp) :: DiaNsq3
     real(kind=wp) :: varpzDia3, fDiaN3 ! Part of diatoms available for food
     real(kind=wp) :: loss_hetfd
-    real(kind=wp) :: PhyNsq3
     real(kind=wp) :: varpzPhy3, fPhyN3 ! Part of small phytoplankton available for food
-    real(kind=wp) :: CoccoNsq3
     real(kind=wp) :: varpzCocco3, fCoccoN3 ! Part of coccolithophores available for food
-    real(kind=wp) :: PhaeoNsq3
     real(kind=wp) :: varpzPhaeo3, fPhaeoN3 ! Part of phaeocystis available for food
     real(kind=wp) :: food3, foodsq3 ! [(mmol N)2/m6]
     ! [mmol N / (m3 * day)]
@@ -531,6 +519,12 @@ module recom_config
 
     ! Decides if grazing should have preference for phyN or DiaN
     logical :: REcoM_Grazing_Variable_Preference = .true.
+    ! Form of the variable preference (only used if REcoM_Grazing_Variable_Preference):
+    !   'fasham'  : varpz_i = pz_i*N_i / sum_j(pz_j*N_j)       (default, current model)
+    !   'sigmoid' : varpz_i = pz_i*N_i**2 / (s_i + N_i**2)     (legacy REcoM, uses s*Nsq*)
+    character(len=16) :: REcoM_Grazing_Preference_Form = 'fasham'
+    ! Set once by validate_grazing_preference; avoids a string compare per level
+    logical :: grazing_pref_sigmoid = .false.
     logical :: REcoM_Grazing_Variable_Efficiency = .true. ! allows grazing efficiency to vary
     ! with food availability
     logical :: Grazing_detritus = .false. ! Decides grazing on detritus
@@ -550,15 +544,8 @@ module recom_config
     !CO2 and both, temperature and light
     logical :: Diags = .true. !!!!!!!!!!!!!!!!!!!!!!Change in recom.F90 Diagnostics -> Diags
     logical :: constant_CO2 = .true.
-    logical :: UseFeDust = .true. ! Turns dust input of iron off when set to.false.
-    logical :: UseDustClim = .true.
-    ! Use Albani dustclim field (If it is false Mahowald will be used)
-    logical :: UseDustClimAlbani = .true.
     logical :: use_photodamage = .false. ! use Alvarez et al (2018) for chlorophyll degradation
     !MB More stable computation of zooplankton respiration fluxes adding a small number to HetN
-    logical :: HetRespFlux_plus = .true.
-    character(100) :: REcoMDataPath = &
-            '/albedo/work/projects/MarESys/ogurses/input/mesh_CORE2_finaltopo_mean/'
     logical :: restore_alkalinity = .true.
     logical :: useRivers = .false.
     logical :: useRivFe = .false. ! river input of Fe
@@ -597,6 +584,7 @@ module recom_config
             VPhaeo, &
             allow_var_sinking, biostep, REcoM_Geider_limiter, &
             REcoM_Grazing_Variable_Preference, REcoM_Grazing_Variable_Efficiency, &
+            REcoM_Grazing_Preference_Form, &
             Grazing_detritus, &
             het_resp_noredfield, &
             diatom_mucus, &
@@ -604,8 +592,7 @@ module recom_config
     ! BALL, DISS added OmegaC_diss, added CO2lim
             use_viscosity_scaling, OmegaC_diss, CO2lim, &
             Diags, constant_CO2, &
-            UseFeDust, UseDustClim, UseDustClimAlbani, &
-            use_photodamage, HetRespFlux_plus, REcoMDataPath, &
+            use_photodamage, &
             restore_alkalinity, useRivers, useRivFe, &
             useErosion, NitrogenSS, useAeolianN, &
             firstyearoffesomcycle, lastyearoffesomcycle, numofCO2cycles, &
@@ -620,13 +607,7 @@ module recom_config
     real(kind=wp) :: Vcalc = 0.0216 ! [1/day] depth dependence of calc_diss
 
     namelist /pasinking/ Vdet_a, Vcalc
-    !!------------------------------------------------------------------------------
-    !! *** Initialization ***
-    real(kind=wp) :: cPhyN = 0.2d0
-    real(kind=wp) :: cHetN = 0.2d0
-    real(kind=wp) :: cZoo2N = 0.2d0
 
-    namelist /painitialization_N/ cPhyN, cHetN, cZoo2N
     !!------------------------------------------------------------------------------
     !! *** Temperature and Arrhenius functions ***
     real(kind=wp) :: recom_Tref = 288.15d0 ! [K]
@@ -646,15 +627,15 @@ module recom_config
     real(kind=wp) :: expon_phy = 0.0599d0 ! small phyto exponent
     real(kind=wp) :: ord_cocco = -0.2310d0 ! coccolith ordonnee
     real(kind=wp) :: expon_cocco = 0.0327d0 ! small phyto ordonnee
-    real(kind=wp) :: ord_phaeo = -0.2310d0 ! phaeocystis ordonnee
-    real(kind=wp) :: expon_phaeo = 0.0327d0 ! phaeocystis ordonnee
+    !real(kind=wp) :: ord_phaeo = -0.2310d0 ! phaeocystis ordonnee
+    !real(kind=wp) :: expon_phaeo = 0.0327d0 ! phaeocystis ordonnee
 
     real(kind=wp) :: reminSi = 0.02d0
     ! NEW O2remin mmol m-3; Table 1 in Cram 2018 cites DeVries & Weber 2017
     ! for a range of 0-30 mmol m-3
     real(kind=wp) :: k_o2_remin = 15.d0
     namelist /paArrhenius/ recom_Tref, C2K, Ae, Tmax_phaeo, Topt_phaeo, uopt_phaeo, beta_phaeo, &
-            ord_d, expon_d, ord_phy, expon_phy, ord_cocco, expon_cocco, ord_phaeo, expon_phaeo, &
+            ord_d, expon_d, ord_phy, expon_phy, ord_cocco, expon_cocco, & !ord_phaeo, expon_phaeo, &
             reminSi, k_o2_remin
 
     !!------------------------------------------------------------------------------
@@ -671,12 +652,10 @@ module recom_config
     real(kind=wp) :: k_Fe_c = 0.04 ! NEW
     real(kind=wp) :: k_Fe_p = 0.09 ! Phaeocystis (to be tuned)
     real(kind=wp) :: k_si = 4.d0
-    real(kind=wp) :: P_cm = 3.0d0 ! [1/day]   the rate of C-specific photosynthesis
-    real(kind=wp) :: P_cm_d = 3.5d0
-    real(kind=wp) :: P_cm_c = 3.3d0 ! NEW
-    real(kind=wp) :: P_cm_p = 3.4d0 ! NEW for Phaeocystis ( to be tuned)
+    real(kind=wp) :: P_cm = 3.0d0 ! [1/day]   the rate of C-specific photosynthesis, used only when enable_coccos = .false.
+    real(kind=wp) :: P_cm_d = 3.5d0 ! used only when enable_coccos = .false.
     namelist /palimiter_function/ NMinSlope, SiMinSlope, NCmin, NCmin_d, NCmin_c, NCmin_p, SiCmin, &
-            k_Fe, k_Fe_d, k_Fe_c, k_Fe_p, k_si, P_cm, P_cm_d, P_cm_c, P_cm_p
+            k_Fe, k_Fe_d, k_Fe_c, k_Fe_p, k_si, P_cm, P_cm_d
 
     !!------------------------------------------------------------------------------
     !! *** For light calculations ***
@@ -751,6 +730,8 @@ module recom_config
     ! [1/day] Temperature dependent N degradation of extracellular organic N (EON)
     real(kind=wp) :: loss_het = 0.05d0
     real(kind=wp) :: pzDia = 0.5d0 ! Maximum diatom preference
+    ! s*Nsq*: half-saturation of squared prey [(mmol N m-3)**2], used only with
+    ! REcoM_Grazing_Preference_Form = 'sigmoid'; 0 makes that prey's preference fixed
     real(kind=wp) :: sDiaNsq = 0.d0
     real(kind=wp) :: pzPhy = 1.0d0 ! Maximum small phytoplankton preference
     real(kind=wp) :: sPhyNsq = 0.d0
@@ -779,6 +760,8 @@ module recom_config
     real(kind=wp) :: fecal_rate_n_mes = 0.25d0 ! NEW 3Zoo
     real(kind=wp) :: fecal_rate_c_mes = 0.32d0 ! NEW 3Zoo
     real(kind=wp) :: pzDia2 = 1.d0 ! Maximum diatom preference
+    ! s*Nsq*: half-saturation of squared prey [(mmol N m-3)**2], used only with
+    ! REcoM_Grazing_Preference_Form = 'sigmoid'; 0 makes that prey's preference fixed
     real(kind=wp) :: sDiaNsq2 = 0.d0
     real(kind=wp) :: pzPhy2 = 0.5d0 ! Maximum diatom preference
     real(kind=wp) :: sPhyNsq2 = 0.d0
@@ -809,6 +792,8 @@ module recom_config
     ! NEW 3Zoo [1/day] Respiration by heterotrophs and mortality (loss to detritus)
     real(kind=wp) :: res_miczoo = 0.01d0
     real(kind=wp) :: pzDia3 = 0.5d0 ! NEW 3Zoo Maximum diatom preference
+    ! s*Nsq*: half-saturation of squared prey [(mmol N m-3)**2], used only with
+    ! REcoM_Grazing_Preference_Form = 'sigmoid'; 0 makes that prey's preference fixed
     real(kind=wp) :: sDiaNsq3 = 0.d0 ! NEW 3Zoo
     real(kind=wp) :: pzPhy3 = 1.0d0 ! NEW 3Zoo Maximum small phytoplankton preference
     real(kind=wp) :: sPhyNsq3 = 0.d0 ! NEW 3Zoo
@@ -825,6 +810,8 @@ module recom_config
     !-------------------------------------------------------------------------------
     !! *** Detritus Grazing Params ***
     real(kind=wp) :: pzDet = 1.d0 ! Maximum small detritus prefence by first zooplankton
+    ! s*Nsq*: half-saturation of squared prey [(mmol N m-3)**2], used only with
+    ! REcoM_Grazing_Preference_Form = 'sigmoid'; 0 makes that prey's preference fixed
     real(kind=wp) :: sDetNsq = 0.d0
     real(kind=wp) :: pzDetZ2 = 1.d0 ! Maximum large detritus preference by first zooplankton
     real(kind=wp) :: sDetZ2Nsq = 0.d0
@@ -992,11 +979,11 @@ module recom_config
     ! kg m-3; reference seawater density (see Cram et al., 2018)
     real(kind=wp) :: rho_ref_water = 1027.d0
     ! kg m-1 s-1; reference seawater viscosity, at Temp=4 degC (see Cram et al., 2018)
-    real(kind=wp) :: visc_ref_water = 0.d00158
+    real(kind=wp) :: visc_ref_water = 0.00158d0
     real(kind=wp) :: w_ref1 = 10.d0 ! m s-1; reference sinking velocity of small detritus
     real(kind=wp) :: w_ref2 = 200.d0 ! m s-1; reference sinking velocity of large detritus
     ! s-1; factor to increase sinking speed of det1 with depth, set to 0 if not wanted
-    real(kind=wp) :: depth_scaling1 = 0.d015
+    real(kind=wp) :: depth_scaling1 = 0.015d0
     ! s-1; factor to increase sinking speed of det2 with depth, set to 0 if not wanted
     real(kind=wp) :: depth_scaling2 = 0.d0
     ! d-1; for numerical stability, set a maximum possible
@@ -1192,6 +1179,8 @@ contains
     subroutine validate_recom_tracers(num_tracers, use_age_tracer, use_transit, l_sf6, l_f11, l_f12&
             , l_r14c, l_r39ar, mype)
         use mpi, only: MPI_Abort, MPI_COMM_WORLD
+        use recom_log, only: recom_section, recom_kv, recom_info, recom_ok, recom_warn, &
+                recom_error, recom_itoa
 
         implicit none
 
@@ -1403,89 +1392,64 @@ contains
         ! --------------------------------------------------------------------------
 
         if (mype == 0) then
-            write(*, *) ''
-            write(*, *) '=========================================================================='
-            write(*, *) 'REcoM TRACER CONFIGURATION VALIDATION'
-            write(*, *) '=========================================================================='
-            write(*, *) 'Model configuration:'
-            write(*, *) '  enable_3zoo2det = ', enable_3zoo2det
-            write(*, *) '  enable_coccos   = ', enable_coccos
-            write(*, *) '  use_age_tracer  = ', use_age_tracer
-            write(*, *) '  use_transit     = ', use_transit
-            write(*, *) ''
-            write(*, *) 'Tracer layout: T, S | BGC | [age] | [transit]'
-            write(*, *) ''
-            write(*, *) 'Tracer counts:'
-            write(*, *) '  Physical tracers (T, S)           = ', n_base_physical
-            write(*, *) '  Age tracer  (ID=100)               = ', merge(1, 0, use_age_tracer)
-            write(*, *) '  Transit tracers                    = ', n_transit_tracers
-            write(*, *) '  Expected BGC tracers              = ', expected_bgc_num
-            write(*, *) '  Expected TOTAL tracers            = ', expected_total_tracers
-            write(*, *) '  Actual tracers from namelist      = ', num_tracers
-            write(*, *) '  Actual BGC tracers from namelist  = ', actual_bgc_num
-            write(*, *) ''
+            call recom_section('tracer configuration')
+            call recom_kv('enable_3zoo2det', enable_3zoo2det)
+            call recom_kv('enable_coccos', enable_coccos)
+            call recom_kv('use_age_tracer', use_age_tracer)
+            call recom_kv('use_transit', use_transit)
+            call recom_info('layout: T, S | BGC | [age] | [transit]')
+            call recom_kv('physical (T, S)', n_base_physical)
+            call recom_kv('age (ID=100)', merge(1, 0, use_age_tracer))
+            call recom_kv('transit', n_transit_tracers)
+            call recom_kv('BGC expected', expected_bgc_num)
+            call recom_kv('BGC in namelist', actual_bgc_num)
+            call recom_kv('total expected', expected_total_tracers)
+            call recom_kv('total in namelist', num_tracers)
         end if
 
         ! Check for inconsistencies
         if (actual_bgc_num /= expected_bgc_num) then
             config_error = .true.
             if (mype == 0) then
-                write(*, *) '======================================================================&
-                        &===='
-                write(*, *) 'ERROR: TRACER COUNT MISMATCH!'
-                write(*, *) '======================================================================&
-                        &===='
-                write(*, *) 'The number of BGC tracers in the namelist does not match'
-                write(*, *) 'the expected count for the current configuration.'
-                write(*, *) ''
-                write(*, *) '  Expected BGC tracers: ', expected_bgc_num
-                write(*, *) '  Actual BGC tracers:   ', actual_bgc_num
-                write(*, *) '  Difference:           ', actual_bgc_num - expected_bgc_num
-                write(*, *) ''
-                write(*, *) 'Required tracer IDs for current configuration:'
-                write(*, *) '  Base tracers (always):  1001-1022 (22 tracers) + 1037 (DICremin)'
+                call recom_error('tracer count mismatch', &
+                        'BGC expected=' // recom_itoa(expected_bgc_num) // &
+                        '  found=' // recom_itoa(actual_bgc_num))
+                call recom_info('the number of BGC tracers in the namelist does not match the')
+                call recom_info('expected count for the current configuration')
+                call recom_kv('difference', actual_bgc_num - expected_bgc_num)
+                call recom_info('required tracer IDs for this configuration:')
+                call recom_info('  base (always)        1001-1022 (22 tracers) + 1037 (DICremin)')
 
                 if (enable_3zoo2det .and. .not.enable_coccos) then
-                    write(*, *) '  3Zoo2Det extension:     1023-1030 (8 tracers)'
-                    write(*, *) '    - Zoo2N, Zoo2C:       1023-1024'
-                    write(*, *) '    - DetZ2 pool:         1025-1028'
-                    write(*, *) '    - MicZooN, MicZooC:   1029-1030'
-                    write(*, *) '  DICremin:               1037     '
+                    call recom_info('  3Zoo2Det extension   1023-1030 (8 tracers)')
+                    call recom_info('    Zoo2N, Zoo2C       1023-1024')
+                    call recom_info('    DetZ2 pool         1025-1028')
+                    call recom_info('    MicZooN, MicZooC   1029-1030')
+                    call recom_info('  DICremin             1037')
                 else if (enable_coccos .and. .not.enable_3zoo2det) then
-                    write(*, *) '  Coccos extension:       1023-1028 (6 tracers)'
-                    write(*, *) '    - CoccoN, C, Chl:     1023-1025'
-                    write(*, *) '    - PhaeoN, C, Chl:     1026-1028'
-                    write(*, *) '  DICremin:               1037     '
+                    call recom_info('  Coccos extension     1023-1028 (6 tracers)')
+                    call recom_info('    CoccoN, C, Chl     1023-1025')
+                    call recom_info('    PhaeoN, C, Chl     1026-1028')
+                    call recom_info('  DICremin             1037')
                 else if (enable_3zoo2det .and. enable_coccos) then
-                    write(*, *) '    - Zoo2N, Zoo2C:       1023-1024'
-                    write(*, *) '  3Zoo2Det extension:     1025-1028 (4 tracers for det2)'
-                    write(*, *) '  Coccos extension:       1029-1034 (6 tracers)'
-                    write(*, *) '    - CoccoN, C, Chl:     1029-1031'
-                    write(*, *) '    - PhaeoN, C, Chl:     1032-1034'
-                    write(*, *) '  MicroZoo extension:     1035-1036 (2 tracers)'
-                    write(*, *) '  DICremin:               1037     '
+                    call recom_info('    Zoo2N, Zoo2C       1023-1024')
+                    call recom_info('  3Zoo2Det extension   1025-1028 (4 tracers for det2)')
+                    call recom_info('  Coccos extension     1029-1034 (6 tracers)')
+                    call recom_info('    CoccoN, C, Chl     1029-1031')
+                    call recom_info('    PhaeoN, C, Chl     1032-1034')
+                    call recom_info('  MicroZoo extension   1035-1036 (2 tracers)')
+                    call recom_info('  DICremin             1037')
                 end if
 
-                write(*, *) ''
-                write(*, *) 'ACTION REQUIRED:'
-                write(*, *) '  1. Check your namelist.config tracer_list section'
-                write(*, *) '  2. Ensure enable_3zoo2det and enable_coccos match your setup'
-                write(*, *) '  3. Add/remove tracers to match the expected configuration'
-                write(*, *) '  4. Ensure order is T, S | BGC | [age] | [transit]'
-                write(*, *) '======================================================================&
-                        &===='
-                write(*, *) ''
+                call recom_info('action required:')
+                call recom_info('  1. check the tracer_list section of namelist.config')
+                call recom_info('  2. ensure enable_3zoo2det and enable_coccos match your setup')
+                call recom_info('  3. add/remove tracers to match the expected configuration')
+                call recom_info('  4. ensure the order is T, S | BGC | [age] | [transit]')
             end if
         else
             ! Validation passed
-            if (mype == 0) then
-                write(*, *) '======================================================================&
-                        &===='
-                write(*, *) 'VALIDATION PASSED: Tracer configuration is consistent!'
-                write(*, *) '======================================================================&
-                        &===='
-                write(*, *) ''
-            end if
+            if (mype == 0) call recom_ok('tracer configuration is consistent')
         end if
 
         ! ===========================================================================
@@ -1493,20 +1457,11 @@ contains
         ! ===========================================================================
         if (bgc_num /= expected_bgc_num) then
             if (mype == 0) then
-                write(*, *) '======================================================================&
-                        &===='
-                write(*, *) 'WARNING: bgc_num variable inconsistency!'
-                write(*, *) '======================================================================&
-                        &===='
-                write(*, *) 'The bgc_num parameter does not match the expected value.'
-                write(*, *) '  Current bgc_num value: ', bgc_num
-                write(*, *) '  Expected value:        ', expected_bgc_num
-                write(*, *) ''
-                write(*, *) 'This may indicate that bgc_num was not updated after changing'
-                write(*, *) 'enable_3zoo2det or enable_coccos flags.'
-                write(*, *) '======================================================================&
-                        &===='
-                write(*, *) ''
+                call recom_warn('bgc_num does not match the configuration', &
+                        'bgc_num=' // recom_itoa(bgc_num) // &
+                        '  expected=' // recom_itoa(expected_bgc_num))
+                call recom_info('bgc_num may not have been updated after changing')
+                call recom_info('enable_3zoo2det or enable_coccos')
             end if
             config_error = .true.
         end if
@@ -1519,112 +1474,73 @@ contains
         ! This check requires access to the actual tracer IDs from the namelist
         ! We'll validate against the expected list
         if (mype == 0) then
-            write(*, *) '=========================================================================='
-            write(*, *) 'VALIDATING TRACER IDs'
-            write(*, *) '=========================================================================='
-            write(*, *) 'Expected tracer ID sequence:'
-            write(*, *) ''
-
-            ! Display expected IDs in a readable format
-            write(*, *) 'Physical tracers (T, S):'
-            write(*, *) '  ', expected_tracer_ids(1:n_base_physical)
-            write(*, *) ''
-            write(*, *) 'Base BGC tracers (1001-1022):'
-            write(*, *) '  ', expected_tracer_ids(n_base_physical + 1:n_base_physical + 22)
-            write(*, *) ''
+            call recom_section('expected tracer IDs')
+            call recom_kv('T, S', expected_tracer_ids(1:n_base_physical))
+            call recom_kv('base BGC', expected_tracer_ids(n_base_physical + 1:n_base_physical + 22))
 
             if (expected_bgc_num > 22) then
-                write(*, *) 'Extended configuration tracers:'
-                write(*, *) '  ', expected_tracer_ids(n_base_physical + 23:n_base_physical + &
-                        expected_bgc_num)
-                write(*, *) ''
+                call recom_kv('extended BGC', expected_tracer_ids(n_base_physical + 23: &
+                        n_base_physical + expected_bgc_num))
             end if
 
             if (use_age_tracer) then
-                write(*, *) 'Age tracer:'
-                write(*, *) '  ', expected_tracer_ids(n_base_physical + expected_bgc_num + 1)
-                write(*, *) ''
+                call recom_kv('age', expected_tracer_ids(n_base_physical + expected_bgc_num + 1))
             end if
 
             if (use_transit .and. n_transit_tracers > 0) then
-                write(*, *) 'Transit tracers (tail):'
-                write(*, *) '  ', expected_tracer_ids(num_expected_tracers - n_transit_tracers + 1:&
-                        num_expected_tracers)
-                write(*, *) ''
+                call recom_kv('transit (tail)', expected_tracer_ids(num_expected_tracers - &
+                        n_transit_tracers + 1:num_expected_tracers))
             end if
 
-            write(*, *) 'CRITICAL: The tracer IDs in your namelist MUST match this sequence'
-            write(*, *) '          exactly, in the same order!'
-            write(*, *) ''
-            write(*, *) 'Common errors to avoid:'
-            write(*, *) '  - Using wrong tracer ID numbers (e.g., 1023 instead of 1025)'
-            write(*, *) '  - Tracer ID clashes between configurations'
-            write(*, *) '  - Incorrect order of tracer IDs in namelist'
-            write(*, *) '  - Missing or duplicate tracer IDs'
-            write(*, *) '  - Placing transit tracers before BGC tracers (they now go at the end)'
-            write(*, *) ''
+            call recom_info('the namelist tracer IDs must match this sequence exactly, in order')
+            call recom_info('common errors:')
+            call recom_info('  - wrong tracer ID numbers (e.g. 1023 instead of 1025)')
+            call recom_info('  - tracer ID clashes between configurations')
+            call recom_info('  - tracer IDs in the wrong order')
+            call recom_info('  - missing or duplicate tracer IDs')
+            call recom_info('  - transit tracers before the BGC tracers (they go at the end)')
 
-            ! Configuration-specific warnings
+            ! Configuration-specific notes
             if (enable_3zoo2det .and. enable_coccos) then
-                write(*, *) 'IMPORTANT for FULL MODEL (3zoo2det + coccos):'
-                write(*, *) '  - Zoo2 uses:         1023-1024'
-                write(*, *) '  - Det2 pool uses:    1025-1028'
-                write(*, *) '  - Coccos uses:       1029-1031'
-                write(*, *) '  - Phaeocystis uses:  1032-1034'
-                write(*, *) '  - Microzooplankton:  1035-1036'
-                write(*, *) '  - DIC remin:         1037     '
-                write(*, *) ''
+                call recom_info('full model (3zoo2det + coccos):')
+                call recom_info('  Zoo2 1023-1024 | Det2 1025-1028 | Coccos 1029-1031')
+                call recom_info('  Phaeocystis 1032-1034 | MicroZoo 1035-1036 | DICremin 1037')
             else if (enable_coccos .and. .not.enable_3zoo2det) then
-                write(*, *) 'IMPORTANT for COCCOS-ONLY configuration:'
-                write(*, *) '  - Coccos uses:       1023-1025 (NOT 1029-1031)'
-                write(*, *) '  - Phaeocystis uses:  1026-1028 (NOT 1032-1034)'
-                write(*, *) '  - DIC remin:         1037     '
-                write(*, *) '  - Tracers 1029+ are NOT used in this configuration'
-                write(*, *) ''
+                call recom_info('coccos-only configuration:')
+                call recom_info('  Coccos 1023-1025 (NOT 1029-1031)')
+                call recom_info('  Phaeocystis 1026-1028 (NOT 1032-1034) | DICremin 1037')
+                call recom_info('  tracers 1029+ are NOT used in this configuration')
             else if (enable_3zoo2det .and. .not.enable_coccos) then
-                write(*, *) 'IMPORTANT for 3ZOO2DET-ONLY configuration:'
-                write(*, *) '  - Zoo2 uses:         1023-1024'
-                write(*, *) '  - Det2 pool uses:    1025-1028'
-                write(*, *) '  - Microzoo uses:     1029-1030 (NOT 1035-1036)'
-                write(*, *) '  - DIC remin:         1037     '
-                write(*, *) '  - Tracers 1031+ are NOT used in this configuration'
-                write(*, *) ''
+                call recom_info('3zoo2det-only configuration:')
+                call recom_info('  Zoo2 1023-1024 | Det2 1025-1028')
+                call recom_info('  MicroZoo 1029-1030 (NOT 1035-1036) | DICremin 1037')
+                call recom_info('  tracers 1031+ are NOT used in this configuration')
             else
-                write(*, *) 'IMPORTANT for BASE configuration:'
-                write(*, *) '  - Only tracers 1-2, 1001-1022 and 1037 should be present'
-                write(*, *) '  - Tracers 1023+ are NOT used in base configuration'
-                write(*, *) ''
+                call recom_info('base configuration:')
+                call recom_info('  only tracers 1-2, 1001-1022 and 1037 should be present')
+                call recom_info('  tracers 1023+ are NOT used in the base configuration')
             end if
-
-            write(*, *) '=========================================================================='
-            write(*, *) ''
         end if
 
         ! ===========================================================================
         ! Check for tracer ID clashes based on configuration
         ! ===========================================================================
         if (mype == 0) then
-            write(*, *) '=========================================================================='
-            write(*, *) 'CHECKING FOR TRACER ID CONFLICTS'
-            write(*, *) '=========================================================================='
+            call recom_section('tracer ID conflicts')
 
             ! Warn about potential clashes between configurations
             if (enable_3zoo2det .and. enable_coccos) then
-                write(*, *) 'Full model configuration active.'
+                call recom_info('full model configuration active')
             else if (enable_coccos) then
-                write(*, *) 'Coccos-only configuration active.'
-                write(*, *) 'Coccos MUST use IDs 1023-1025 (NOT 1029-1031).'
-                write(*, *) 'Phaeocystis MUST use IDs 1026-1028 (NOT 1032-1034).'
+                call recom_info('coccos-only configuration active')
+                call recom_info('Coccos MUST use IDs 1023-1025 (NOT 1029-1031)')
+                call recom_info('Phaeocystis MUST use IDs 1026-1028 (NOT 1032-1034)')
             else if (enable_3zoo2det) then
-                write(*, *) '3Zoo2Det-only configuration active.'
-                write(*, *) 'Microzoo MUST use IDs 1029-1030 (NOT 1035-1036).'
+                call recom_info('3zoo2det-only configuration active')
+                call recom_info('MicroZoo MUST use IDs 1029-1030 (NOT 1035-1036)')
             end if
 
-            write(*, *) ''
-            write(*, *) 'Please manually verify your namelist tracer_list against the'
-            write(*, *) 'expected sequence shown above.'
-            write(*, *) '=========================================================================='
-            write(*, *) ''
+            call recom_info('please verify your namelist tracer_list against the sequence above')
         end if
 
         ! ===========================================================================
@@ -1632,12 +1548,8 @@ contains
         ! ===========================================================================
         if (config_error) then
             if (mype == 0) then
-                write(*, *) ''
-                write(*, *) '******************************************************************'
-                write(*, *) '***  FATAL ERROR: MODEL CONFIGURATION INCONSISTENCY DETECTED   ***'
-                write(*, *) '***  MODEL EXECUTION STOPPED                                   ***'
-                write(*, *) '******************************************************************'
-                write(*, *) ''
+                call recom_error('model configuration inconsistency detected')
+                call recom_info('model execution stopped')
             end if
             deallocate(expected_tracer_ids, tracer_found)
             ! Stop execution (use appropriate stop routine for your model)
@@ -1661,6 +1573,8 @@ contains
     subroutine validate_tracer_id_sequence(tracer_ids, num_tracers, use_age_tracer, use_transit, &
             l_sf6, l_f11, l_f12, l_r14c, l_r39ar, mype)
         use mpi, only: MPI_Abort, MPI_COMM_WORLD
+        use recom_log, only: recom_section, recom_kv, recom_info, recom_ok, recom_warn, &
+                recom_error, recom_itoa
 
         implicit none
 
@@ -1777,28 +1691,24 @@ contains
         ! Check 1: Compare actual vs expected tracer IDs
         ! ===========================================================================
         if (mype == 0) then
-            write(*, *) ''
-            write(*, *) '=========================================================================='
-            write(*, *) 'VALIDATING TRACER ID SEQUENCE FROM NAMELIST'
-            write(*, *) '=========================================================================='
-            write(*, *) 'Expected layout: T, S | BGC | [age] | [transit]'
+            call recom_section('tracer ID sequence from namelist')
+            call recom_info('expected layout: T, S | BGC | [age] | [transit]')
         end if
 
         do i = 1, num_tracers
             if (tracer_ids(i) /= expected_ids(i)) then
                 error_found = .true.
                 if (mype == 0) then
-                    write(*, *) 'ERROR at position ', i, ':'
-                    write(*, *) '  Expected tracer ID: ', expected_ids(i)
-                    write(*, *) '  Found tracer ID:    ', tracer_ids(i)
+                    call recom_error('wrong tracer ID', 'position=' // recom_itoa(i) // &
+                            '  expected=' // recom_itoa(expected_ids(i)) // &
+                            '  found=' // recom_itoa(tracer_ids(i)))
                     ! position-specific hints
                     if (use_age_tracer .and. &
                             i == n_base_physical + bgc_num_local + 1) &
-                            write(*, *) '  HINT: this slot must be age tracer ID=100'
+                            call recom_info('hint: this slot must be the age tracer, ID=100')
                     if (use_transit .and. i > n_base_physical + bgc_num_local + merge(1, 0, &
                             use_age_tracer)) &
-                            write(*, *) '  HINT: this slot is in the transit-tracer tail block'
-                    write(*, *) ''
+                            call recom_info('hint: this slot is in the transit-tracer tail block')
                 end if
             end if
         end do
@@ -1811,10 +1721,8 @@ contains
                 if (tracer_ids(i) == tracer_ids(j)) then
                     duplicate_found = .true.
                     if (mype == 0) then
-                        write(*, *) 'ERROR: Duplicate tracer ID detected!'
-                        write(*, *) '  Tracer ID ', tracer_ids(i), ' appears at positions ', i, &
-                                ' and ', j
-                        write(*, *) ''
+                        call recom_error('duplicate tracer ID', 'ID=' // recom_itoa(tracer_ids(i)) // &
+                                '  positions=' // recom_itoa(i) // ', ' // recom_itoa(j))
                     end if
                 end if
             end do
@@ -1825,35 +1733,18 @@ contains
         ! ===========================================================================
         if (error_found .or. duplicate_found) then
             if (mype == 0) then
-                write(*, *) '======================================================================&
-                        &===='
-                write(*, *) 'TRACER ID VALIDATION FAILED!'
-                write(*, *) '======================================================================&
-                        &===='
-                write(*, *) ''
-                write(*, *) 'Expected tracer ID sequence for current configuration:'
-                write(*, *) expected_ids
-                write(*, *) ''
-                write(*, *) 'Actual tracer ID sequence from namelist:'
-                write(*, *) tracer_ids
-                write(*, *) ''
-                write(*, *) '  1. Layout must be: T, S | BGC | [age] | [transit]'
+                call recom_error('tracer ID validation failed')
+                call recom_kv('expected', expected_ids)
+                call recom_kv('namelist', tracer_ids)
+                call recom_info('1. layout must be: T, S | BGC | [age] | [transit]')
                 if (use_age_tracer) &
-                        write(*, *) '  2. Age tracer          ID=100  (use_age_tracer =' // &
-                        ' .true.), placed right after BGC'
+                        call recom_info('2. age tracer ID=100 (use_age_tracer = .true.), right after BGC')
                 if (use_transit) &
-                        write(*, *) '  3. Transit tracers placed at the END, after age (if any)'
-                write(*, *) 'ACTION REQUIRED:'
-                write(*, *) '  Correct the tracer IDs in your namelist.config file'
-                write(*, *) '  Ensure the sequence matches exactly as expected'
-                write(*, *) '======================================================================&
-                        &===='
-                write(*, *) ''
-                write(*, *) '******************************************************************'
-                write(*, *) '***  FATAL ERROR: INVALID TRACER ID SEQUENCE                   ***'
-                write(*, *) '***  MODEL EXECUTION STOPPED                                   ***'
-                write(*, *) '******************************************************************'
-                write(*, *) ''
+                        call recom_info('3. transit tracers at the END, after age (if any)')
+                call recom_info('action required: correct the tracer IDs in namelist.config so the')
+                call recom_info('sequence matches exactly')
+                call recom_error('invalid tracer ID sequence')
+                call recom_info('model execution stopped')
             end if
             deallocate(expected_ids)
             ! Stop execution (use appropriate stop routine for your model)
@@ -1861,25 +1752,113 @@ contains
             stop
         else
             if (mype == 0) then
-                write(*, *) '======================================================================&
-                        &===='
-                write(*, *) 'TRACER ID VALIDATION PASSED!'
-                write(*, *) 'All tracer IDs match expected sequence - no clashes detected.'
+                call recom_ok('tracer IDs match the expected sequence, no clashes')
                 if (use_age_tracer) &
-                        write(*, *) '  Age tracer   (ID=100) correctly placed at slot ', &
-                        n_base_physical + bgc_num_local + 1
+                        call recom_kv('age tracer slot', n_base_physical + bgc_num_local + 1)
                 if (use_transit) &
-                        write(*, *) '  Transit tracers (', n_transit_tracers, ') correctly' // &
-                        ' placed at tail'
-                write(*, *) '======================================================================&
-                        &===='
-                write(*, *) ''
+                        call recom_kv('transit at tail', n_transit_tracers)
             end if
         end if
 
         deallocate(expected_ids)
 
     end subroutine validate_tracer_id_sequence
+
+    ! ==============================================================================
+    ! SUBROUTINE: validate_grazing_preference
+    ! Purpose: Check REcoM_Grazing_Preference_Form, set grazing_pref_sigmoid, and warn
+    !          about half-saturation constants that have no effect in this setup.
+    !          Call once after the namelists are read.
+    ! ==============================================================================
+    subroutine validate_grazing_preference(mype)
+        use mpi, only: MPI_Abort, MPI_COMM_WORLD
+        use recom_log, only: recom_kv, recom_info, recom_warn, recom_error
+
+        implicit none
+
+        integer, intent(in) :: mype
+        integer :: MPIErr
+        character(len=16) :: form
+        real(kind=wp) :: s_meso(7), s_macro(8), s_micro(4)
+        logical :: any_s_set
+
+        form = adjustl(REcoM_Grazing_Preference_Form)
+        call to_lower(form)
+
+        select case (trim(form))
+        case ('fasham')
+            grazing_pref_sigmoid = .false.
+        case ('sigmoid')
+            grazing_pref_sigmoid = .true.
+        case default
+            if (mype == 0) then
+                call recom_error('REcoM_Grazing_Preference_Form not supported', &
+                        '"' // trim(REcoM_Grazing_Preference_Form) // '"')
+                call recom_info('use "fasham" or "sigmoid"')
+            end if
+            call MPI_ABORT(MPI_COMM_WORLD, 1, MPIErr)
+            stop
+        end select
+
+        ! Only the constants of grazers/prey that exist in this configuration matter
+        s_meso = [sPhyNsq, sDiaNsq, &
+                merge(sDetNsq, 0.0_wp, Grazing_detritus), &
+                merge(sDetZ2Nsq, 0.0_wp, Grazing_detritus .and. enable_3zoo2det), &
+                merge(sMicZooNsq, 0.0_wp, enable_3zoo2det), &
+                merge(sCoccoNsq, 0.0_wp, enable_coccos), &
+                merge(sPhaeoNsq, 0.0_wp, enable_coccos)]
+        s_macro = 0.0_wp
+        s_micro = 0.0_wp
+        if (enable_3zoo2det) then
+            s_macro = [sPhyNsq2, sDiaNsq2, sHetNsq, sMicZooNsq2, &
+                    merge(sDetNsq2, 0.0_wp, Grazing_detritus), &
+                    merge(sDetZ2Nsq2, 0.0_wp, Grazing_detritus), &
+                    merge(sCoccoNsq2, 0.0_wp, enable_coccos), &
+                    merge(sPhaeoNsq2, 0.0_wp, enable_coccos)]
+            s_micro = [sPhyNsq3, sDiaNsq3, &
+                    merge(sCoccoNsq3, 0.0_wp, enable_coccos), &
+                    merge(sPhaeoNsq3, 0.0_wp, enable_coccos)]
+        end if
+        any_s_set = any(s_meso /= 0.0_wp) .or. any(s_macro /= 0.0_wp) .or. &
+                any(s_micro /= 0.0_wp)
+
+        if (any(s_meso < 0.0_wp) .or. any(s_macro < 0.0_wp) .or. any(s_micro < 0.0_wp)) then
+            if (mype == 0) call recom_error('s*Nsq* grazing half-saturations must be >= 0')
+            call MPI_ABORT(MPI_COMM_WORLD, 1, MPIErr)
+            stop
+        end if
+
+        if (mype == 0) then
+            if (.not. REcoM_Grazing_Variable_Preference) then
+                call recom_kv('grazing preference', 'fixed (pz only)')
+                if (any_s_set) call recom_warn('s*Nsq* are set but have no effect', &
+                        'REcoM_Grazing_Variable_Preference = .false.')
+            else if (grazing_pref_sigmoid) then
+                call recom_kv('grazing preference', 'sigmoid  pz*N**2/(s+N**2)')
+                if (.not. any_s_set) call recom_warn('all active s*Nsq* are 0', &
+                        'the sigmoid form equals fixed preferences')
+            else
+                call recom_kv('grazing preference', 'fasham  pz*N/sum(pz*N)')
+                if (any_s_set) call recom_warn('s*Nsq* are set but have no effect', &
+                        'REcoM_Grazing_Preference_Form = "fasham"')
+            end if
+        end if
+
+        ! the flag only matters when variable preferences are on
+        grazing_pref_sigmoid = grazing_pref_sigmoid .and. REcoM_Grazing_Variable_Preference
+
+    contains
+
+        subroutine to_lower(str)
+            character(len=*), intent(inout) :: str
+            integer :: i, ic
+            do i = 1, len(str)
+                ic = iachar(str(i:i))
+                if (ic >= iachar('A') .and. ic <= iachar('Z')) str(i:i) = achar(ic + 32)
+            end do
+        end subroutine to_lower
+
+    end subroutine validate_grazing_preference
 
 end module recom_config
 !===============================================================================
@@ -2786,7 +2765,8 @@ contains
     ! ==============================================================================
     subroutine allocate_and_init_diags(nl)
 
-        use REcoM_declarations, only: vertcalcdiss, vertcalcif
+        use REcoM_declarations, only: vertcalcdiss, vertcalcif, &
+                vertrespmeso, vertrespmacro, vertrespmicro
 
         implicit none
 
@@ -2807,6 +2787,16 @@ contains
         vertcalcdiss = 0.d0
         vertcalcif = 0.d0
 
+        ! Zooplankton respiration: used in update_3d_diags / deallocate_diags
+        ! independently of Grazing_detritus
+        allocate(vertrespmeso(nl - 1))
+        vertrespmeso = 0.d0
+        if (enable_3zoo2det) then
+            allocate(vertrespmacro(nl - 1), vertrespmicro(nl - 1))
+            vertrespmacro = 0.d0
+            vertrespmicro = 0.d0
+        end if
+
         ! --------------------------------------------------------------------------
         ! Zooplankton grazing (optional)
         ! --------------------------------------------------------------------------
@@ -2825,6 +2815,8 @@ contains
                 vertdocexd, vertaggd, VTPhyCO2, VTDiaCO2, VTCphotLigLim_phyto, &
                 VTCphotLigLim_diatoms, VTCphot_phyto, VTCphot_diatoms, vertSiProd, vertScavFe, &
                 VTlimN_phyto, VTlimFe_phyto, VTlimN_diatoms, VTlimFe_diatoms
+                VTTemp_diatoms, VTTemp_phyto, VTqlimitFac_phyto, VTqlimitFac_diatoms, &
+                VTSi_assimDia
 
         implicit none
 
@@ -2883,6 +2875,21 @@ contains
         VTlimFe_phyto = 0.d0
         VTlimN_diatoms = 0.d0
         VTlimFe_diatoms = 0.d0
+        
+        ! --------------------------------------------------------------------------
+        ! Temperature / nutrient / Si tracking - Phytoplankton and Diatoms
+        ! (always allocated; may be written in REcoM_sms independent of coccos)
+        ! --------------------------------------------------------------------------
+        allocate(VTTemp_diatoms(nl - 1), VTTemp_phyto(nl - 1))
+        VTTemp_diatoms = 0.d0
+        VTTemp_phyto = 0.d0
+
+        allocate(VTqlimitFac_phyto(nl - 1), VTqlimitFac_diatoms(nl - 1))
+        VTqlimitFac_phyto = 0.d0
+        VTqlimitFac_diatoms = 0.d0
+
+        allocate(VTSi_assimDia(nl - 1))
+        VTSi_assimDia = 0.d0
 
     end subroutine alloc_init_phyto_diags
 
@@ -2894,8 +2901,7 @@ contains
 
         use REcoM_declarations, only: vertNPPc, vertGPPc, vertNNAc, vertChldegc, vertrespc, &
                 vertdocexc, vertaggc, vertNPPp, vertGPPp, vertNNAp, vertChldegp, vertrespp, &
-                vertdocexp, vertaggp, VTTemp_diatoms, VTTemp_phyto, VTqlimitFac_phyto, &
-                VTqlimitFac_diatoms, VTSi_assimDia, VTTemp_cocco, VTTemp_phaeo, VTCoccoCO2, &
+                vertdocexp, vertaggp, VTTemp_cocco, VTTemp_phaeo, VTCoccoCO2, &
                 VTPhaeoCO2, VTqlimitFac_cocco, VTqlimitFac_phaeo, VTCphotLigLim_cocco, &
                 VTCphotLigLim_phaeo, VTCphot_cocco, VTCphot_phaeo
 
@@ -2932,21 +2938,6 @@ contains
         vertaggp = 0.d0
 
         ! --------------------------------------------------------------------------
-        ! Temperature / nutrient / light tracking - Phytoplankton and Diatoms
-        ! (only allocated when coccos are enabled, matching original file1 logic)
-        ! --------------------------------------------------------------------------
-        allocate(VTTemp_diatoms(nl - 1), VTTemp_phyto(nl - 1))
-        VTTemp_diatoms = 0.d0
-        VTTemp_phyto = 0.d0
-
-        allocate(VTqlimitFac_phyto(nl - 1), VTqlimitFac_diatoms(nl - 1))
-        VTqlimitFac_phyto = 0.d0
-        VTqlimitFac_diatoms = 0.d0
-
-        allocate(VTSi_assimDia(nl - 1))
-        VTSi_assimDia = 0.d0
-
-        ! --------------------------------------------------------------------------
         ! Temperature / photosynthesis tracking - Coccos and Phaeocystis
         ! --------------------------------------------------------------------------
         allocate(VTTemp_cocco(nl - 1), VTTemp_phaeo(nl - 1))
@@ -2980,7 +2971,7 @@ contains
         use REcoM_declarations, only: vertgrazmicro_tot, vertgrazmicro_n, vertgrazmicro_d, &
                 vertgrazmicro_c, vertgrazmicro_p, vertrespmicro, vertgrazmeso_tot, &
                 vertgrazmeso_n, vertgrazmeso_d, vertgrazmeso_det, vertgrazmeso_mic, &
-                vertgrazmeso_det2, vertrespmeso, vertgrazmeso_c, vertgrazmeso_p, &
+                vertgrazmeso_det2, vertgrazmeso_c, vertgrazmeso_p, &
                 vertgrazmacro_tot, vertgrazmacro_n, vertgrazmacro_d, vertgrazmacro_mes, &
                 vertgrazmacro_det, vertgrazmacro_mic, vertgrazmacro_det2, vertrespmacro, &
                 vertgrazmacro_c, vertgrazmacro_p
@@ -2989,40 +2980,38 @@ contains
 
         integer, intent(in) :: nl
 
+        ! Mesozooplankton (exists in every configuration)
+        allocate(vertgrazmeso_tot(nl - 1), vertgrazmeso_n(nl - 1), vertgrazmeso_d(nl - 1))
+        allocate(vertgrazmeso_det(nl - 1))
+        vertgrazmeso_tot = 0.d0
+        vertgrazmeso_n = 0.d0
+        vertgrazmeso_d = 0.d0
+        vertgrazmeso_det = 0.d0
+
+        if (enable_coccos) then
+            allocate(vertgrazmeso_c(nl - 1), vertgrazmeso_p(nl - 1))
+            vertgrazmeso_c = 0.d0
+            vertgrazmeso_p = 0.d0
+        end if
+
         ! --------------------------------------------------------------------------
         ! Microzooplankton and Mesozooplankton (3-zoo configuration only)
         ! --------------------------------------------------------------------------
         if (enable_3zoo2det) then
-            ! Microzooplankton
-            allocate(vertgrazmicro_tot(nl - 1), vertgrazmicro_n(nl - 1), vertgrazmicro_d(nl - 1))
-            allocate(vertrespmicro(nl - 1))
+            allocate(vertgrazmeso_mic(nl - 1), vertgrazmeso_det2(nl - 1))
+            vertgrazmeso_mic = 0.d0
+            vertgrazmeso_det2 = 0.d0
 
+             ! Microzooplankton
+            allocate(vertgrazmicro_tot(nl - 1), vertgrazmicro_n(nl - 1), vertgrazmicro_d(nl - 1))
             vertgrazmicro_tot = 0.d0
             vertgrazmicro_n = 0.d0
             vertgrazmicro_d = 0.d0
-            vertrespmicro = 0.d0
-
-            ! Mesozooplankton
-            allocate(vertgrazmeso_tot(nl - 1), vertgrazmeso_n(nl - 1), vertgrazmeso_d(nl - 1))
-            allocate(vertgrazmeso_det(nl - 1), vertgrazmeso_mic(nl - 1), vertgrazmeso_det2(nl - 1))
-            allocate(vertrespmeso(nl - 1))
-
-            vertgrazmeso_tot = 0.d0
-            vertgrazmeso_n = 0.d0
-            vertgrazmeso_d = 0.d0
-            vertgrazmeso_det = 0.d0
-            vertgrazmeso_mic = 0.d0
-            vertgrazmeso_det2 = 0.d0
-            vertrespmeso = 0.d0
 
             if (enable_coccos) then
                 allocate(vertgrazmicro_c(nl - 1), vertgrazmicro_p(nl - 1))
-                allocate(vertgrazmeso_c(nl - 1), vertgrazmeso_p(nl - 1))
-
                 vertgrazmicro_c = 0.d0
                 vertgrazmicro_p = 0.d0
-                vertgrazmeso_c = 0.d0
-                vertgrazmeso_p = 0.d0
             end if
         end if
 
@@ -3032,7 +3021,6 @@ contains
         allocate(vertgrazmacro_tot(nl - 1), vertgrazmacro_n(nl - 1), vertgrazmacro_d(nl - 1))
         allocate(vertgrazmacro_mes(nl - 1), vertgrazmacro_det(nl - 1))
         allocate(vertgrazmacro_mic(nl - 1), vertgrazmacro_det2(nl - 1))
-        allocate(vertrespmacro(nl - 1))
 
         vertgrazmacro_tot = 0.d0
         vertgrazmacro_n = 0.d0
@@ -3041,7 +3029,6 @@ contains
         vertgrazmacro_det = 0.d0
         vertgrazmacro_mic = 0.d0
         vertgrazmacro_det2 = 0.d0
-        vertrespmacro = 0.d0
 
         if (enable_coccos) then
             allocate(vertgrazmacro_c(nl - 1), vertgrazmacro_p(nl - 1))
@@ -3234,9 +3221,8 @@ contains
         ! --------------------------------------------------------------------------
         ! Zooplankton Respiration
         ! --------------------------------------------------------------------------
-        respmeso(1:nzmax, n) = vertrespmeso(1:nzmax)
-
         if (enable_3zoo2det) then
+            respmeso(1:nzmax, n)  = vertrespmeso(1:nzmax)
             respmacro(1:nzmax, n) = vertrespmacro(1:nzmax)
             respmicro(1:nzmax, n) = vertrespmicro(1:nzmax)
         end if
@@ -3337,6 +3323,7 @@ contains
         deallocate(vertNPPn, vertGPPn, vertNNAn, vertChldegn)
         deallocate(vertaggn, vertdocexn, vertrespn)
         deallocate(VTPhyCO2, VTCphotLigLim_phyto, VTCphot_phyto)
+        deallocate(VTTemp_phyto, VTqlimitFac_phyto)
 
         ! --------------------------------------------------------------------------
         ! Diatoms
@@ -3346,7 +3333,9 @@ contains
         deallocate(VTDiaCO2, VTCphotLigLim_diatoms, VTCphot_diatoms)
         deallocate(vertSiProd, vertScavFe)
         deallocate(VTlimN_phyto, VTlimFe_phyto, VTlimN_diatoms, VTlimFe_diatoms)
-
+        deallocate(VTTemp_diatoms, VTqlimitFac_diatoms)
+        deallocate(VTSi_assimDia)
+        
         ! --------------------------------------------------------------------------
         ! Mesozooplankton (base heterotroph group; see matching unconditional
         ! allocation above)
@@ -3354,9 +3343,6 @@ contains
         deallocate(vertrespmeso)
 
         if (enable_coccos) then
-            deallocate(VTTemp_phyto, VTqlimitFac_phyto)
-            deallocate(VTTemp_diatoms, VTqlimitFac_diatoms)
-            deallocate(VTSi_assimDia)
 
             ! --------------------------------------------------------------------------
             ! Coccolithophores and Phaeocystis (if enabled)
@@ -3375,38 +3361,25 @@ contains
             deallocate(vertcalcdiss, vertcalcif)
         end if
 
-        ! --------------------------------------------------------------------------
-        ! Zooplankton Grazing (if enabled)
-        ! --------------------------------------------------------------------------
         if (Grazing_detritus) then
             deallocate(vertgrazmeso_tot, vertgrazmeso_n, vertgrazmeso_d)
             deallocate(vertgrazmeso_det)
+            if (enable_coccos) deallocate(vertgrazmeso_c, vertgrazmeso_p)
 
-            if (enable_coccos) then
-                deallocate(vertgrazmeso_c, vertgrazmeso_p)
-            end if
+            ! macro grazing is allocated whenever Grazing_detritus is on
+            deallocate(vertgrazmacro_tot, vertgrazmacro_n, vertgrazmacro_d)
+            deallocate(vertgrazmacro_mes, vertgrazmacro_det)
+            deallocate(vertgrazmacro_mic, vertgrazmacro_det2)
+            if (enable_coccos) deallocate(vertgrazmacro_c, vertgrazmacro_p)
 
             if (enable_3zoo2det) then
                 deallocate(vertgrazmeso_mic, vertgrazmeso_det2)
-
-                deallocate(vertgrazmacro_tot, vertgrazmacro_n, vertgrazmacro_d)
-                deallocate(vertgrazmacro_mes, vertgrazmacro_det)
-                deallocate(vertgrazmacro_mic, vertgrazmacro_det2)
-                deallocate(vertrespmacro)
-
-                if (enable_coccos) then
-                    deallocate(vertgrazmacro_c, vertgrazmacro_p)
-                end if
-
                 deallocate(vertgrazmicro_tot, vertgrazmicro_n, vertgrazmicro_d)
-                deallocate(vertrespmicro)
-
-                if (enable_coccos) then
-                    deallocate(vertgrazmicro_c, vertgrazmicro_p)
-                end if
+                if (enable_coccos) deallocate(vertgrazmicro_c, vertgrazmicro_p)
             end if
         end if
 
+        if (enable_3zoo2det) deallocate(vertrespmacro, vertrespmicro)
     end subroutine deallocate_diags
 
 end module recom_diags_management

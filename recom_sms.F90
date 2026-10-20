@@ -89,6 +89,10 @@ contains
                 omegac_diss, one, ord_cocco, ord_d, ord_phy, p_cm, p_cm_d, pa2atm, pzcocco, &
                 pzmiczoo2, pzphaeo, pzphaeo2, pzphaeo3, pzphy, pzphy2, pzphy3, &
                 recom_grazing_variable_preference, recom_grazing_variable_efficiency, &
+                grazing_pref_sigmoid, &
+                sphynsq, sdiansq, scocconsq, sphaeonsq, smiczoonsq, sdetnsq, sdetz2nsq, &
+                sphynsq2, sdiansq2, scocconsq2, sphaeonsq2, shetnsq, smiczoonsq2, &
+                sdetnsq2, sdetz2nsq2, sphynsq3, sdiansq3, scocconsq3, sphaeonsq3, &
                 recom_tref, redfield, redo2c, reminc, reminn, &
                 reminsi, res_het, res_miczoo, res_phy, res_phy_c, res_phy_d, res_phy_p, res_zoo2, &
                 rho_c1, rho_n, secondsperday, sedflx_num, sicmax, sicmin, sicuptakeratio, &
@@ -122,6 +126,7 @@ contains
         use recom_sms_update, only: sms_update_state, sms_update_tracer_scalars
         use recom_carbonate_chemistry, only: calculate_carbonate_chemistry
         use recom_sms_init
+        use recom_log, only: recom_warn, recom_info, recom_kv, recom_itoa
 
         implicit none
 
@@ -1181,6 +1186,29 @@ contains
                     ! Preferences scale with relative abundance of each prey type
                     !---------------------------------------------------------------------------
 
+                    if (grazing_pref_sigmoid) then
+                    ! Sigmoidal form: varpz_i = pz_i * N_i**2 / (s_i + N_i**2), each prey
+                    ! on its own (REcoM_Grazing_Preference_Form = 'sigmoid')
+                    varpzPhy = sigmoid_preference(pzPhy, PhyN, sPhyNsq)
+                    varpzDia = sigmoid_preference(pzDia, DiaN, sDiaNsq)
+
+                    if (Grazing_detritus) then
+                        varpzDet = sigmoid_preference(pzDet, DetN, sDetNsq)
+                    end if
+
+                    if (enable_3zoo2det) then
+                        if (Grazing_detritus) varpzDetZ2 = sigmoid_preference(pzDetZ2, DetZ2N, &
+                                sDetZ2Nsq)
+                        varpzMicZoo = sigmoid_preference(pzMicZoo, MicZooN, sMicZooNsq)
+                    end if
+
+                    if (enable_coccos) then
+                        varpzCocco = sigmoid_preference(pzCocco, CoccoN, sCoccoNsq)
+                        varpzPhaeo = sigmoid_preference(pzPhaeo, PhaeoN, sPhaeoNsq)
+                    end if
+
+                    else
+                    ! Normalised (Fasham) form (REcoM_Grazing_Preference_Form = 'fasham')
                     ! Calculate total weighted food availability (denominator)
                     aux = pzPhy * PhyN + pzDia * DiaN
 
@@ -1214,6 +1242,8 @@ contains
                         varpzCocco = (pzCocco * CoccoN) / aux
                         varpzPhaeo = (pzPhaeo * PhaeoN) / aux
                     end if
+
+                    end if ! grazing_pref_sigmoid
 
                     ! Calculate available food pools (preference × concentration)
                     fPhyN = varpzPhy * PhyN
@@ -1466,6 +1496,25 @@ contains
                         ! Preferences scale with relative abundance of each prey type
                         !-----------------------------------------------------------------------
 
+                        if (grazing_pref_sigmoid) then
+                        ! Sigmoidal form (REcoM_Grazing_Preference_Form = 'sigmoid')
+                        varpzPhy2 = sigmoid_preference(pzPhy2, PhyN, sPhyNsq2)
+                        varpzDia2 = sigmoid_preference(pzDia2, DiaN, sDiaNsq2)
+                        varpzMicZoo2 = sigmoid_preference(pzMicZoo2, MicZooN, sMicZooNsq2)
+                        varpzHet = sigmoid_preference(pzHet, HetN, sHetNsq)
+
+                        if (enable_coccos) then
+                            varpzCocco2 = sigmoid_preference(pzCocco2, CoccoN, sCoccoNsq2)
+                            varpzPhaeo2 = sigmoid_preference(pzPhaeo2, PhaeoN, sPhaeoNsq2)
+                        end if
+
+                        if (Grazing_detritus) then
+                            varpzDet2 = sigmoid_preference(pzDet2, DetN, sDetNsq2)
+                            varpzDetZ22 = sigmoid_preference(pzDetZ22, DetZ2N, sDetZ2Nsq2)
+                        end if
+
+                        else
+                        ! Normalised (Fasham) form (REcoM_Grazing_Preference_Form = 'fasham')
                         ! Calculate total weighted food availability (denominator)
                         ! Core prey: phytoplankton, diatoms, meso- and microzooplankton
                         aux = pzPhy2 * PhyN + pzDia2 * DiaN + pzHet * HetN + pzMicZoo2 * MicZooN
@@ -1496,6 +1545,8 @@ contains
                             varpzDet2 = (pzDet2 * DetN) / aux
                             varpzDetZ22 = (pzDetZ22 * DetZ2N) / aux
                         end if
+
+                        end if ! grazing_pref_sigmoid
 
                         ! Calculate available food pools (preference × concentration)
                         fPhyN2 = varpzPhy2 * PhyN
@@ -1732,6 +1783,18 @@ contains
                         ! Preferences scale with relative abundance of each phytoplankton type
                         !-----------------------------------------------------------------------
 
+                        if (grazing_pref_sigmoid) then
+                        ! Sigmoidal form (REcoM_Grazing_Preference_Form = 'sigmoid')
+                        varpzPhy3 = sigmoid_preference(pzPhy3, PhyN, sPhyNsq3)
+                        varpzDia3 = sigmoid_preference(pzDia3, DiaN, sDiaNsq3)
+
+                        if (enable_coccos) then
+                            varpzCocco3 = sigmoid_preference(pzCocco3, CoccoN, sCoccoNsq3)
+                            varpzPhaeo3 = sigmoid_preference(pzPhaeo3, PhaeoN, sPhaeoNsq3)
+                        end if
+
+                        else
+                        ! Normalised (Fasham) form (REcoM_Grazing_Preference_Form = 'fasham')
                         ! Calculate total weighted food availability (denominator)
                         ! Core phytoplankton prey: small phytoplankton and diatoms
                         aux = pzPhy3 * PhyN + pzDia3 * DiaN
@@ -1750,6 +1813,8 @@ contains
                             varpzCocco3 = (pzCocco3 * CoccoN) / aux
                             varpzPhaeo3 = (pzPhaeo3 * PhaeoN) / aux
                         end if
+
+                        end if ! grazing_pref_sigmoid
 
                         ! Calculate available food pools (preference × concentration)
                         fPhyN3 = varpzPhy3 * PhyN
@@ -1911,6 +1976,20 @@ contains
                     ! REDFIELD-BASED RESPIRATION MODE
                     ! Respirate excess carbon above Redfield C:N ratio
                     !---------------------------------------------------------------------------
+
+                    ! HetRespFlux_plus uses the stabilised form HetC / (HetN + tiny_het) (MB's addition).
+                    ! Legacy REcoM chose between the two forms with HetRespFlux_plus:
+                    !
+                    ! if (HetRespFlux_plus) then
+                    !     HetRespFlux = recip_res_het * arrFunc * (HetC * recip_hetN_plus - redfield) * HetC
+                    ! else
+                    !     ! legacy "default computation scheme"
+                    !     HetRespFlux = recip_res_het * arrFunc * (recipQZoo - redfield) * HetC
+                    ! end if
+                    !
+                    ! The unregularised form HetC/HetN blows up as HetN -> tiny, so it was
+                    ! dropped. HetRespFlux_plus no longer has an effect and
+                    ! removed from the namelist
 
                     ! Calculate respiration based on deviation from Redfield ratio
                     ! When C:N > Redfield, organism has excess carbon that must be respired
@@ -2223,13 +2302,15 @@ contains
                 ! Diagnostic: aggregationrate > 5/d (DetN runaway)
                 if (aggregationrate > 5.0_wp .and. n_agg_diag_prints < n_agg_diag_prints_max) then
                     n_agg_diag_prints = n_agg_diag_prints + 1
-                    print *, 'warning: aggregationrate runaway at n=', n, ' k=', k, ' mstep=', mstep
-                    print *, '  lat, lon        =', Latd(1), geo_coord_nod2D(1, n) * rad2deg_diag
-                    print *, '  aggregationrate [1/d] =', aggregationrate
-                    print *, '  DetN  [mmolN/m3] =', DetN
-                    print *, '  PhyC  [mmolC/m3] =', PhyC
-                    print *, '  DiaN  [mmolN/m3] =', DiaN
-                    print *, '  DiaC  [mmolC/m3] =', DiaC
+                    call recom_warn('aggregationrate runaway', 'n=' // recom_itoa(n) // &
+                            '  k=' // recom_itoa(k) // '  mstep=' // recom_itoa(mstep))
+                    call recom_kv('lat', Latd(1), 'deg')
+                    call recom_kv('lon', geo_coord_nod2D(1, n) * rad2deg_diag, 'deg')
+                    call recom_kv('aggregationrate', aggregationrate, 'd-1')
+                    call recom_kv('DetN', DetN, 'mmolN m-3')
+                    call recom_kv('PhyC', PhyC, 'mmolC m-3')
+                    call recom_kv('DiaN', DiaN, 'mmolN m-3')
+                    call recom_kv('DiaC', DiaC, 'mmolC m-3')
                 end if
 
                 !===============================================================================
@@ -3477,7 +3558,7 @@ contains
 
                 if (mype == 0) then
                     ! Print message only on master processor (parallel computing)
-                    write(*, *) ' --> Sedimentary input of nutrients through MEDUSA'
+                    call recom_info('sedimentary input of nutrients through MEDUSA')
                 end if
 
                 ! Note: MEDUSA fluxes are applied elsewhere in the code
@@ -3531,12 +3612,14 @@ contains
                     else
                         n_locbenthos_diag_prints_open = n_locbenthos_diag_prints_open + 1
                     end if
-                    print *, 'diag: LocBenthos runaway at n=', n, ' nzmin=', nzmin, &
-                            ' (cavity=', (nzmin > 1), ')  mstep=', mstep
-                    print *, '  lat, lon              =', Latd(1), geo_coord_nod2D(1, n) * rad2deg_diag
-                    print *, '  LocBenthos(1) [assumed mmolN/m2] =', LocBenthos(1)
-                    print *, '  decayRateBenN [1/d]    =', decayRateBenN
-                    print *, '  decayBenthos(1) [assumed mmolN/m2/d] =', decayBenthos(1)
+                    call recom_warn('LocBenthos(N) runaway', 'n=' // recom_itoa(n) // &
+                            '  nzmin=' // recom_itoa(nzmin) // '  mstep=' // recom_itoa(mstep))
+                    call recom_kv('cavity', nzmin > 1)
+                    call recom_kv('lat', Latd(1), 'deg')
+                    call recom_kv('lon', geo_coord_nod2D(1, n) * rad2deg_diag, 'deg')
+                    call recom_kv('LocBenthos(1)', LocBenthos(1), 'mmolN m-2 (assumed)')
+                    call recom_kv('decayRateBenN', decayRateBenN, 'd-1')
+                    call recom_kv('decayBenthos(1)', decayBenthos(1), 'mmolN m-2 d-1 (assumed)')
                 end if
 
                 ! Update benthic N pool (remove remineralized N)
@@ -3612,11 +3695,13 @@ contains
                     else
                         n_locbenthos_si_diag_prints_open = n_locbenthos_si_diag_prints_open + 1
                     end if
-                    print *, 'diag: LocBenthos(Si) runaway at n=', n, ' nzmin=', nzmin, &
-                            ' (cavity=', (nzmin > 1), ')  mstep=', mstep
-                    print *, '  lat, lon               =', Latd(1), geo_coord_nod2D(1, n) * rad2deg_diag
-                    print *, '  LocBenthos(3) [assumed mmolSi/m2] =', LocBenthos(3)
-                    print *, '  decayBenthos(3) [assumed mmolSi/m2/d] =', decayBenthos(3)
+                    call recom_warn('LocBenthos(Si) runaway', 'n=' // recom_itoa(n) // &
+                            '  nzmin=' // recom_itoa(nzmin) // '  mstep=' // recom_itoa(mstep))
+                    call recom_kv('cavity', nzmin > 1)
+                    call recom_kv('lat', Latd(1), 'deg')
+                    call recom_kv('lon', geo_coord_nod2D(1, n) * rad2deg_diag, 'deg')
+                    call recom_kv('LocBenthos(3)', LocBenthos(3), 'mmolSi m-2 (assumed)')
+                    call recom_kv('decayBenthos(3)', decayBenthos(3), 'mmolSi m-2 d-1 (assumed)')
                 end if
 
                 ! Update benthic Si pool
@@ -3981,6 +4066,31 @@ contains
         ! Ensure non-negative values (numerical safety)
         if (photosynthesis_rate < tiny) photosynthesis_rate = zero
     end subroutine calculate_photosynthesis_rate
+
+    !-------------------------------------------------------------------------------
+    ! Sigmoidal (Holling-III-like) prey preference
+    !   varpz = pz * N**2 / (s + N**2)
+    !   pz  : maximum preference [-]
+    !   N   : prey nitrogen [mmol N m-3]
+    !   s   : half-saturation of the squared prey concentration [(mmol N m-3)**2]
+    !   s = 0 gives varpz = pz (identical to fixed preferences).
+    !-------------------------------------------------------------------------------
+    pure function sigmoid_preference(pz, prey, s_sq) result(varpz)
+        use recom_declarations, only: wp
+
+        implicit none
+
+        real(kind=wp), intent(in) :: pz, prey, s_sq
+        real(kind=wp) :: varpz
+        real(kind=wp) :: prey_sq
+
+        prey_sq = prey * prey
+        if (prey_sq + s_sq > 0.0_wp) then
+            varpz = pz * prey_sq / (s_sq + prey_sq)
+        else
+            varpz = 0.0_wp
+        end if
+    end function sigmoid_preference
 
     !-------------------------------------------------------------------------------
     ! Function for calculating limiter

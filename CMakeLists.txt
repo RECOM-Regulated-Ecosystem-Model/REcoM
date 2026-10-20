@@ -18,8 +18,19 @@ file(GLOB_RECURSE SOURCES "*.?90")
 # sinking tracers, and the Benthos_tr cross-group merge that was supposed to
 # fill in the rest never receives anything to merge).
 add_compile_definitions(__recom __usetp)
+# the coupling macros of FESOM (target_compile_definitions PRIVATE) do not reach
+# this library, so they are repeated here
+if(FESOM_COUPLED)
+    add_compile_definitions(__oasis)
+endif()
 if(OIFS_COUPLED)
     add_compile_definitions(__oifs)
+endif()
+if(USE_YAC)
+    # update_atm_forcing_yac fills neither press_air nor u_wind, v_wind, and no atmospheric
+    # CO2 is received: REcoM would run with zero sea-level pressure and wind
+    message(FATAL_ERROR "REcoM coupled via YAC (USE_YAC) is not supported: sea-level pressure, "
+                        "10 m wind and atmospheric CO2 are not passed from the YAC coupling")
 endif()
 
 # Create the target library for REcoM and add its dependencies

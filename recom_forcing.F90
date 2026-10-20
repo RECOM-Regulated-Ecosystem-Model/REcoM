@@ -59,6 +59,7 @@ contains
         use recom_extra, only: cobeta, depth_calculations
         use recom_sms_module, only: recom_sms
         use gasx, only: scco2, flxco2, pistonvel, o2flux
+        use recom_log, only: recom_trace, recom_error, recom_kv, recom_itoa
         use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
 
         implicit none
@@ -197,25 +198,27 @@ contains
 
         ! Guard against unphysical DIC (indicates upstream tracer corruption)
         if (REcoM_DIC(1) > 10.d0) then  ! > 10 mol/m3 = 10000 mmol/m3
-            print *, 'error: DIC out of range at n=', n
-            print *, '  nzmin, depth   =', nzmin, zF(nzmin)
-            print *, '  DIC   [mol/m3] =', REcoM_DIC
-            print *, '  Alk   [mol/m3] =', REcoM_Alk
-            print *, '  T     [deg C]  =', REcoM_T
-            print *, '  S              =', REcoM_S
-            print *, '  Si    [mol/m3] =', REcoM_Si
-            print *, '  Phos  [mol/m3] =', REcoM_Phos
-            print *, '  pCO2           =', pco2surf
-            print *, '  rhoSW          =', rhoSW
-            print *, '  tempis         =', tempis
-            print *, '  kw660          =', kw660
-            print *, '  AtmCO2         =', LocAtmCO2
-            print *, '  Patm   [atm]   =', Patm
-            print *, '  ULoc   [m/s]   =', ULoc
-            print *, '  ice_conc       =', Loc_ice_conc
-            print *, '  thick(nzmin)   =', thick(nzmin)
-            print *, '  Nmocsy         =', Nmocsy
-            print *, '  Lond, Latd     =', Lond, Latd
+            call recom_error('DIC out of range', 'n=' // recom_itoa(n))
+            call recom_kv('nzmin', nzmin)
+            call recom_kv('depth', zF(nzmin), 'm')
+            call recom_kv('DIC', REcoM_DIC(1), 'mol m-3')
+            call recom_kv('Alk', REcoM_Alk(1), 'mol m-3')
+            call recom_kv('T', REcoM_T(1), 'deg C')
+            call recom_kv('S', REcoM_S(1))
+            call recom_kv('Si', REcoM_Si(1), 'mol m-3')
+            call recom_kv('Phos', REcoM_Phos(1), 'mol m-3')
+            call recom_kv('pCO2', pco2surf(1))
+            call recom_kv('rhoSW', rhoSW(1))
+            call recom_kv('tempis', tempis(1))
+            call recom_kv('kw660', kw660(1))
+            call recom_kv('AtmCO2', LocAtmCO2(1))
+            call recom_kv('Patm', Patm(1), 'atm')
+            call recom_kv('ULoc', ULoc(1), 'm s-1')
+            call recom_kv('ice_conc', Loc_ice_conc(1))
+            call recom_kv('thick(nzmin)', thick(nzmin), 'm')
+            call recom_kv('Nmocsy', Nmocsy)
+            call recom_kv('lon', Lond(1), 'deg')
+            call recom_kv('lat', Latd(1), 'deg')
             stop
         end if
 
@@ -229,27 +232,29 @@ contains
             ! Sanity check on computed flux magnitude
 
             if (abs(co2flux(1)) > 1.e10) then
-                print *, 'error: CO2 flux out of range at n=', n
-                print *, '  nzmin, depth   =', nzmin, zF(nzmin)
-                print *, '  co2flux        =', co2flux
-                print *, '  pco2surf       =', pco2surf
-                print *, '  co2            =', co2
-                print *, '  rhoSW          =', rhoSW
-                print *, '  T     [deg C]  =', REcoM_T
-                print *, '  tempis         =', tempis
-                print *, '  S              =', REcoM_S
-                print *, '  Alk   [mol/m3] =', REcoM_Alk
-                print *, '  DIC   [mol/m3] =', REcoM_DIC
-                print *, '  Si    [mol/m3] =', REcoM_Si
-                print *, '  Phos  [mol/m3] =', REcoM_Phos
-                print *, '  kw660          =', kw660
-                print *, '  AtmCO2         =', LocAtmCO2
-                print *, '  Patm   [atm]   =', Patm
-                print *, '  thick(nzmin)   =', thick(nzmin)
-                print *, '  Nmocsy         =', Nmocsy
-                print *, '  Lond, Latd     =', Lond, Latd
-                print *, '  ULoc   [m/s]   =', ULoc
-                print *, '  ice_conc       =', Loc_ice_conc
+                call recom_error('CO2 flux out of range', 'n=' // recom_itoa(n))
+                call recom_kv('nzmin', nzmin)
+                call recom_kv('depth', zF(nzmin), 'm')
+                call recom_kv('co2flux', co2flux(1), 'mol m-2 s-1')
+                call recom_kv('pco2surf', pco2surf(1))
+                call recom_kv('co2', co2(1))
+                call recom_kv('rhoSW', rhoSW(1))
+                call recom_kv('T', REcoM_T(1), 'deg C')
+                call recom_kv('tempis', tempis(1))
+                call recom_kv('S', REcoM_S(1))
+                call recom_kv('Alk', REcoM_Alk(1), 'mol m-3')
+                call recom_kv('DIC', REcoM_DIC(1), 'mol m-3')
+                call recom_kv('Si', REcoM_Si(1), 'mol m-3')
+                call recom_kv('Phos', REcoM_Phos(1), 'mol m-3')
+                call recom_kv('kw660', kw660(1))
+                call recom_kv('AtmCO2', LocAtmCO2(1))
+                call recom_kv('Patm', Patm(1), 'atm')
+                call recom_kv('thick(nzmin)', thick(nzmin), 'm')
+                call recom_kv('Nmocsy', Nmocsy)
+                call recom_kv('lon', Lond(1), 'deg')
+                call recom_kv('lat', Latd(1), 'deg')
+                call recom_kv('ULoc', ULoc(1), 'm s-1')
+                call recom_kv('ice_conc', Loc_ice_conc(1))
                 stop
             end if
 
@@ -287,8 +292,7 @@ contains
         !===========================================================================
         ! Water-column BGC <E2><80><94> sources minus sinks
         !===========================================================================
-        if (recom_debug .and. mype == 0) print *, achar(27) // '[36m' // '     --> REcoM_sms' // &
-                achar(27) // '[0m'
+        if (recom_debug .and. mype == 0) call recom_trace('REcoM_sms', 2)
 
         call REcoM_sms(n, nzmin, Nn, state, thick, SurfSW, sms, Temp, Sali_depth, &
                 CO2_watercolumn, & ! MOCSY [mol/m3]
@@ -326,8 +330,7 @@ contains
             state(nzmin:nn, iphac)   = max(tiny_C_p, state(nzmin:nn, iphac))
         end if
 
-        if (recom_debug .and. mype == 0) print *, achar(27) // '[36m' // '     --> ciso after' // &
-                ' REcoM_Forcing' // achar(27) // '[0m'
+        if (recom_debug .and. mype == 0) call recom_trace('ciso', 2)
 
         if (ciso) then
             if (nzmin == 1) then
