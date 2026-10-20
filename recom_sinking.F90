@@ -53,10 +53,11 @@ contains
         use recom_g_comm_auto, only: recom_exchange_nod
 
         use recom_declarations, only: wp, tracer_ids
-        use recom_glovar, only: Benthos, Benthos_tr, SinkFlx, SinkFlx_tr
+        use recom_glovar, only: Benthos, Benthos_tr, SinkFlx, SinkFlx_tr, BotFlux
 
         use recom_config, only: allow_var_sinking, benthos_num, bottflx_num, ciso, Vdet, VPhy, &
             VDia, VDet_zoo2, VCocco, VPhaeo, enable_3zoo2det, enable_coccos, use_MEDUSA, sedflx_num, recom_det_tracer_id, &
+            Diags, &
             recom_phy_tracer_id, recom_dia_tracer_id, recom_cocco_tracer_id, recom_phaeo_tracer_id, SecondsPerDay, vdet_a
 
         use recom_ciso, only: ciso_organic_14
@@ -83,6 +84,7 @@ contains
 
         integer :: j, e
         integer :: nl1, ul1, nz, n
+        integer :: iel ! element of this tracer for BotFlux (0: not counted)
         real(kind=WP) :: Vben(nl), aux(nl - 1), add_benthos_2d(myDim_nod2D)
         real(kind=WP) :: seafloor(nl) ! seafloor area [m2] under each layer of node n
         real(kind=WP) :: tv
@@ -95,6 +97,8 @@ contains
         ! n is rank-local: a location is given by mype and n
         integer, parameter :: n_si_negdep_diag_prints_max = 15
         integer, save :: n_si_negdep_diag_prints = 0
+
+        iel = sinking_element(tracer_id)
 
         do n = 1, myDim_nod2D ! needs exchange_nod in the end
 
@@ -166,6 +170,9 @@ contains
             ! Deposit [mmol] -> [mmol/m2] as Benthos expects; area(1,n) is 0 in cavities
             ! ----------------------------------------------------------------
             add_benthos_2d(n) = add_benthos_2d(n) / area(ul1, n)
+
+            ! CMIP7 diagnostic: flux into the benthos [mmol m-2 s-1]
+            if (Diags .and. iel > 0) BotFlux(n, iel) = BotFlux(n, iel) + add_benthos_2d(n) / dt
 
             ! ----------------------------------------------------------------
             ! Diagnostic: implausible Si deposit (> si_deposit_diag_min in one step)
@@ -605,11 +612,11 @@ contains
         use REcoM_declarations, only: wp, tracer_ids
 
         use REcoM_GloVar, only: sinkvel1_tr, sinkvel2_tr, scaling_visc_3D, scaling_density1_3D, &
-            scaling_density2_3D
+            scaling_density2_3D, ExpFlux
 
         use recom_config, only: allow_var_sinking, depth_scaling1, depth_scaling2, &
             max_sinking_velocity, use_ballasting, enable_3zoo2det, VDet_zoo2, enable_coccos, &
-            secondsPerDay, vcocco, vdet, vdet_a, vdia, vphaeo, vphy, w_ref1, w_ref2
+            secondsPerDay, vcocco, vdet, vdet_a, vdia, vphaeo, vphy, w_ref1, w_ref2, Diags
 
         implicit none
 
@@ -625,6 +632,7 @@ contains
         real(kind=WP), intent(inout), dimension(:, :) :: vert_sink
 
         integer :: nz, nzmin, nzmax, n, k, nlevels_nod2D_minimum
+        integer :: iel ! element of this tracer for ExpFlux (0: not counted)
         real(kind=wp) :: wM, wPs
         real(kind=wp) :: Rjp, Rj, Rjm
 
@@ -691,6 +699,8 @@ contains
             Vsink = VDet_zoo2
 
         end if
+
+        iel = sinking_element(tracer_id)
 
         !! ---- Skip advection entirely for negligibly slow-sinking tracers
         if (Vsink > 0.1) then
@@ -895,6 +905,20 @@ contains
                 end if ! simple upwind
 
                 ! ----------------------------------------------------------------
+                ! CMIP7 diagnostic: downward flux of this tracer through the
+                ! interior interfaces, added to its element [mmol m-2 s-1].
+                ! vd_flux is positive downward [mmol s-1]. The surface (or ice
+                ! base) and seafloor interfaces carry no flux here; deposition
+                ! into the benthos is in BotFlux.
+                ! ----------------------------------------------------------------
+                if (Diags .and. iel > 0) then
+                    do nz = nzmin + 1, nzmax
+                        if (area(nz, n) > 0.0_WP) ExpFlux(nz, n, iel) = ExpFlux(nz, n, iel) &
+                                + vd_flux(nz) / area(nz, n)
+                    end do
+                end if
+
+                ! ----------------------------------------------------------------
                 ! Accumulate the net flux divergence into the tracer tendency.
                 ! ----------------------------------------------------------------
                 do nz = nzmin, nzmax
@@ -906,6 +930,52 @@ contains
         end if ! Vsink > 0.1
 
     end subroutine ver_sinking_recom
+
+    !===============================================================================
+    ! sinking_element
+    !   Element of a sinking tracer for the CMIP7 diagnostics ExpFlux and BotFlux:
+    !   1 = N, 2 = organic C, 3 = Si, 4 = calcite, 0 = not counted (chlorophyll,
+    !   carbon isotopes). Same grouping as the Benthos buckets 1-4 in
+    !   ver_sinking_recom_benthos. Disabled tracers have id -1 and never match.
+    !===============================================================================
+    integer function sinking_element(tracer_id)
+
+        use REcoM_declarations, only: tracer_ids
+
+        implicit none
+
+        integer, intent(in) :: tracer_id
+
+        sinking_element = 0
+
+        if (tracer_id == tracer_ids%phytoplankton_nitrogen .or. &
+                tracer_id == tracer_ids%detrital_nitrogen .or. &
+                tracer_id == tracer_ids%diatom_nitrogen .or. &
+                tracer_id == tracer_ids%coccolithophore_nitrogen .or. &
+                tracer_id == tracer_ids%phaeocystis_nitrogen .or. &
+                tracer_id == tracer_ids%macrozooplankton_detrital_nitrogen) then
+            sinking_element = 1
+
+        elseif (tracer_id == tracer_ids%phytoplankton_carbon .or. &
+                tracer_id == tracer_ids%detrital_carbon .or. &
+                tracer_id == tracer_ids%diatom_carbon .or. &
+                tracer_id == tracer_ids%coccolithophore_carbon .or. &
+                tracer_id == tracer_ids%phaeocystis_carbon .or. &
+                tracer_id == tracer_ids%macrozooplankton_detrital_carbon) then
+            sinking_element = 2
+
+        elseif (tracer_id == tracer_ids%diatom_silica .or. &
+                tracer_id == tracer_ids%detrital_silica .or. &
+                tracer_id == tracer_ids%macrozooplankton_detrital_silica) then
+            sinking_element = 3
+
+        elseif (tracer_id == tracer_ids%phytoplankton_calcite .or. &
+                tracer_id == tracer_ids%detrital_calcite .or. &
+                tracer_id == tracer_ids%macrozooplankton_detrital_calcite) then
+            sinking_element = 4
+        end if
+
+    end function sinking_element
 
 
     !===============================================================================

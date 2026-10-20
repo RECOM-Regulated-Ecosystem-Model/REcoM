@@ -168,7 +168,9 @@ contains
                 CO33D, OmegaC3D, kspc3D, rhoSW3D, rho_particle1, rho_particle2, &
                 scaling_density1_3D, scaling_density2_3D, scaling_visc_3D, seawater_visc_3D, &
                 Sinkingvel1, Sinkingvel2, Sinkvel1_tr, Sinkvel2_tr, GloSed, SinkFlx, &
-                SinkFlx_tr, lb_flux, x_co2atm
+                SinkFlx_tr, lb_flux, x_co2atm, ExpFlux, BotFlux, Graz3D, SiProd, ScavFe, &
+                limN_phy3D, limFe_phy3D, limN_dia3D, limFe_dia3D, O2sat3D, dpO2s, O2min, intDIC, &
+                intDOC, intPOC, OmegaA3D, CO3satA3D
 
         use recom_locvar, only: LocBenthos
         use recom_config, only: Diags, benthos_num, use_MEDUSA, bottflx_num, sedflx_num, use_atbox
@@ -327,6 +329,26 @@ contains
             allocate(TCphot_phaeo(nl - 1, node_size), source=0.d0)
 
             allocate(TSi_assimDia(nl - 1, node_size), source=0.d0)
+
+            ! CMIP7 export, benthic flux, grazing, Si uptake and Fe scavenging diagnostics
+            allocate(ExpFlux(nl, node_size, 4), source=0.d0)
+            allocate(BotFlux(node_size, 4), source=0.d0)
+            allocate(Graz3D(nl - 1, node_size), source=0.d0)
+            allocate(SiProd(node_size), source=0.d0)
+            allocate(ScavFe(node_size), source=0.d0)
+
+            ! CMIP7 limitation factors, O2 saturation and pressure difference, O2 minimum and
+            ! carbon inventories
+            allocate(limN_phy3D(nl - 1, node_size), source=0.d0)
+            allocate(limFe_phy3D(nl - 1, node_size), source=0.d0)
+            allocate(limN_dia3D(nl - 1, node_size), source=0.d0)
+            allocate(limFe_dia3D(nl - 1, node_size), source=0.d0)
+            allocate(O2sat3D(nl - 1, node_size), source=0.d0)
+            allocate(dpO2s(node_size), source=0.d0)
+            allocate(O2min(node_size), source=0.d0)
+            allocate(intDIC(node_size), source=0.d0)
+            allocate(intDOC(node_size), source=0.d0)
+            allocate(intPOC(node_size), source=0.d0)
         end if
 
         !! *** Allocate 3D mocsy ***
@@ -336,6 +358,8 @@ contains
         allocate(HCO33D(nl - 1, node_size), source=0.d0)
         allocate(CO33D(nl - 1, node_size), source=0.d0)
         allocate(OmegaC3D(nl - 1, node_size), source=0.d0)
+        allocate(OmegaA3D(nl - 1, node_size), source=0.d0)
+        allocate(CO3satA3D(nl - 1, node_size), source=0.d0)
         allocate(kspc3D(nl - 1, node_size), source=0.d0)
         allocate(rhoSW3D(nl - 1, node_size), source=0.d0)
 

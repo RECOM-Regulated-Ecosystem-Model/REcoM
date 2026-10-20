@@ -127,11 +127,12 @@ contains
 
         use recom_config, only: benthos_num, bgc_num, ciso, diags, dust_sol, enable_3zoo2det, &
                 enable_coccos, ialk, parfrac, recom_debug, restore_alkalinity, secondsperday, &
-                use_atbox, tiny, pa2atm
+                use_atbox, tiny, pa2atm, ioxy, idic, idoc, iphyc, idiac, idetc, ihetc, izoo2c, &
+                idetz2c, imiczooc, icocc, iphac
 
         use recom_locvar, only: LocBenthos, locatmco2, fedust, hplus, loc_ice_conc, ndust, uloc, &
                 ph, kw660, k0, pco2surf, dpco2surf, dflux, co2flux_seaicemask, o2flux_seaicemask, &
-                oflux
+                oflux, OmegaA_watercolumn
 
         use recom_ciso, only: locatmco2_13, locatmco2_14, r_atm_13, r_atm_14, ciso_14, &
                 gloco2flux_13, gloco2flux_14, glopco2surf_13, glopco2surf_14, lat_val, &
@@ -148,13 +149,16 @@ contains
                 nnac, nnad, nnan, nnap, nppc, nppd, nppn, nppp, x_co2atm, glohplus, atmco2, &
                 glofedust, glondust, atmfeinput, atmninput, pistonvelocity, alphaco2, &
                 glopco2surf, glodpco2surf, gloco2flux, gloco2flux_seaicemask, &
-                gloo2flux, gloo2flux_seaicemask, chldegp
+                gloo2flux, gloo2flux_seaicemask, chldegp, omegaa3d, co3sata3d, o2sat3d, dpo2s, &
+                o2min, intdic, intdoc, intpoc
 
         use recom_diags_management, only: allocate_and_init_diags, update_2d_diags, &
                 update_3d_diags, deallocate_diags
 
         use recom_forcing_module, only: recom_forcing
         use recom_atbox_module, only: recom_atbox
+        use gasx, only: o2sato, vapress
+        use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
 
         implicit none
 
@@ -229,6 +233,11 @@ contains
         real(kind=wp), allocatable :: rhoSW_watercolumn(:)
         real(kind=WP) :: ttf_rhs_bak(nl - 1, num_tracers) ! local variable
 
+        ! CMIP7 state diagnostics of the column
+        real(kind=wp) :: o2sat_col(nl - 1) ! O2 at saturation with 1 atm moist air [mol/m3]
+        real(kind=wp) :: vpsw(1)           ! water vapour pressure at the surface [atm]
+        integer       :: kz, kmin_o2       ! level loop, level of the shallowest O2 minimum
+
         integer                    :: actual_bgc_num
         integer                    :: num_physical_tracers
         integer                    :: n_transit_tracers   ! number of active transit tracers
@@ -243,6 +252,8 @@ contains
                 HCO3_watercolumn(nl - 1))
         allocate(CO3_watercolumn(nl - 1), OmegaC_watercolumn(nl - 1), kspc_watercolumn(nl - 1), &
                 rhoSW_watercolumn(nl - 1))
+        ! module array (filled in calculate_carbonate_chemistry), kept between calls
+        if (.not. allocated(OmegaA_watercolumn)) allocate(OmegaA_watercolumn(nl - 1))
 
         num_physical_tracers = 2
 
@@ -432,6 +443,7 @@ contains
             HCO3_watercolumn(nzmin:nzmax)   = HCO33D(nzmin:nzmax, n)
             CO3_watercolumn(nzmin:nzmax)    = CO33D(nzmin:nzmax, n)
             OmegaC_watercolumn(nzmin:nzmax) = OmegaC3D(nzmin:nzmax, n)
+            OmegaA_watercolumn(nzmin:nzmax) = OmegaA3D(nzmin:nzmax, n)
             kspc_watercolumn(nzmin:nzmax)   = kspc3D(nzmin:nzmax, n)
             rhoSW_watercolumn(nzmin:nzmax)  = rhoSW3D(nzmin:nzmax, n)
 
@@ -507,6 +519,54 @@ contains
             end do
 
             !-----------------------------------------------------------------------
+            ! CMIP7 state diagnostics of the updated column (o2sat, dpo2, o2min,
+            ! intdic, intdoc, intpoc)
+            !-----------------------------------------------------------------------
+            if (Diags) then
+                ! O2 at saturation with 1 atm moist air (Garcia & Gordon) [mol/m3 -> mmol/m3]
+                call o2sato(Temp(nzmin:nzmax), Sali_depth(nzmin:nzmax), nzmax - nzmin + 1, &
+                        o2sat_col(nzmin:nzmax))
+                O2sat3D(nzmin:nzmax, n) = o2sat_col(nzmin:nzmax) * 1.e3_WP
+
+                ! Surface O2 partial pressure difference, ocean minus atmosphere [Pa]:
+                ! pO2 = 0.20946 * (p - p_H2O); the ocean pO2 is that of the air the water
+                ! is in equilibrium with, O2 / O2sat(1 atm) * 0.20946 * (1 atm - p_H2O)
+                if (nzmin == 1) then
+                    call vapress(Temp(1:1), Sali_depth(1:1), 1, vpsw)
+                    dpO2s(n) = 0.20946_WP * pa2atm * &
+                            (C(1, ioxy) * 1.e-3_WP / o2sat_col(1) * (1.0_WP - vpsw(1)) &
+                            - (Loc_slp / pa2atm - vpsw(1)))
+                else ! cavity: no air-sea exchange
+                    dpO2s(n) = ieee_value(0.0_WP, ieee_quiet_nan)
+                end if
+
+                ! O2 at the local minimum of the profile closest to the surface; the
+                ! column minimum if the profile has no interior minimum [mmol/m3]
+                kmin_o2 = 0
+                do kz = nzmin + 1, nzmax - 1
+                    if (C(kz, ioxy) < C(kz - 1, ioxy) .and. C(kz, ioxy) <= C(kz + 1, ioxy)) then
+                        kmin_o2 = kz
+                        exit
+                    end if
+                end do
+                if (kmin_o2 > 0) then
+                    O2min(n) = C(kmin_o2, ioxy)
+                else
+                    O2min(n) = minval(C(nzmin:nzmax, ioxy))
+                end if
+
+                ! Column inventories [mmolC/m2]; POC = phytoplankton + zooplankton + detritus
+                intDIC(n) = sum(C(nzmin:nzmax, idic) * hnode(nzmin:nzmax, n))
+                intDOC(n) = sum(C(nzmin:nzmax, idoc) * hnode(nzmin:nzmax, n))
+                intPOC(n) = sum((C(nzmin:nzmax, iphyc) + C(nzmin:nzmax, idiac) &
+                        + C(nzmin:nzmax, idetc) + C(nzmin:nzmax, ihetc)) * hnode(nzmin:nzmax, n))
+                if (enable_3zoo2det) intPOC(n) = intPOC(n) + sum((C(nzmin:nzmax, izoo2c) &
+                        + C(nzmin:nzmax, idetz2c) + C(nzmin:nzmax, imiczooc)) * hnode(nzmin:nzmax, n))
+                if (enable_coccos) intPOC(n) = intPOC(n) + sum((C(nzmin:nzmax, icocc) &
+                        + C(nzmin:nzmax, iphac)) * hnode(nzmin:nzmax, n))
+            end if
+
+            !-----------------------------------------------------------------------
             ! Sources-minus-sinks (SMS) tendency for diagnostic tracers
             !-----------------------------------------------------------------------
             do tr_num = 1, num_tracers
@@ -572,6 +632,13 @@ contains
             !! * Diss *
             CO33D(nzmin:nzmax, n) = CO3_watercolumn(nzmin:nzmax)
             OmegaC3D(nzmin:nzmax, n) = OmegaC_watercolumn(nzmin:nzmax)
+            OmegaA3D(nzmin:nzmax, n) = OmegaA_watercolumn(nzmin:nzmax)
+            ! carbonate ion at aragonite saturation, CO3 / Omega_A [mol/m3]
+            where (OmegaA3D(nzmin:nzmax, n) > 0.0_WP)
+                CO3satA3D(nzmin:nzmax, n) = CO33D(nzmin:nzmax, n) / OmegaA3D(nzmin:nzmax, n)
+            elsewhere
+                CO3satA3D(nzmin:nzmax, n) = 0.0_WP
+            end where
             kspc3D(nzmin:nzmax, n) = kspc_watercolumn(nzmin:nzmax)
             rhoSW3D(nzmin:nzmax, n) = rhoSW_watercolumn(nzmin:nzmax)
         end do
