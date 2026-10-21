@@ -2814,7 +2814,7 @@ contains
                 vertdocexn, vertaggn, vertNPPd, vertGPPd, vertNNAd, vertChldegd, vertrespd, &
                 vertdocexd, vertaggd, VTPhyCO2, VTDiaCO2, VTCphotLigLim_phyto, &
                 VTCphotLigLim_diatoms, VTCphot_phyto, VTCphot_diatoms, vertSiProd, vertScavFe, &
-                VTlimN_phyto, VTlimFe_phyto, VTlimN_diatoms, VTlimFe_diatoms
+                VTlimN_phyto, VTlimFe_phyto, VTlimN_diatoms, VTlimFe_diatoms, &
                 VTTemp_diatoms, VTTemp_phyto, VTqlimitFac_phyto, VTqlimitFac_diatoms, &
                 VTSi_assimDia
 
