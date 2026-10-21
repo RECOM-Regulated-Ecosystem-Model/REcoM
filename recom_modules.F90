@@ -233,6 +233,13 @@ module REcoM_declarations
     real(kind=wp), allocatable, dimension(:) :: vertrespd
     real(kind=wp), allocatable, dimension(:) :: vertdocexd
     real(kind=wp), allocatable, dimension(:) :: vertaggd
+    ! Si uptake by diatoms [mmolSi m-3 day-1] and Fe scavenging [umolFe m-3 day-1],
+    ! profiles and depth integrals (CMIP7 intpbsi, frfe)
+    real(kind=wp) :: locSiProd, locScavFe
+    real(kind=wp), allocatable, dimension(:) :: vertSiProd, vertScavFe
+    ! Nitrogen (quota) and iron limitation factors of photosynthesis [-] (CMIP7 limn*, limfe*)
+    real(kind=wp), allocatable, dimension(:) :: VTlimN_phyto, VTlimFe_phyto
+    real(kind=wp), allocatable, dimension(:) :: VTlimN_diatoms, VTlimFe_diatoms
 
     ! ==================================================================
     ! COCCOLITHOPHORES (c suffix)
@@ -1909,6 +1916,8 @@ module REcoM_GloVar
     real(kind=wp), allocatable, dimension(:, :) :: CO33D
     ! DISS: calcite saturation state
     real(kind=wp), allocatable, dimension(:, :) :: OmegaC3D
+    ! Aragonite saturation state [-] and carbonate ion at aragonite saturation [mol m-3]
+    real(kind=wp), allocatable, dimension(:, :) :: OmegaA3D, CO3satA3D
     ! DISS: [mol^2/kg^2] stoichiometric solubility product of calcite
     real(kind=wp), allocatable, dimension(:, :) :: kspc3D
     ! DISS: [mol/m3] in-situ density of seawater
@@ -2087,6 +2096,25 @@ module REcoM_GloVar
     ! Sinking speed of particle class 2 OG 16.03.23
     real(kind=wp), allocatable, dimension(:, :, :) :: Sinkvel2_tr
 
+    ! CMIP7 diagnostics, allocated with Diags. Element index: 1=N, 2=C (organic), 3=Si, 4=calcite.
+    ! Downward particulate flux through the layer interfaces (sinking only, all sinking tracers
+    ! of the element) [mmol m-2 s-1], (nl, node, element)
+    real(kind=wp), allocatable, dimension(:, :, :) :: ExpFlux
+    ! Particulate flux into the benthos [mmol m-2 s-1], (node, element)
+    real(kind=wp), allocatable, dimension(:, :) :: BotFlux
+    ! Grazing on phytoplankton by all zooplankton [mmolC m-3 day-1]
+    real(kind=wp), allocatable, dimension(:, :) :: Graz3D
+    ! Depth-integrated Si uptake by diatoms [mmolSi m-2 day-1] and Fe scavenging [umolFe m-2 day-1]
+    real(kind=wp), allocatable, dimension(:) :: SiProd, ScavFe
+    ! Nitrogen and iron limitation factors of small phytoplankton and diatoms [-]
+    real(kind=wp), allocatable, dimension(:, :) :: limN_phy3D, limFe_phy3D, limN_dia3D, limFe_dia3D
+    ! O2 at saturation (1 atm moist air, Garcia & Gordon) [mmol m-3]
+    real(kind=wp), allocatable, dimension(:, :) :: O2sat3D
+    ! Surface O2 partial pressure difference ocean - atmosphere [Pa], O2 at the shallowest
+    ! local minimum of the profile [mmol m-3], column inventories of DIC, DOC and particulate
+    ! organic carbon (phytoplankton, zooplankton, detritus) [mmolC m-2]
+    real(kind=wp), allocatable, dimension(:) :: dpO2s, O2min, intDIC, intDOC, intPOC
+
     ! Yearly input into bottom water from sediments [n2d 5] or [n2d 7] with ciso
     real(kind=wp), allocatable, dimension(:, :) :: GloSed
     ! Yearly burial from medusa: [n2d 5] or [n2d 9] with ciso_14
@@ -2247,6 +2275,8 @@ module REcoM_locVar
 
     ! NEW MOCSY Omega for aragonite, i.e., the aragonite saturation state
     real(kind=wp) :: OmegaA_depth(1)
+    ! Aragonite saturation state of the water column of the current node [-]
+    real(kind=wp), allocatable, dimension(:) :: OmegaA_watercolumn
 
     ! NEW MOCSY Omega for calcite, i.e., the   calcite saturation state
     real(kind=wp) :: OmegaC_depth(1)
@@ -2783,7 +2813,8 @@ contains
         use REcoM_declarations, only: vertNPPn, vertGPPn, vertNNAn, vertChldegn, vertrespn, &
                 vertdocexn, vertaggn, vertNPPd, vertGPPd, vertNNAd, vertChldegd, vertrespd, &
                 vertdocexd, vertaggd, VTPhyCO2, VTDiaCO2, VTCphotLigLim_phyto, &
-                VTCphotLigLim_diatoms, VTCphot_phyto, VTCphot_diatoms, &
+                VTCphotLigLim_diatoms, VTCphot_phyto, VTCphot_diatoms, vertSiProd, vertScavFe, &
+                VTlimN_phyto, VTlimFe_phyto, VTlimN_diatoms, VTlimFe_diatoms, &
                 VTTemp_diatoms, VTTemp_phyto, VTqlimitFac_phyto, VTqlimitFac_diatoms, &
                 VTSi_assimDia
 
@@ -2834,6 +2865,17 @@ contains
         VTCphot_phyto = 0.d0
         VTCphot_diatoms = 0.d0
 
+        allocate(vertSiProd(nl - 1), vertScavFe(nl - 1))
+        vertSiProd = 0.d0
+        vertScavFe = 0.d0
+
+        allocate(VTlimN_phyto(nl - 1), VTlimFe_phyto(nl - 1))
+        allocate(VTlimN_diatoms(nl - 1), VTlimFe_diatoms(nl - 1))
+        VTlimN_phyto = 0.d0
+        VTlimFe_phyto = 0.d0
+        VTlimN_diatoms = 0.d0
+        VTlimFe_diatoms = 0.d0
+        
         ! --------------------------------------------------------------------------
         ! Temperature / nutrient / Si tracking - Phytoplankton and Diatoms
         ! (always allocated; may be written in REcoM_sms independent of coccos)
@@ -3007,7 +3049,7 @@ contains
                 grazmeso_mic, grazmeso_det2, grazmacro_tot, grazmacro_n, grazmacro_d, &
                 grazmacro_det, grazmacro_mic, grazmacro_det2, grazmacro_c, grazmacro_p, &
                 grazmicro_n, grazmicro_d, grazmicro_c, grazmicro_p, chldegd, chldegn, gppd, gppn, &
-                grazmicro_tot, grazmacro_mes, nnad, nnan, nppd, nppn
+                grazmicro_tot, grazmacro_mes, nnad, nnan, nppd, nppn, siprod, scavfe
 
         use REcoM_declarations, only: locchldegc, locchldegd, locchldegn, locchldegp, locgppc, &
                 locgppd, locgppn, locgppp, locgrazmacro_c, locgrazmacro_d, locgrazmacro_det, &
@@ -3015,7 +3057,8 @@ contains
                 locgrazmacro_tot, locgrazmeso_c, locgrazmeso_d, locgrazmeso_det, locgrazmeso_det2, &
                 locgrazmeso_mic, locgrazmeso_n, locgrazmeso_p, locgrazmeso_tot, locgrazmicro_c, &
                 locgrazmicro_d, locgrazmicro_n, locgrazmicro_p, locgrazmicro_tot, locnnac, &
-                locgrazmacro_p, locnnad, locnnan, locnnap, locnppc, locnppd, locnppn, locnppp
+                locgrazmacro_p, locnnad, locnnan, locnnap, locnppc, locnppd, locnppn, locnppp, &
+                locsiprod, locscavfe
 
         implicit none
 
@@ -3036,6 +3079,12 @@ contains
         GPPd(n) = locGPPd
         NNAd(n) = locNNAd
         Chldegd(n) = locChldegd
+        SiProd(n) = locSiProd
+
+        ! --------------------------------------------------------------------------
+        ! Iron scavenging
+        ! --------------------------------------------------------------------------
+        ScavFe(n) = locScavFe
 
         ! --------------------------------------------------------------------------
         ! Coccolithophores and Phaeocystis (if enabled)
@@ -3111,7 +3160,8 @@ contains
                 TCphotLigLim_diatoms, TTemp_phyto, TqlimitFac_phyto, TTemp_diatoms, &
                 TSi_assimDia, TCoccoCO2, TphaeoCO2, TTemp_cocco, TTemp_phaeo, TqlimitFac_cocco, &
                 TCphotLigLim_cocco, TCphot_cocco, TqlimitFac_phaeo, TCphotLigLim_phaeo, &
-                docexd, docexn, docexp, TCphot_phaeo, docexc, respmacro, TqlimitFac_diatoms
+                docexd, docexn, docexp, TCphot_phaeo, docexc, respmacro, TqlimitFac_diatoms, Graz3D, &
+                limN_phy3D, limFe_phy3D, limN_dia3D, limFe_dia3D
 
         use REcoM_declarations, only: vertaggc, vertaggd, vertaggn, vertaggp, vertcalcdiss, &
                 vertrespc, vertrespd, vertrespmacro, vertrespmeso, vertrespmicro, vertrespn, &
@@ -3121,7 +3171,10 @@ contains
                 vtqlimitfac_phaeo, vtqlimitfac_phyto, vtsi_assimdia, vttemp_cocco, vttemp_diatoms, &
                 vtcphot_phyto, vertcalcif, vertdocexc, vttemp_phaeo, vttemp_phyto, &
                 vtcphotliglim_phyto, vertdocexd, vertdocexn, vertdocexp, vertnppc, vertnppd, &
-                vertnppn, vertnppp
+                vertnppn, vertnppp, vertgrazmeso_n, vertgrazmeso_d, vertgrazmeso_c, vertgrazmeso_p, &
+                vertgrazmacro_n, vertgrazmacro_d, vertgrazmacro_c, vertgrazmacro_p, &
+                vertgrazmicro_n, vertgrazmicro_d, vertgrazmicro_c, vertgrazmicro_p, &
+                VTlimN_phyto, VTlimFe_phyto, VTlimN_diatoms, VTlimFe_diatoms
 
         implicit none
 
@@ -3173,6 +3226,30 @@ contains
             respmacro(1:nzmax, n) = vertrespmacro(1:nzmax)
             respmicro(1:nzmax, n) = vertrespmicro(1:nzmax)
         end if
+
+        ! --------------------------------------------------------------------------
+        ! Grazing on phytoplankton by all zooplankton (prey loss, before grazing
+        ! efficiency), only diagnosed with Grazing_detritus
+        ! --------------------------------------------------------------------------
+        if (Grazing_detritus) then
+            Graz3D(1:nzmax, n) = vertgrazmeso_n(1:nzmax) + vertgrazmeso_d(1:nzmax)
+            if (enable_coccos) Graz3D(1:nzmax, n) = Graz3D(1:nzmax, n) &
+                    + vertgrazmeso_c(1:nzmax) + vertgrazmeso_p(1:nzmax)
+            if (enable_3zoo2det) then
+                Graz3D(1:nzmax, n) = Graz3D(1:nzmax, n) &
+                        + vertgrazmacro_n(1:nzmax) + vertgrazmacro_d(1:nzmax) &
+                        + vertgrazmicro_n(1:nzmax) + vertgrazmicro_d(1:nzmax)
+                if (enable_coccos) Graz3D(1:nzmax, n) = Graz3D(1:nzmax, n) &
+                        + vertgrazmacro_c(1:nzmax) + vertgrazmacro_p(1:nzmax) &
+                        + vertgrazmicro_c(1:nzmax) + vertgrazmicro_p(1:nzmax)
+            end if
+        end if
+
+        ! Nitrogen and iron limitation of photosynthesis
+        limN_phy3D(1:nzmax, n) = VTlimN_phyto(1:nzmax)
+        limFe_phy3D(1:nzmax, n) = VTlimFe_phyto(1:nzmax)
+        limN_dia3D(1:nzmax, n) = VTlimN_diatoms(1:nzmax)
+        limFe_dia3D(1:nzmax, n) = VTlimFe_diatoms(1:nzmax)
 
         TPhyCO2(1:nzmax, n) = VTPhyCO2(1:nzmax)
         TDiaCO2(1:nzmax, n) = VTDiaCO2(1:nzmax)
@@ -3235,7 +3312,8 @@ contains
                 vtdiaco2, vtphaeoco2, vtphyco2, vtqlimitfac_cocco, vtqlimitfac_diatoms, &
                 vtqlimitfac_phaeo, vtqlimitfac_phyto, vtsi_assimdia, vttemp_cocco, vttemp_diatoms, &
                 vttemp_phaeo, vttemp_phyto, vtcphot_phyto, vertgrazmeso_tot, vertgrazmicro_tot, &
-                vtcphotliglim_phyto
+                vtcphotliglim_phyto, vertSiProd, vertScavFe, VTlimN_phyto, VTlimFe_phyto, &
+                VTlimN_diatoms, VTlimFe_diatoms
 
         implicit none
 
@@ -3253,8 +3331,11 @@ contains
         deallocate(vertNPPd, vertGPPd, vertNNAd, vertChldegd)
         deallocate(vertaggd, vertdocexd, vertrespd)
         deallocate(VTDiaCO2, VTCphotLigLim_diatoms, VTCphot_diatoms)
+        deallocate(vertSiProd, vertScavFe)
+        deallocate(VTlimN_phyto, VTlimFe_phyto, VTlimN_diatoms, VTlimFe_diatoms)
         deallocate(VTTemp_diatoms, VTqlimitFac_diatoms)
         deallocate(VTSi_assimDia)
+        
         ! --------------------------------------------------------------------------
         ! Mesozooplankton (base heterotroph group; see matching unconditional
         ! allocation above)
