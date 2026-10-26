@@ -24,7 +24,8 @@ contains
                 vertgrazmacro_mes, vertgrazmacro_p, vertgrazmacro_c, vertgrazmacro_d, &
                 vertgrazmacro_n, vertgrazmeso_det, vertgrazmeso_mic, vertgrazmeso_det2, &
                 vertgrazmeso_p, vertgrazmeso_c, vertgrazmeso_d, vertgrazmeso_n, vertgrazmeso_tot, &
-                vertgrazmacro_tot, aggregationrate, arrfunc, arrfunczoo2, ca, calc_diss, &
+                vertgrazmacro_tot, vertSiProd, vertScavFe, VTlimN_phyto, VTlimFe_phyto, &
+                VTlimN_diatoms, VTlimFe_diatoms, aggregationrate, arrfunc, arrfunczoo2, ca, calc_diss, &
                 calc_diss2, calc_diss_ben, calc_loss_agg, calc_loss_gra, calc_loss_gra2, &
                 calc_loss_gra3, calcification, chl2c, chl2c_cocco, chl2c_dia, chl2c_phaeo, &
                 chl2c_plast, chl2c_plast_cocco, chl2c_plast_dia, chl2c_plast_phaeo, chl2n, &
@@ -81,7 +82,7 @@ contains
                 het_resp_noredfield, ialk, icchl, icocc, icocn, idchl, idetc, idetcal, idetn, &
                 idetz2c, idetz2calc, idetz2n, idetz2si, idiac, idian, idiasi, idic, idin, idoc, &
                 ife, ihetc, ihetn, imiczooc, imiczoon, ioxy, ipchl, iphac, iphachl, iphan, iphyc, &
-                k_fe_d, k_fe_p, k_o2_remin, k_si, k_w, kscavfe, ligandstabconst, loss_het, &
+                k_fe_d, k_fe_p, k_o2_remin, k_si, k_w, kscavfe, kscavfe2, ligandstabconst, loss_het, &
                 loss_miczoo, loss_zoo2, lossc, lossc_c, lossc_d, lossc_p, lossc_z, lossc_z2, &
                 lossn, lossn_c, lossn_d, lossn_p, lossn_z, lossn_z2, lossn_z3, ncmax, ncmax_c, &
                 ncuptakeratio_d, ncuptakeratio_p, nmaxslope, nminslope, nmocsy, o2dep_remin, &
@@ -633,6 +634,11 @@ contains
                 ! Iron is often the limiting micronutrient in HNLC regions
                 feLimitFac = Fe / (k_Fe + Fe)
 
+                if (Diags) then
+                    VTlimN_phyto(k) = qlimitFac
+                    VTlimFe_phyto(k) = feLimitFac
+                end if
+
                 ! Apply Liebig's law: most limiting nutrient controls photosynthesis
                 qlimitFac = min(qlimitFac, feLimitFac)
 
@@ -653,6 +659,7 @@ contains
 
                 ! Nitrogen limitation
                 qlimitFac = recom_limiter(NMinSlope, NCmin_d, quota_dia)
+                if (Diags) VTlimN_diatoms(k) = qlimitFac
 
                 ! Silicon limitation (unique to diatoms)
                 ! Required for frustule formation - critical for diatom growth
@@ -661,6 +668,7 @@ contains
 
                 ! Iron limitation
                 feLimitFac = Fe / (k_Fe_d + Fe)
+                if (Diags) VTlimFe_diatoms(k) = feLimitFac
                 qlimitFac = min(qlimitFac, feLimitFac)
 
                 ! Calculate maximum photosynthesis rate
@@ -2691,6 +2699,16 @@ contains
                     vertNPPd(k) = vertNPPd(k) + ( &
                             +Cphot_dia * DiaC &
                             - PhyRespRate_dia * DiaC &
+                            ) * recipbiostep
+
+                    ! Si uptake by diatoms, the source term of DiaSi [mmolSi m-3 day-1]
+                    vertSiProd(k) = vertSiProd(k) + Si_assim * DiaC * recipbiostep
+
+                    ! Fe scavenging onto particles, the loss term of DFe [umolFe m-3 day-1]
+                    vertScavFe(k) = vertScavFe(k) + ( &
+                            +kScavFe * DetC * FreeFe & ! Slow-sinking detritus
+                            + kScavFe * DetZ2C * FreeFe * is_3zoo2det & ! Fast-sinking detritus
+                            + kScavFe2 * FreeFe & ! Background
                             ) * recipbiostep
 
                     if (enable_coccos) then

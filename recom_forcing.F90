@@ -22,6 +22,7 @@ contains
 
         use recom_declarations, only: wp, tiny_si, tiny_n, tiny_c, tiny_n_d, tiny_n_c, tiny_n_p, &
                 tiny_c_p, tiny_c_d, tiny_c_c, vertNPPn, vertGPPn, locGPPn, locNPPn, vertNNAn, &
+                vertSiProd, locSiProd, vertScavFe, locScavFe, &
                 vertChldegn, vertNPPd, locNPPd, locchldegn, vertGPPd, locGPPd, vertNNAd, locNNAd, &
                 vertChldegd, locChldegd, vertNPPc, vertGPPc, locNPPc, locGPPc, vertNNAc, &
                 locNNAc, locChldegc, vertNPPp, locNPPp, vertGPPp, vertNNAp, vertchldegp, locNNAp, &
@@ -431,6 +432,8 @@ contains
             locGPPd = sum(vertGPPd(nzmin:nn) * thick(nzmin:nn))
             locNNAd = sum(vertNNAd(nzmin:nn) * thick(nzmin:nn))
             locChldegd = sum(vertChldegd(nzmin:nn) * thick(nzmin:nn))
+            locSiProd = sum(vertSiProd(nzmin:nn) * thick(nzmin:nn))
+            locScavFe = sum(vertScavFe(nzmin:nn) * thick(nzmin:nn))
 
             if (enable_coccos) then
                 locNPPc = sum(vertNPPc(nzmin:nn) * thick(nzmin:nn))
