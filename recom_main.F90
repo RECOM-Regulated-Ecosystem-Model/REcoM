@@ -499,7 +499,7 @@ contains
                     kspc_watercolumn, & ! NEW DISS calcite solubility product [mol^2/kg^2]
                     rhoSW_watercolumn, & ! NEW DISS in-situ density of seawater [mol/m^3]
                     PAR, MPI_COMM_FESOM, mype, myDim_nod2D, &
-                    eDim_nod2D, nl, hnode, zbar_3d_n, &
+                    eDim_nod2D, nl, hnode, zbar_3d_n, areasvol, &
                     geo_coord_nod2D, daynew, ndpyr, dt, kappa, mstep, rad)
 
             do tr_num = bgc_start, bgc_end

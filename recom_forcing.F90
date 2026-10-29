@@ -17,7 +17,7 @@ contains
             CO2_watercolumn, pH_watercolumn, pCO2_watercolumn, &
             HCO3_watercolumn, CO3_watercolumn, OmegaC_watercolumn, &
             kspc_watercolumn, rhoSW_watercolumn, PAR, MPI_COMM_FESOM, &
-            mype, myDim_nod2D, eDim_nod2D, nl, hnode, zbar_3d_n, &
+            mype, myDim_nod2D, eDim_nod2D, nl, hnode, zbar_3d_n, areasvol, &
             geo_coord_nod2D, daynew, ndpyr, dt, kappa, mstep, rad)
 
         use recom_declarations, only: wp, tiny_si, tiny_n, tiny_c, tiny_n_d, tiny_n_c, tiny_n_p, &
@@ -91,6 +91,7 @@ contains
         real(kind=wp), intent(inout), dimension(nl - 1) :: PAR
 
         real(kind=WP), intent(in), dimension(:, :) :: hnode, zbar_3d_n
+        real(kind=WP), intent(in), dimension(:, :) :: areasvol ! cell area as in the tracer budget [m2]
         real(kind=WP), intent(in), dimension(:, :) :: geo_coord_nod2D
         real(kind=wp), intent(inout), dimension(nl - 1, bgc_num) :: state
 
@@ -120,6 +121,8 @@ contains
         ! SMS tendency [mmol/m3/timestep]
         !---------------------------------------------------------------------------
         real(kind=wp), dimension(nl - 1, bgc_num) :: sms
+        real(kind=wp), dimension(nl - 1) :: vol ! cell volume for the conservative lower bound [m3]
+        integer :: itr
 
         !---------------------------------------------------------------------------
         ! Local geometry
@@ -304,7 +307,16 @@ contains
         !---------------------------------------------------------------------------
         ! Apply SMS tendency and enforce lower concentration bounds
         !---------------------------------------------------------------------------
-        state(nzmin:nn, :) = max(tiny, state(nzmin:nn, :) + sms(nzmin:nn, :))
+        ! Negative values (from the SMS update, or from the transport since the last call,
+        ! e.g. FCT/Redi in nutrient-depleted layers) are filled from the same column, so
+        ! that the lower bound does not create mass: clamping them alone created
+        ! ~0.5 Tmol Si/yr (5 ppm/yr of the Si inventory) and ~0.1 Tmol N/yr.
+        state(nzmin:nn, :) = state(nzmin:nn, :) + sms(nzmin:nn, :)
+        vol(nzmin:nn) = areasvol(nzmin:nn, n) * hnode(nzmin:nn, n)
+        do itr = 1, bgc_num
+            call fill_negative_column(state(nzmin:nn, itr), vol(nzmin:nn))
+        end do
+        state(nzmin:nn, :) = max(tiny, state(nzmin:nn, :))
 
         ! Per-species lower bounds (tighter than the generic 'tiny')
         state(nzmin:nn, ipchl)  = max(tiny_chl, state(nzmin:nn, ipchl))
@@ -486,5 +498,26 @@ contains
 
         end if
     end subroutine REcoM_Forcing
+
+    !===============================================================================
+    ! fill_negative_column
+    !   Sets negative concentrations of one tracer column to zero and removes the
+    !   same amount from the positive cells of the column, in proportion to their
+    !   content, so that the column inventory sum(c*vol) is unchanged. A column
+    !   with a non-positive inventory is only clipped (not conservative, rare).
+    !===============================================================================
+    subroutine fill_negative_column(c, vol)
+        use recom_declarations, only: wp
+        implicit none
+        real(kind=wp), intent(inout) :: c(:)
+        real(kind=wp), intent(in)    :: vol(:)
+        real(kind=wp) :: deficit, avail
+
+        deficit = -sum(min(c, 0.0_wp) * vol)
+        if (deficit <= 0.0_wp) return
+        avail = sum(max(c, 0.0_wp) * vol)
+        c = max(c, 0.0_wp)
+        if (avail > deficit) c = c * (1.0_wp - deficit / avail)
+    end subroutine fill_negative_column
 
 end module recom_forcing_module
