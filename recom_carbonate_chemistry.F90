@@ -15,7 +15,8 @@ contains
         use recom_declarations, only: wp, parave
         use recom_locvar, only: betad_depth, co2_depth, co3_depth, dpos, fco2_depth, &
                 hco3_depth, kspc_depth, logfile_outfreq_30, logfile_outfreq_7, omegaa_depth, &
-                omegac_depth, pco2_depth, p_depth, ph_depth, rhosw_depth, tempis_depth
+                omegac_depth, pco2_depth, p_depth, ph_depth, rhosw_depth, tempis_depth, &
+                OmegaA_watercolumn
         use recom_config, only: nmocsy
         use mvars, only: vars_sprac
 
@@ -253,6 +254,7 @@ contains
             HCO3_watercolumn(k) = hco3_depth(1)
             CO3_watercolumn(k) = co3_depth(1)
             OmegaC_watercolumn(k) = OmegaC_depth(1)
+            OmegaA_watercolumn(k) = OmegaA_depth(1)
             kspc_watercolumn(k) = kspc_depth(1)
             rhoSW_watercolumn(k) = rhoSW_depth(1)
         end if

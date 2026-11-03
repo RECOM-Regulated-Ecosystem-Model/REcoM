@@ -46,20 +46,22 @@ contains
     !         recom_declarations throughout this file.
     !===============================================================================
     subroutine ver_sinking_recom_benthos(tr_num, nl, ulevels_nod2D, nlevels_nod2D, zbar_3d_n, &
-            nod_in_elem2D_num, nod_in_elem2D, nlevels, area, areasvol, tracer_id, tracer_data_values, &
+            nod_in_elem2D_num, nod_in_elem2D, nlevels, elem_area, area, areasvol, tracer_id, tracer_data_values, &
             myDim_nod2d, str_bf, mype, MPI_COMM_FESOM, npes, sn, rn, s_mpitype_nod2D, &
             r_mpitype_nod2D, s_mpitype_nod3D, r_mpitype_nod3D, sPE, rPE, requests, nreq, dt)
 
         use recom_g_comm_auto, only: recom_exchange_nod
 
         use recom_declarations, only: wp, tracer_ids
-        use recom_glovar, only: Benthos, Benthos_tr, SinkFlx, SinkFlx_tr
+        use recom_glovar, only: Benthos, Benthos_tr, SinkFlx, SinkFlx_tr, BotFlux
 
         use recom_config, only: allow_var_sinking, benthos_num, bottflx_num, ciso, Vdet, VPhy, &
             VDia, VDet_zoo2, VCocco, VPhaeo, enable_3zoo2det, enable_coccos, use_MEDUSA, sedflx_num, recom_det_tracer_id, &
+            Diags, &
             recom_phy_tracer_id, recom_dia_tracer_id, recom_cocco_tracer_id, recom_phaeo_tracer_id, SecondsPerDay, vdet_a
 
         use recom_ciso, only: ciso_organic_14
+        use recom_log, only: recom_warn, recom_kv, recom_itoa
 
         implicit none
 
@@ -69,6 +71,7 @@ contains
         integer, intent(in), dimension(:) :: nod_in_elem2D_num, nlevels
         integer, intent(in), dimension(:, :) :: nod_in_elem2D
         real(kind=WP), intent(in) :: dt
+        real(kind=WP), intent(in), dimension(:) :: elem_area
         real(kind=WP), intent(in), dimension(:, :) :: zbar_3d_n, area, areasvol, tracer_data_values
         real(kind=WP), intent(inout), dimension(:, :) :: str_bf
 
@@ -80,10 +83,11 @@ contains
         integer, intent(in), dimension(:), pointer :: s_mpitype_nod2D, r_mpitype_nod2D
         integer, intent(in), dimension(:, :, :), pointer :: s_mpitype_nod3D, r_mpitype_nod3D
 
-        integer :: k
+        integer :: j, e
         integer :: nl1, ul1, nz, n
+        integer :: iel ! element of this tracer for BotFlux (0: not counted)
         real(kind=WP) :: Vben(nl), aux(nl - 1), add_benthos_2d(myDim_nod2D)
-        integer :: nlevels_nod2D_minimum
+        real(kind=WP) :: seafloor(nl) ! seafloor area [m2] under each layer of node n
         real(kind=WP) :: tv
         ! Print caps per MPI rank (cavity/open ocean separately)
         integer, parameter :: n_si_deposit_diag_prints_max = 5
@@ -94,6 +98,8 @@ contains
         ! n is rank-local: a location is given by mype and n
         integer, parameter :: n_si_negdep_diag_prints_max = 15
         integer, save :: n_si_negdep_diag_prints = 0
+
+        iel = sinking_element(tracer_id)
 
         do n = 1, myDim_nod2D ! needs exchange_nod in the end
 
@@ -138,22 +144,21 @@ contains
             ! conversion [m/d] --> [m/s] (vertical velocity, note that it is positive here)
             Vben = Vben / SecondsPerDay
 
-            k = nod_in_elem2D_num(n)
-
-            ! Screen minimum depth among neighbouring nodes around node n, so that
-            ! the flux loop below does not run below the shallowest shared bottom.
-            nlevels_nod2D_minimum = minval(nlevels(nod_in_elem2D(1:k, n)) - 1)
-
             ! ----------------------------------------------------------------
-            ! Downward mass flux through each layer, weighted by the change in
-            ! cross-sectional area between adjacent layer interfaces.
-            !
-            ! max(.., ul1): don't start under the ice at cavity nodes.
+            ! Seafloor area under layer nz: 1/3 of every surrounding element whose
+            ! deepest wet layer is nz (as area(nz,n), but ice-base area not counted).
+            ! In the open ocean identical to area(nz,n) - area(nz+1,n).
             ! ----------------------------------------------------------------
-            do nz = max(nlevels_nod2D_minimum, ul1), nl1
+            seafloor = 0._WP
+            do j = 1, nod_in_elem2D_num(n)
+                e = nod_in_elem2D(j, n)
+                seafloor(nlevels(e) - 1) = seafloor(nlevels(e) - 1) + elem_area(e) / 3.0_WP
+            end do
+
+            ! Downward mass flux intercepted by the seafloor under each layer
+            do nz = ul1, nl1
                 tv = tracer_data_values(nz, n) * Vben(nz)
-                ! Clamped at 0: cavities can widen with depth (spurious negative capture)
-                aux(nz) = -tv * max(area(nz, n) - area(nz + 1, n), 0.0_WP)
+                aux(nz) = -tv * seafloor(nz)
             end do
 
             do nz = ul1, nl1
@@ -167,6 +172,9 @@ contains
             ! ----------------------------------------------------------------
             add_benthos_2d(n) = add_benthos_2d(n) / area(ul1, n)
 
+            ! CMIP7 diagnostic: flux into the benthos [mmol m-2 s-1]
+            if (Diags .and. iel > 0) BotFlux(n, iel) = BotFlux(n, iel) + add_benthos_2d(n) / dt
+
             ! ----------------------------------------------------------------
             ! Diagnostic: implausible Si deposit (> si_deposit_diag_min in one step)
             ! ----------------------------------------------------------------
@@ -178,10 +186,11 @@ contains
                 else
                     n_si_deposit_diag_prints_open = n_si_deposit_diag_prints_open + 1
                 end if
-                print *, 'diag: Si deposit at mype=', mype, ' n=', n, ' ul1=', ul1, &
-                        ' (cavity=', (ul1 > 1), ')'
-                print *, '  add_benthos_2d(n) [mmolSi/m2, this timestep] =', add_benthos_2d(n)
-                print *, '  area(ul1,n) [m2]                             =', area(ul1, n)
+                call recom_warn('large Si deposit', 'mype=' // recom_itoa(mype) // &
+                        '  n=' // recom_itoa(n) // '  ul1=' // recom_itoa(ul1))
+                call recom_kv('cavity', ul1 > 1)
+                call recom_kv('add_benthos_2d', add_benthos_2d(n), 'mmolSi m-2 (this step)')
+                call recom_kv('area(ul1)', area(ul1, n), 'm2')
             end if
 
             ! ----------------------------------------------------------------
@@ -190,11 +199,12 @@ contains
             if (tracer_id == tracer_ids%detrital_silica .and. add_benthos_2d(n) < -1.0_WP .and. &
                     n_si_negdep_diag_prints < n_si_negdep_diag_prints_max) then
                 n_si_negdep_diag_prints = n_si_negdep_diag_prints + 1
-                print *, 'diag: negative Si deposit area profile at mype=', mype, ' n=', n, &
-                        ' ul1=', ul1, ' nl1=', nl1
+                call recom_warn('negative Si deposit, area profile', 'mype=' // recom_itoa(mype) // &
+                        '  n=' // recom_itoa(n) // '  ul1=' // recom_itoa(ul1) // '  nl1=' // &
+                        recom_itoa(nl1))
                 do nz = ul1, min(ul1 + 5, nl1)
-                    print *, '  nz=', nz, ' area(nz,n) [m2]=', area(nz, n), &
-                            ' aux(nz) [mmol/s]=', aux(nz)
+                    call recom_kv('area(' // recom_itoa(nz) // ')', area(nz, n), 'm2')
+                    call recom_kv('aux(' // recom_itoa(nz) // ')', aux(nz), 'mmol s-1')
                 end do
             end if
 
@@ -447,12 +457,13 @@ contains
     !   flux into a per-volume concentration tendency for cell nz.
     !===============================================================================
     subroutine diff_ver_recom_expl(nl, ulevels_nod2D, nlevels_nod2D, nod_in_elem2D_num, &
-            nod_in_elem2D, nlevels, area, areasvol, hnode_new, tracer_id, myDim_nod2d, &
+            nod_in_elem2D, nlevels, elem_area, area, areasvol, hnode_new, tracer_id, myDim_nod2d, &
             eDim_nod2D, mype, MPI_COMM_FESOM, dtr_bf, dt)
 
         use recom_declarations, only: wp, tracer_ids
         use recom_glovar, only: GloSed, glodecayBenthos
         use recom_config, only: ciso, use_MEDUSA, sedflx_num, redO2C, Fe2N_benthos
+        use recom_log, only: recom_error, recom_info, recom_itoa
 
         implicit none
 
@@ -462,13 +473,14 @@ contains
         integer, intent(in), dimension(:) :: nod_in_elem2D_num, nlevels
         real(kind=WP), intent(in) :: dt
         integer, intent(in), dimension(:, :) :: nod_in_elem2D
+        real(kind=WP), intent(in), dimension(:) :: elem_area
         real(kind=WP), intent(in), dimension(:, :) :: area, areasvol, hnode_new
         real(kind=WP), intent(inout), dimension(:, :) :: dtr_bf
 
-        integer :: k
+        integer :: j, e
         integer :: nl1, nz, n, ul1
         real(kind=WP) :: vd_flux(nl)
-        integer :: nlevels_nod2D_minimum
+        real(kind=WP) :: seafloor(nl) ! seafloor area [m2] under each layer of node n
         real(kind=WP) :: bottom_flux(myDim_nod2D + eDim_nod2D)
         real(kind=WP) :: tot_flux
         logical :: areal_flux
@@ -507,8 +519,9 @@ contains
                 end if
             case default
                 if (mype == 0) then
-                    write(*, *) 'check specified in boundary conditions'
-                    write(*, *) 'the model will stop!'
+                    call recom_error('no bottom boundary condition for this tracer', &
+                            'ID=' // recom_itoa(tracer_id))
+                    call recom_info('check the specified boundary conditions; model execution stopped')
                 end if
                 call MPI_ABORT(MPI_COMM_FESOM, 1)
                 stop
@@ -543,8 +556,9 @@ contains
                 end if
             case default
                 if (mype == 0) then
-                    write(*, *) 'check specified in boundary conditions'
-                    write(*, *) 'the model will stop!'
+                    call recom_error('no bottom boundary condition for this tracer', &
+                            'ID=' // recom_itoa(tracer_id))
+                    call recom_info('check the specified boundary conditions; model execution stopped')
                 end if
                 call MPI_ABORT(MPI_COMM_FESOM, 1)
                 stop
@@ -559,32 +573,22 @@ contains
 
             vd_flux = 0._WP
 
-            k = nod_in_elem2D_num(n)
-            ! Screen minimum depth among neighbouring nodes around node n
-            nlevels_nod2D_minimum = minval(nlevels(nod_in_elem2D(1:k, n)) - 1)
-
             !_______________________________________________________________________
-            ! Bottom flux, distributed across layers proportional to the change
-            ! in cross-sectional area between interfaces, then normalized by the
-            ! surface-layer volume-area.
-            !
-            ! NOTE / NEEDS CONFIRMATION: every layer nz here divides by
-            ! areasvol(ul1, n) -- the *surface* (ul1) layer's volume-area -- not
-            ! areasvol(nz, n), the volume-area of the layer the flux is actually
-            ! being assigned to. This was already flagged by OG
-            ! (see "CHECK" comment above on the GloSed DIN line) as needing review.
-            ! Left unchanged; verify against the intended discretization before
-            ! trusting sub-surface benthic flux distribution.
-            !
-            ! max(.., ul1) and clamp at 0: cavity fixes as in ver_sinking_recom_benthos.
+            ! Bottom flux, distributed over the layers in proportion to the seafloor
+            ! area under each layer (see ver_sinking_recom_benthos).
             ! GlodecayBenthos is per area: make it a total flux like MEDUSA's.
             tot_flux = bottom_flux(n)
             if (areal_flux) tot_flux = tot_flux * area(ul1, n)
-            do nz = max(nlevels_nod2D_minimum, ul1), nl1
-                vd_flux(nz) = max(area(nz, n) - area(nz + 1, n), 0.0_WP) * tot_flux / (area(ul1, n))
+            seafloor = 0._WP
+            do j = 1, nod_in_elem2D_num(n)
+                e = nod_in_elem2D(j, n)
+                seafloor(nlevels(e) - 1) = seafloor(nlevels(e) - 1) + elem_area(e) / 3.0_WP
             end do
-            nz = nl1
-            vd_flux(nz + 1) = (area(nz + 1, n)) * tot_flux / (area(ul1, n))
+            ! seafloor under layer nz is its bottom face, vd_flux(nz+1), which cell nz
+            ! receives below; weights sum to 1, so the return equals the benthic loss
+            do nz = ul1, nl1
+                vd_flux(nz + 1) = seafloor(nz) * tot_flux / sum(seafloor(ul1:nl1))
+            end do
 
             !_______________________________________________________________________
             ! Add bottom flux into the tracer tendency (rhs). Each cell nz only
@@ -620,11 +624,11 @@ contains
         use REcoM_declarations, only: wp, tracer_ids
 
         use REcoM_GloVar, only: sinkvel1_tr, sinkvel2_tr, scaling_visc_3D, scaling_density1_3D, &
-            scaling_density2_3D
+            scaling_density2_3D, ExpFlux
 
         use recom_config, only: allow_var_sinking, depth_scaling1, depth_scaling2, &
             max_sinking_velocity, use_ballasting, enable_3zoo2det, VDet_zoo2, enable_coccos, &
-            secondsPerDay, vcocco, vdet, vdet_a, vdia, vphaeo, vphy, w_ref1, w_ref2
+            secondsPerDay, vcocco, vdet, vdet_a, vdia, vphaeo, vphy, w_ref1, w_ref2, Diags
 
         implicit none
 
@@ -640,6 +644,7 @@ contains
         real(kind=WP), intent(inout), dimension(:, :) :: vert_sink
 
         integer :: nz, nzmin, nzmax, n, k, nlevels_nod2D_minimum
+        integer :: iel ! element of this tracer for ExpFlux (0: not counted)
         real(kind=wp) :: wM, wPs
         real(kind=wp) :: Rjp, Rj, Rjm
 
@@ -711,6 +716,8 @@ contains
             Vsink = VDet_zoo2
 
         end if
+
+        iel = sinking_element(tracer_id)
 
         !! ---- Skip advection entirely for negligibly slow-sinking tracers
         if (Vsink > 0.1) then
@@ -806,6 +813,7 @@ contains
                     ! ----------------------------------------------------------------
                     ! Cap the sinking CFL at cfl_safety: the DST3/TVD limiter below needs
                     ! cfl <= 1, which thin cells (e.g. at cavity ice drafts) can exceed.
+                    ! todo: disable test
                     if (dz_trr(nz) > 0.0d0) then
                         Wvel_flux(nz) = sign(min(abs(Wvel_flux(nz)), &
                                 cfl_safety * dz_trr(nz) / dt), Wvel_flux(nz))
@@ -916,6 +924,20 @@ contains
                 end if ! simple upwind
 
                 ! ----------------------------------------------------------------
+                ! CMIP7 diagnostic: downward flux of this tracer through the
+                ! interior interfaces, added to its element [mmol m-2 s-1].
+                ! vd_flux is positive downward [mmol s-1]. The surface (or ice
+                ! base) and seafloor interfaces carry no flux here; deposition
+                ! into the benthos is in BotFlux.
+                ! ----------------------------------------------------------------
+                if (Diags .and. iel > 0) then
+                    do nz = nzmin + 1, nzmax
+                        if (area(nz, n) > 0.0_WP) ExpFlux(nz, n, iel) = ExpFlux(nz, n, iel) &
+                                + vd_flux(nz) / area(nz, n)
+                    end do
+                end if
+
+                ! ----------------------------------------------------------------
                 ! Accumulate the net flux divergence into the tracer tendency.
                 ! ----------------------------------------------------------------
                 do nz = nzmin, nzmax
@@ -927,6 +949,52 @@ contains
         end if ! Vsink > 0.1
 
     end subroutine ver_sinking_recom
+
+    !===============================================================================
+    ! sinking_element
+    !   Element of a sinking tracer for the CMIP7 diagnostics ExpFlux and BotFlux:
+    !   1 = N, 2 = organic C, 3 = Si, 4 = calcite, 0 = not counted (chlorophyll,
+    !   carbon isotopes). Same grouping as the Benthos buckets 1-4 in
+    !   ver_sinking_recom_benthos. Disabled tracers have id -1 and never match.
+    !===============================================================================
+    integer function sinking_element(tracer_id)
+
+        use REcoM_declarations, only: tracer_ids
+
+        implicit none
+
+        integer, intent(in) :: tracer_id
+
+        sinking_element = 0
+
+        if (tracer_id == tracer_ids%phytoplankton_nitrogen .or. &
+                tracer_id == tracer_ids%detrital_nitrogen .or. &
+                tracer_id == tracer_ids%diatom_nitrogen .or. &
+                tracer_id == tracer_ids%coccolithophore_nitrogen .or. &
+                tracer_id == tracer_ids%phaeocystis_nitrogen .or. &
+                tracer_id == tracer_ids%macrozooplankton_detrital_nitrogen) then
+            sinking_element = 1
+
+        elseif (tracer_id == tracer_ids%phytoplankton_carbon .or. &
+                tracer_id == tracer_ids%detrital_carbon .or. &
+                tracer_id == tracer_ids%diatom_carbon .or. &
+                tracer_id == tracer_ids%coccolithophore_carbon .or. &
+                tracer_id == tracer_ids%phaeocystis_carbon .or. &
+                tracer_id == tracer_ids%macrozooplankton_detrital_carbon) then
+            sinking_element = 2
+
+        elseif (tracer_id == tracer_ids%diatom_silica .or. &
+                tracer_id == tracer_ids%detrital_silica .or. &
+                tracer_id == tracer_ids%macrozooplankton_detrital_silica) then
+            sinking_element = 3
+
+        elseif (tracer_id == tracer_ids%phytoplankton_calcite .or. &
+                tracer_id == tracer_ids%detrital_calcite .or. &
+                tracer_id == tracer_ids%macrozooplankton_detrital_calcite) then
+            sinking_element = 4
+        end if
+
+    end function sinking_element
 
 
     !===============================================================================

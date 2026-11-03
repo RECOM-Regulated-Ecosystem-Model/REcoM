@@ -22,6 +22,7 @@ contains
 
         use recom_declarations, only: wp, tiny_si, tiny_n, tiny_c, tiny_n_d, tiny_n_c, tiny_n_p, &
                 tiny_c_p, tiny_c_d, tiny_c_c, vertNPPn, vertGPPn, locGPPn, locNPPn, vertNNAn, &
+                vertSiProd, locSiProd, vertScavFe, locScavFe, &
                 vertChldegn, vertNPPd, locNPPd, locchldegn, vertGPPd, locGPPd, vertNNAd, locNNAd, &
                 vertChldegd, locChldegd, vertNPPc, vertGPPc, locNPPc, locGPPc, vertNNAc, &
                 locNNAc, locChldegc, vertNPPp, locNPPp, vertGPPp, vertNNAp, vertchldegp, locNNAp, &
@@ -38,12 +39,11 @@ contains
                 locNNAn, vertChldegc, vertgrazmeso_c, locgrazmacro_tot, locgrazmacro_det2, &
                 vertgrazmacro_p
 
-        use recom_config, only: use_DICremin
-        use recom_config, only: bgc_num, chl2n_max, chl2n_max_c, chl2n_max_d, chl2n_max_p, ciso, &
+        use recom_config, only: bgc_num, ciso, &
                 diags, enable_3zoo2det, enable_coccos, grazing_detritus, ialk, icchl, icocc, &
-                idchl, idiac, idian, idiasi, idic, idin, imiczooc, imiczoon, ioxy, idicremin, ipchl, &
-                iphac, iphachl, iphan, iphyc, iphyn, isi, ncmax, ncmax_c, ncmax_d, ncmax_p, nmocsy, &
-                one, pa2atm, recom_debug, secondsperday, sicmax, tiny, tiny_chl, icocn
+                idchl, idiac, idian, idiasi, idic, idin, ioxy, ipchl, &
+                iphac, iphachl, iphan, iphyc, iphyn, isi, nmocsy, &
+                one, pa2atm, recom_debug, secondsperday, tiny, tiny_chl, icocn
 
         use recom_ciso, only: alpha_aq_13, alpha_aq_14, alpha_dic_13, alpha_dic_14, alpha_k_13, &
                 alpha_k_14, alpha_p_13, alpha_p_14, alpha_p_dia_13, alpha_p_dia_14, ciso_14, &
@@ -59,6 +59,8 @@ contains
         use recom_extra, only: cobeta, depth_calculations
         use recom_sms_module, only: recom_sms
         use gasx, only: scco2, flxco2, pistonvel, o2flux
+        use recom_log, only: recom_trace, recom_error, recom_kv, recom_itoa
+        use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
 
         implicit none
 
@@ -129,23 +131,8 @@ contains
         real(kind=wp), dimension(nl - 1) :: thick      ! Layer thickness [m]
         real(kind=wp), dimension(nl - 1) :: recipthick ! 1/thick [1/m]
 
-        !---------------------------------------------------------------------------
-        ! Threshold concentrations derived from config parameters
-        !   tiny_X = minimum meaningful concentration for species X, used as lower
-        !   bound after the SMS update and as a near-zero guard in ratio calculations.
-        !---------------------------------------------------------------------------
-        tiny_N   = tiny_chl / chl2N_max    ! [mmol N/m3]  small phytoplankton N
-        tiny_N_d = tiny_chl / chl2N_max_d  ! [mmol N/m3]  diatom N
-        tiny_C   = tiny_N   / NCmax        ! [mmol C/m3]  small phytoplankton C
-        tiny_C_d = tiny_N_d / NCmax_d      ! [mmol C/m3]  diatom C
-        tiny_Si  = tiny_C_d / SiCmax       ! [mmol Si/m3] diatom Si
-
-        if (enable_coccos) then
-            tiny_N_c = tiny_chl / chl2N_max_c  ! [mmol N/m3]  coccolithophore N
-            tiny_C_c = tiny_N_c / NCmax_c      ! [mmol C/m3]  coccolithophore C
-            tiny_N_p = tiny_chl / chl2N_max_p  ! [mmol N/m3]  phaeocystis N
-            tiny_C_p = tiny_N_p / NCmax_p      ! [mmol C/m3]  phaeocystis C
-        end if
+        ! tiny_N, tiny_C, tiny_N_d, tiny_C_d, tiny_Si (and cocco/phaeo): lower bounds after the
+        ! SMS update, computed once in initialize_tiny_thresholds (recom_init.F90)
 
         !---------------------------------------------------------------------------
         ! Grid geometry for this column
@@ -165,6 +152,7 @@ contains
         !   We clamp to [2, 40] deg C and [21, 43] to avoid extrapolation errors,
         !   including in near-freezing, low-salinity, high-ice-cover cells.
         !---------------------------------------------------------------------------
+        ! nzmin, not level 1: at cavity nodes level 1 is inside the ice shelf and not set in `state`
         REcoM_DIC  = max(tiny * 1e-3, state(nzmin, idic) * 1e-3) ! mmol/m3 -> mol/m3
         REcoM_Alk  = max(tiny * 1e-3, state(nzmin, ialk) * 1e-3)
         REcoM_Si   = max(tiny * 1e-3, state(nzmin, isi)  * 1e-3)
@@ -210,25 +198,27 @@ contains
 
         ! Guard against unphysical DIC (indicates upstream tracer corruption)
         if (REcoM_DIC(1) > 10.d0) then  ! > 10 mol/m3 = 10000 mmol/m3
-            print *, 'error: DIC out of range at n=', n
-            print *, '  nzmin, depth   =', nzmin, zF(nzmin)
-            print *, '  DIC   [mol/m3] =', REcoM_DIC
-            print *, '  Alk   [mol/m3] =', REcoM_Alk
-            print *, '  T     [deg C]  =', REcoM_T
-            print *, '  S              =', REcoM_S
-            print *, '  Si    [mol/m3] =', REcoM_Si
-            print *, '  Phos  [mol/m3] =', REcoM_Phos
-            print *, '  pCO2           =', pco2surf
-            print *, '  rhoSW          =', rhoSW
-            print *, '  tempis         =', tempis
-            print *, '  kw660          =', kw660
-            print *, '  AtmCO2         =', LocAtmCO2
-            print *, '  Patm   [atm]   =', Patm
-            print *, '  ULoc   [m/s]   =', ULoc
-            print *, '  ice_conc       =', Loc_ice_conc
-            print *, '  thick(nzmin)   =', thick(nzmin)
-            print *, '  Nmocsy         =', Nmocsy
-            print *, '  Lond, Latd     =', Lond, Latd
+            call recom_error('DIC out of range', 'n=' // recom_itoa(n))
+            call recom_kv('nzmin', nzmin)
+            call recom_kv('depth', zF(nzmin), 'm')
+            call recom_kv('DIC', REcoM_DIC(1), 'mol m-3')
+            call recom_kv('Alk', REcoM_Alk(1), 'mol m-3')
+            call recom_kv('T', REcoM_T(1), 'deg C')
+            call recom_kv('S', REcoM_S(1))
+            call recom_kv('Si', REcoM_Si(1), 'mol m-3')
+            call recom_kv('Phos', REcoM_Phos(1), 'mol m-3')
+            call recom_kv('pCO2', pco2surf(1))
+            call recom_kv('rhoSW', rhoSW(1))
+            call recom_kv('tempis', tempis(1))
+            call recom_kv('kw660', kw660(1))
+            call recom_kv('AtmCO2', LocAtmCO2(1))
+            call recom_kv('Patm', Patm(1), 'atm')
+            call recom_kv('ULoc', ULoc(1), 'm s-1')
+            call recom_kv('ice_conc', Loc_ice_conc(1))
+            call recom_kv('thick(nzmin)', thick(nzmin), 'm')
+            call recom_kv('Nmocsy', Nmocsy)
+            call recom_kv('lon', Lond(1), 'deg')
+            call recom_kv('lat', Latd(1), 'deg')
             stop
         end if
 
@@ -242,27 +232,29 @@ contains
             ! Sanity check on computed flux magnitude
 
             if (abs(co2flux(1)) > 1.e10) then
-                print *, 'error: CO2 flux out of range at n=', n
-                print *, '  nzmin, depth   =', nzmin, zF(nzmin)
-                print *, '  co2flux        =', co2flux
-                print *, '  pco2surf       =', pco2surf
-                print *, '  co2            =', co2
-                print *, '  rhoSW          =', rhoSW
-                print *, '  T     [deg C]  =', REcoM_T
-                print *, '  tempis         =', tempis
-                print *, '  S              =', REcoM_S
-                print *, '  Alk   [mol/m3] =', REcoM_Alk
-                print *, '  DIC   [mol/m3] =', REcoM_DIC
-                print *, '  Si    [mol/m3] =', REcoM_Si
-                print *, '  Phos  [mol/m3] =', REcoM_Phos
-                print *, '  kw660          =', kw660
-                print *, '  AtmCO2         =', LocAtmCO2
-                print *, '  Patm   [atm]   =', Patm
-                print *, '  thick(nzmin)   =', thick(nzmin)
-                print *, '  Nmocsy         =', Nmocsy
-                print *, '  Lond, Latd     =', Lond, Latd
-                print *, '  ULoc   [m/s]   =', ULoc
-                print *, '  ice_conc       =', Loc_ice_conc
+                call recom_error('CO2 flux out of range', 'n=' // recom_itoa(n))
+                call recom_kv('nzmin', nzmin)
+                call recom_kv('depth', zF(nzmin), 'm')
+                call recom_kv('co2flux', co2flux(1), 'mol m-2 s-1')
+                call recom_kv('pco2surf', pco2surf(1))
+                call recom_kv('co2', co2(1))
+                call recom_kv('rhoSW', rhoSW(1))
+                call recom_kv('T', REcoM_T(1), 'deg C')
+                call recom_kv('tempis', tempis(1))
+                call recom_kv('S', REcoM_S(1))
+                call recom_kv('Alk', REcoM_Alk(1), 'mol m-3')
+                call recom_kv('DIC', REcoM_DIC(1), 'mol m-3')
+                call recom_kv('Si', REcoM_Si(1), 'mol m-3')
+                call recom_kv('Phos', REcoM_Phos(1), 'mol m-3')
+                call recom_kv('kw660', kw660(1))
+                call recom_kv('AtmCO2', LocAtmCO2(1))
+                call recom_kv('Patm', Patm(1), 'atm')
+                call recom_kv('thick(nzmin)', thick(nzmin), 'm')
+                call recom_kv('Nmocsy', Nmocsy)
+                call recom_kv('lon', Lond(1), 'deg')
+                call recom_kv('lat', Latd(1), 'deg')
+                call recom_kv('ULoc', ULoc(1), 'm s-1')
+                call recom_kv('ice_conc', Loc_ice_conc(1))
                 stop
             end if
 
@@ -270,15 +262,17 @@ contains
             dflux              = co2flux * 1.e3 * SecondsPerDay  ! mol/m2/s -> mmol/m2/d
             co2flux_seaicemask = co2flux * 1.e3                  ! mol/m2/s -> mmol/m2/s
         else  ! cavity - no atmosphere above
-            dflux              = 0.0_WP
+            ! NaN as fill value for output/diagnostic quantities; the flux that enters
+            ! the DIC boundary condition, the coupling and the atmosphere box stays 0
             co2flux_seaicemask = 0.0_WP
-            pco2surf = 0.0_WP
-            dpco2surf = 0.0_WP
-            ph = 0.0_WP
-            kw660 = 0.0_WP
-            K0 = 0.0_WP
-            omegaC = 0.0_WP
-            omegaA = 0.0_WP
+            dflux     = ieee_value(0.0_WP, ieee_quiet_nan)
+            pco2surf  = ieee_value(0.0_WP, ieee_quiet_nan)
+            dpco2surf = ieee_value(0.0_WP, ieee_quiet_nan)
+            ph        = ieee_value(0.0_WP, ieee_quiet_nan)
+            kw660     = ieee_value(0.0_WP, ieee_quiet_nan)
+            K0        = ieee_value(0.0_WP, ieee_quiet_nan)
+            omegaC    = ieee_value(0.0_WP, ieee_quiet_nan)
+            omegaA    = ieee_value(0.0_WP, ieee_quiet_nan)
         end if
  
         !---------------------------------------------------------------------------
@@ -290,16 +284,15 @@ contains
             call o2flux(REcoM_T, REcoM_S, kw660, ppo, REcoM_O2, Nmocsy, o2ex)
             oflux              = o2ex * 1.e3 * SecondsPerDay  ! mol/m2/s -> mmol/m2/d
             o2flux_seaicemask  = o2ex * 1.e3                  ! mol/m2/s -> mmol/m2/s
-        else
-            oflux              = 0.0_WP
+        else  ! cavity: NaN fill for the output flux; the O2 boundary-condition flux stays 0
+            oflux              = ieee_value(0.0_WP, ieee_quiet_nan)
             o2flux_seaicemask  = 0.0_WP
         end if
 
         !===========================================================================
         ! Water-column BGC <E2><80><94> sources minus sinks
         !===========================================================================
-        if (recom_debug .and. mype == 0) print *, achar(27) // '[36m' // '     --> REcoM_sms' // &
-                achar(27) // '[0m'
+        if (recom_debug .and. mype == 0) call recom_trace('REcoM_sms', 2)
 
         call REcoM_sms(n, nzmin, Nn, state, thick, SurfSW, sms, Temp, Sali_depth, &
                 CO2_watercolumn, & ! MOCSY [mol/m3]
@@ -337,15 +330,7 @@ contains
             state(nzmin:nn, iphac)   = max(tiny_C_p, state(nzmin:nn, iphac))
         end if
 
-        if (enable_3zoo2det) then
-            state(nzmin:nn, imiczoon) = max(tiny, state(nzmin:nn, imiczoon))
-            state(nzmin:nn, imiczooc) = max(tiny, state(nzmin:nn, imiczooc))
-        end if
-
-        if (use_DICremin) state(nzmin:nn, idicremin) = max(tiny, state(nzmin:nn, idicremin))
-
-        if (recom_debug .and. mype == 0) print *, achar(27) // '[36m' // '     --> ciso after' // &
-                ' REcoM_Forcing' // achar(27) // '[0m'
+        if (recom_debug .and. mype == 0) call recom_trace('ciso', 2)
 
         if (ciso) then
             if (nzmin == 1) then
@@ -443,6 +428,8 @@ contains
             locGPPd = sum(vertGPPd(nzmin:nn) * thick(nzmin:nn))
             locNNAd = sum(vertNNAd(nzmin:nn) * thick(nzmin:nn))
             locChldegd = sum(vertChldegd(nzmin:nn) * thick(nzmin:nn))
+            locSiProd = sum(vertSiProd(nzmin:nn) * thick(nzmin:nn))
+            locScavFe = sum(vertScavFe(nzmin:nn) * thick(nzmin:nn))
 
             if (enable_coccos) then
                 locNPPc = sum(vertNPPc(nzmin:nn) * thick(nzmin:nn))

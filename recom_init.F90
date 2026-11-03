@@ -52,10 +52,15 @@ contains
         use REcoM_declarations, only: wp, tracer_ids
         use REcoM_GloVar, only: tracers_info_type
         use recom_config, only: validate_recom_tracers, initialize_tracer_indices, &
-                validate_tracer_id_sequence, bgc_num
+                validate_tracer_id_sequence, bgc_num, validate_grazing_preference
         use recom_ciso, only: idic_13, iphyc_13, idetc_13, ihetc_13, idoc_13, idiac_13, &
                 iphycal_13, idetcal_13, idic_14, iphyc_14, idetc_14, ihetc_14, idoc_14, &
                 idiac_14, iphycal_14, idetcal_14
+#if defined(__oifs)
+        use recom_config, only: use_atbox
+        use mpi, only: MPI_Abort, MPI_COMM_WORLD
+        use recom_log, only: recom_error, recom_info
+#endif
 
         implicit none
 
@@ -75,8 +80,27 @@ contains
         integer :: num_physical_tracers
         integer :: n_transit_tracers ! number of active transit tracers
         integer :: bgc_start, bgc_end ! first/last slot of the BGC-only block
+#if defined(__oifs)
+        integer :: MPIErr
+
+        ! Coupled to OpenIFS, x_co2atm is received from the atmosphere every coupling step.
+        ! The atmospheric box model would use the same array as its prognostic state: the
+        ! coupler overwrites the box, and the box starts from x_co2atm(1), a different node
+        ! on every rank.
+        if (use_atbox) then
+            if (mype == 0) then
+                call recom_error('use_atbox = .true. in a run coupled to OpenIFS')
+                call recom_info('atmospheric CO2 comes from OpenIFS: set use_atbox = .false.')
+                call recom_info('model execution stopped')
+            end if
+            call MPI_Abort(MPI_COMM_WORLD, 1, MPIErr)
+            stop
+        end if
+#endif
 
         call initialize_memory(myDim_nod2D + eDim_nod2D, nl, num_tracers)
+
+        call initialize_tiny_thresholds
 
         call initialize_ciso(myDim_nod2D + eDim_nod2D, nl, ocean_area)
 
@@ -93,6 +117,9 @@ contains
         call validate_tracer_id_sequence(tracers_info%ids(1:num_tracers), num_tracers, &
                 use_age_tracer, use_transit, &
                 l_sf6, l_f11, l_f12, l_r14c, l_r39ar, mype, ciso_tracer_ids())
+
+        ! Grazing preference form (fasham | sigmoid) and s*Nsq* consistency
+        call validate_grazing_preference(mype)
 
         ! T,S | BGC | [age] | [transit] num_physical_tracers
         ! is always just T,S (=2): BGC tracers start right after them, regardless
@@ -167,6 +194,7 @@ contains
         use recom_glovar, only: GloFeDust, AtmFeInput, GloNDust, AtmNInput, RiverDIN2D, &
                 RiverDON2D, RiverDOC2D, RiverDSi2D, RiverDIC2D, RiverAlk2D, RiverFe, &
                 ErosionTON2D, ErosionTOC2D, ErosionTSi2D, relax_alk, virtual_alk, cosAI, &
+                virtual_din, virtual_dic, virtual_dsi, virtual_dfe, virtual_oxy, &
                 GloPCO2surf, GloCO2flux, GloO2flux, GloCO2flux_seaicemask, GloO2flux_seaicemask, &
                 GlodPCO2surf, DenitBen, PistonVelocity, alphaCO2, GlodecayBenthos, Benthos, &
                 Benthos_tr, GloHplus, PAR3D, NPPn, NPPd, NPPc, NPPp, GPPn, GPPd, GPPc, GPPp, &
@@ -185,7 +213,9 @@ contains
                 CO33D, OmegaC3D, kspc3D, rhoSW3D, rho_particle1, rho_particle2, &
                 scaling_density1_3D, scaling_density2_3D, scaling_visc_3D, seawater_visc_3D, &
                 Sinkingvel1, Sinkingvel2, Sinkvel1_tr, Sinkvel2_tr, GloSed, SinkFlx, &
-                SinkFlx_tr, lb_flux, x_co2atm
+                SinkFlx_tr, lb_flux, x_co2atm, ExpFlux, BotFlux, Graz3D, SiProd, ScavFe, &
+                limN_phy3D, limFe_phy3D, limN_dia3D, limFe_dia3D, O2sat3D, dpO2s, O2min, intDIC, &
+                intDOC, intPOC, OmegaA3D, CO3satA3D
 
         use recom_locvar, only: LocBenthos
         use recom_config, only: Diags, benthos_num, use_MEDUSA, bottflx_num, sedflx_num, use_atbox
@@ -219,6 +249,11 @@ contains
         !! * Alkalinity restoring to climatology *
         allocate(relax_alk(node_size), source=0.d0)
         allocate(virtual_alk(node_size), source=0.d0)
+        allocate(virtual_din(node_size), source=0.d0)
+        allocate(virtual_dic(node_size), source=0.d0)
+        allocate(virtual_dsi(node_size), source=0.d0)
+        allocate(virtual_dfe(node_size), source=0.d0)
+        allocate(virtual_oxy(node_size), source=0.d0)
 
         allocate(cosAI(node_size), source=0.d0)
         allocate(GloPCO2surf(node_size), source=0.d0)
@@ -243,9 +278,7 @@ contains
         allocate(decayBenthos(benthos_num), source=0.d0)
         allocate(PAR3D(nl - 1, node_size), source=0.d0)
 
-        if (.not. use_atbox) then
-            allocate(x_co2atm(node_size), source=0.d0)
-        end if
+        if (.not. use_atbox) allocate(x_co2atm(node_size), source=0.d0) ! use_atbox: allocated in initialize_ciso
 
         if (Diags) then
             !! *** Allocate 2D diagnostics ***
@@ -341,6 +374,26 @@ contains
             allocate(TCphot_phaeo(nl - 1, node_size), source=0.d0)
 
             allocate(TSi_assimDia(nl - 1, node_size), source=0.d0)
+
+            ! CMIP7 export, benthic flux, grazing, Si uptake and Fe scavenging diagnostics
+            allocate(ExpFlux(nl, node_size, 4), source=0.d0)
+            allocate(BotFlux(node_size, 4), source=0.d0)
+            allocate(Graz3D(nl - 1, node_size), source=0.d0)
+            allocate(SiProd(node_size), source=0.d0)
+            allocate(ScavFe(node_size), source=0.d0)
+
+            ! CMIP7 limitation factors, O2 saturation and pressure difference, O2 minimum and
+            ! carbon inventories
+            allocate(limN_phy3D(nl - 1, node_size), source=0.d0)
+            allocate(limFe_phy3D(nl - 1, node_size), source=0.d0)
+            allocate(limN_dia3D(nl - 1, node_size), source=0.d0)
+            allocate(limFe_dia3D(nl - 1, node_size), source=0.d0)
+            allocate(O2sat3D(nl - 1, node_size), source=0.d0)
+            allocate(dpO2s(node_size), source=0.d0)
+            allocate(O2min(node_size), source=0.d0)
+            allocate(intDIC(node_size), source=0.d0)
+            allocate(intDOC(node_size), source=0.d0)
+            allocate(intPOC(node_size), source=0.d0)
         end if
 
         !! *** Allocate 3D mocsy ***
@@ -350,6 +403,8 @@ contains
         allocate(HCO33D(nl - 1, node_size), source=0.d0)
         allocate(CO33D(nl - 1, node_size), source=0.d0)
         allocate(OmegaC3D(nl - 1, node_size), source=0.d0)
+        allocate(OmegaA3D(nl - 1, node_size), source=0.d0)
+        allocate(CO3satA3D(nl - 1, node_size), source=0.d0)
         allocate(kspc3D(nl - 1, node_size), source=0.d0)
         allocate(rhoSW3D(nl - 1, node_size), source=0.d0)
 
@@ -628,6 +683,7 @@ contains
 
     function get_tracer_init_value(tracer_id, mype) result(init_value)
         use recom_declarations, only: tracer_ids, wp
+        use recom_log, only: recom_warn, recom_itoa
         use REcoM_config, only: tiny, tiny_chl, chl2N_max, NCmax, chl2N_max_d, NCmax_d, SiCmax, &
                 Redfield
 
@@ -684,8 +740,8 @@ contains
 
         else
             init_value = 0.0_wp
-            if (mype == 0) write(*, *) 'Warning: No initial value defined for tracer ID ', tracer_id, '.' // &
-                    ' Setting to 0'
+            if (mype == 0) call recom_warn('no initial value defined for tracer, set to 0', &
+                    'ID=' // recom_itoa(tracer_id))
         end if
     end function get_tracer_init_value
 
@@ -740,6 +796,7 @@ contains
         use REcoM_glovar, only: tracers_info_type
         use recom_config, only: enable_3zoo2det, enable_coccos
         use recom_declarations, only: WP, is_3zoo2det, is_coccos
+        use recom_log, only: recom_section, recom_info, recom_range, recom_ok
 
         use mpi
 
@@ -751,9 +808,10 @@ contains
         integer, intent(in) :: MPI_COMM_FESOM, mype
 
         integer :: MPIerr, n
-        real(kind=WP) :: locDINmax, locDINmin, locDICmax, locDICmin, locAlkmax, glo
+        real(kind=WP) :: locDINmax, locDINmin, locDICmax, locDICmin, locAlkmax
         real(kind=WP) :: locAlkmin, locDSimax, locDSimin, locDFemax, locDFemin
         real(kind=WP) :: locO2max, locO2min
+        real(kind=WP) :: gmin, gmax
 
         ! With the fixed T,S | BGC | [age] | [transit] layout, BGC tracers
         ! always start at slot 3 (right after T,S) regardless of use_transit.
@@ -770,8 +828,6 @@ contains
         integer, parameter :: dfe_slot = 21
         integer, parameter :: o2_slot = 24
 
-        if (mype == 0) write(*, *) 'Tracers have been initialized as spinup from WOA/glodap' // &
-                ' netcdf files'
         locDINmax = -66666
         locDINmin = 66666
         locDICmax = locDINmax
@@ -812,42 +868,37 @@ contains
                     ulevels_nod2D(n):nlevels_nod2D(n) - 1, n)))
         end do
 
-        if (mype == 0) write(*, *) "Sanity check for REcoM variables after recom_init call"
-        call MPI_AllREDUCE(locDINmax, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal max init. DIN. =', glo
-        call MPI_AllREDUCE(locDINmin, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal min init. DIN. =', glo
+        ! Global range of the initial fields (sanity check after recom_init)
+        if (mype == 0) then
+            call recom_section('REcoM init')
+            call recom_info('tracers initialised as spinup from WOA/GLODAP netcdf files')
+        end if
 
-        call MPI_AllREDUCE(locDICmax, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal max init. DIC. =', glo
-        call MPI_AllREDUCE(locDICmin, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal min init. DIC. =', glo
-        call MPI_AllREDUCE(locAlkmax, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal max init. Alk. =', glo
-        call MPI_AllREDUCE(locAlkmin, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal min init. Alk. =', glo
-        call MPI_AllREDUCE(locDSimax, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal max init. DSi. =', glo
-        call MPI_AllREDUCE(locDSimin, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal min init. DSi. =', glo
-        call MPI_AllREDUCE(locDFemax, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal max init. DFe. =', glo
-        call MPI_AllREDUCE(locDFemin, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, &
-                MPIerr)
-        if (mype == 0) write(*, *) '  `-> gobal min init. DFe. =', glo
-        call MPI_AllREDUCE(locO2max, glo, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
-        if (mype == 0) write(*, *) '  |-> gobal max init. O2. =', glo
-        call MPI_AllREDUCE(locO2min, glo, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, MPIerr)
-        if (mype == 0) write(*, *) '  `-> gobal min init. O2. =', glo
+        call MPI_AllREDUCE(locDINmin, gmin, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, MPIerr)
+        call MPI_AllREDUCE(locDINmax, gmax, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
+        if (mype == 0) call recom_range('DIN', gmin, gmax, 'mmol m-3')
+
+        call MPI_AllREDUCE(locDICmin, gmin, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, MPIerr)
+        call MPI_AllREDUCE(locDICmax, gmax, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
+        if (mype == 0) call recom_range('DIC', gmin, gmax, 'mmol m-3')
+
+        call MPI_AllREDUCE(locAlkmin, gmin, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, MPIerr)
+        call MPI_AllREDUCE(locAlkmax, gmax, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
+        if (mype == 0) call recom_range('Alk', gmin, gmax, 'mmol m-3')
+
+        call MPI_AllREDUCE(locDSimin, gmin, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, MPIerr)
+        call MPI_AllREDUCE(locDSimax, gmax, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
+        if (mype == 0) call recom_range('DSi', gmin, gmax, 'mmol m-3')
+
+        call MPI_AllREDUCE(locDFemin, gmin, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, MPIerr)
+        call MPI_AllREDUCE(locDFemax, gmax, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
+        if (mype == 0) call recom_range('DFe', gmin, gmax, 'umol m-3')
+
+        call MPI_AllREDUCE(locO2min, gmin, 1, MPI_DOUBLE_PRECISION, MPI_MIN, MPI_COMM_FESOM, MPIerr)
+        call MPI_AllREDUCE(locO2max, gmax, 1, MPI_DOUBLE_PRECISION, MPI_MAX, MPI_COMM_FESOM, MPIerr)
+        if (mype == 0) call recom_range('O2', gmin, gmax, 'mmol m-3')
+
+        if (mype == 0) call recom_ok('initialisation done')
 
         if (enable_3zoo2det) then
             is_3zoo2det = 1.0_WP
@@ -861,5 +912,128 @@ contains
             is_coccos = 0.0_WP
         end if
     end subroutine initialization_diagnostics
+
+    !===============================================================================
+    ! Lower bounds (minimum thresholds) of the phytoplankton pools, computed once from
+    ! the namelist parameters after they were read (setup_model) and before the first
+    ! time step; used by REcoM_Forcing (lower bounds after the SMS update) and REcoM_sms
+    !===============================================================================
+    subroutine initialize_tiny_thresholds
+
+        use recom_declarations, only: tiny_n, tiny_c, tiny_n_d, tiny_c_d, tiny_si, &
+                tiny_n_c, tiny_c_c, tiny_n_p, tiny_c_p
+        use recom_config, only: tiny_chl, chl2n_max, chl2n_max_d, chl2n_max_c, chl2n_max_p, &
+                ncmax, ncmax_d, ncmax_c, ncmax_p, sicmax, enable_coccos
+
+        implicit none
+
+        !===============================================================================
+        ! MINIMUM THRESHOLD VALUES
+        !===============================================================================
+        ! Calculates minimum allowable concentrations for all biological state variables.
+        ! Prevents division by zero and ensures numerical stability.
+        !
+        ! Threshold Calculation Strategy:
+        !   - Based on physiological maximum ratios
+        !   - Works backward from minimum chlorophyll
+        !   - Ensures stoichiometric consistency
+        !   - Species-specific values
+        !
+        ! Rationale for Minimum Thresholds:
+        !   - Division by zero prevention in quota calculations
+        !   - Numerical stability in resource limitation terms
+        !   - Prevents spurious negative values
+        !   - Represents detection limits or "ghost populations"
+        !
+        ! Typical Minimum Values:
+        !   - Chlorophyll: ~0.001-0.01 mgChl m-3
+        !   - Nitrogen: ~0.001-0.01 mmolN m-3
+        !   - Carbon: ~0.01-0.1 mmolC m-3
+        !-------------------------------------------------------------------------------
+
+        !-------------------------------------------------------------------------------
+        ! Small Phytoplankton Thresholds
+        !-------------------------------------------------------------------------------
+        ! Variables:
+        !   tiny_N      : Minimum small phyto nitrogen [mmolN m-3]
+        !   tiny_C      : Minimum small phyto carbon [mmolC m-3]
+        !   tiny_chl    : Minimum chlorophyll (set externally) [mgChl m-3]
+        !   chl2N_max   : Maximum Chlorophyll:Nitrogen ratio [mgChl mmolN-1]
+        !   NCmax       : Maximum Nitrogen:Carbon quota [mmolN mmolC-1]
+        !
+        ! Calculation Logic:
+        !   1. Start with minimum observable Chl (tiny_chl)
+        !   2. Calculate minimum N using maximum Chl:N ratio
+        !   3. Calculate minimum C using maximum N:C quota
+        !
+        ! Typical Values:
+        !   chl2N_max = 3.15 mgChl/mmolN (high Chl per N, low light acclimation)
+        !   NCmax = 0.2 mmolN/mmolC (luxury N consumption maximum)
+
+        ! Minimum nitrogen based on minimum chlorophyll and maximum Chl:N ratio
+        tiny_N = tiny_chl / chl2N_max
+
+        ! Minimum carbon based on minimum nitrogen and maximum N:C quota
+        tiny_C = tiny_N / NCmax
+
+        !-------------------------------------------------------------------------------
+        ! Diatom Thresholds
+        !-------------------------------------------------------------------------------
+        ! Variables:
+        !   tiny_N_d    : Minimum diatom nitrogen [mmolN m-3]
+        !   tiny_C_d    : Minimum diatom carbon [mmolC m-3]
+        !   tiny_Si     : Minimum diatom silicate [mmolSi m-3]
+        !   chl2N_max_d : Maximum diatom Chl:N ratio [mgChl mmolN-1]
+        !   NCmax_d     : Maximum diatom N:C quota [mmolN mmolC-1]
+        !   SiCmax      : Maximum diatom Si:C quota [mmolSi mmolC-1]
+        !
+        ! Typical Values:
+        !   chl2N_max_d = 4.2 mgChl/mmolN (diatoms can have higher Chl:N)
+        !   NCmax_d = 0.2 mmolN/mmolC
+        !   SiCmax = 0.8 mmolSi/mmolC (heavily silicified frustules)
+        !
+        ! Silicon Requirement:
+        !   - Unique to diatoms (frustule formation)
+        !   - Calculated from minimum carbon and maximum Si:C ratio
+
+        ! Minimum diatom nitrogen
+        tiny_N_d = tiny_chl / chl2N_max_d
+
+        ! Minimum diatom carbon
+        tiny_C_d = tiny_N_d / NCmax_d
+
+        ! Minimum silicate (based on diatom carbon and maximum Si:C quota): Si = C * (Si:C)
+        tiny_Si = tiny_C_d * SiCmax
+
+        !-------------------------------------------------------------------------------
+        ! Coccolithophore and Phaeocystis Thresholds (Optional)
+        !-------------------------------------------------------------------------------
+        ! Only calculated when 4-plankton functional type model is enabled
+
+        if (enable_coccos) then
+
+            ! Coccolithophore thresholds
+            ! Variables:
+            !   tiny_N_c    : Minimum cocco nitrogen [mmolN m-3]
+            !   tiny_C_c    : Minimum cocco carbon [mmolC m-3]
+            !   chl2N_max_c : Maximum cocco Chl:N ratio [mgChl mmolN-1]
+            !   NCmax_c     : Maximum cocco N:C quota [mmolN mmolC-1]
+
+            tiny_N_c = tiny_chl / chl2N_max_c
+            tiny_C_c = tiny_N_c / NCmax_c
+
+            ! Phaeocystis thresholds
+            ! Variables:
+            !   tiny_N_p    : Minimum Phaeo nitrogen [mmolN m-3]
+            !   tiny_C_p    : Minimum Phaeo carbon [mmolC m-3]
+            !   chl2N_max_p : Maximum Phaeo Chl:N ratio [mgChl mmolN-1]
+            !   NCmax_p     : Maximum Phaeo N:C quota [mmolN mmolC-1]
+
+            tiny_N_p = tiny_chl / chl2N_max_p
+            tiny_C_p = tiny_N_p / NCmax_p
+
+        end if
+
+    end subroutine initialize_tiny_thresholds
 
 end module recom_init_interface

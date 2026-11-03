@@ -120,6 +120,7 @@ contains
     ! stored in (vertical, horizontal) format
     subroutine recom_exchange_nod3D_begin(nod_array3D, npes, sn, rn, MPI_COMM_FESOM, mype, &
             s_mpitype_nod3D, r_mpitype_nod3D, sPE, rPE, requests, nreq, luse_g2g)
+        use recom_log, only: recom_error, recom_info, recom_itoa
         implicit none
 
         logical, intent(in), optional :: luse_g2g
@@ -147,8 +148,9 @@ contains
             if ((nl1 < ubound(r_mpitype_nod3D, 2) - 1) .or. &
                     (nl1 > ubound(r_mpitype_nod3D, 2))) then
                 if (mype == 0) then
-                    print *, 'Subroutine recom_exchange_nod3D not implemented for', nl1, 'layers.'
-                    print *, 'Adding the MPI datatypes is easy, see oce_modules.F90.'
+                    call recom_error('recom_exchange_nod3D not implemented for this layer count', &
+                            'nl1=' // recom_itoa(nl1))
+                    call recom_info('adding the MPI datatypes is easy, see oce_modules.F90')
                 end if
                 call MPI_Abort(MPI_COMM_FESOM, 1)
             end if
