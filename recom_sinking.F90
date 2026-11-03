@@ -167,10 +167,7 @@ contains
                 add_benthos_2d(n) = add_benthos_2d(n) - (aux(nz)) * dt
             end do
 
-            ! ----------------------------------------------------------------
-            ! Deposit [mmol] -> [mmol/m2] as Benthos expects; area(1,n) is 0 in cavities
-            ! ----------------------------------------------------------------
-            add_benthos_2d(n) = add_benthos_2d(n) / area(ul1, n)
+            add_benthos_2d(n) = add_benthos_2d(n) / sum(seafloor(ul1:nl1))
 
             ! CMIP7 diagnostic: flux into the benthos [mmol m-2 s-1]
             if (Diags .and. iel > 0) BotFlux(n, iel) = BotFlux(n, iel) + add_benthos_2d(n) / dt
@@ -440,21 +437,6 @@ contains
     !   back up into the bottom-most water-column cells as a source term
     !   (dtr_bf), for dissolved tracers (DIN, DIC, Alk, Si, DFe, O2, and their
     !   isotopologues).
-    !
-    !   Two flux sources depending on configuration:
-    !     - use_MEDUSA & sedflx_num /= 0 : flux comes from GloSed (MEDUSA sediment
-    !       model), converted from mol/time/area to mol/time by multiplying by
-    !       area(1,:). NOTE: zero at cavity nodes (area(1,n) = 0); not fixed.
-    !     - otherwise (default): GlodecayBenthos (REcoM's benthic
-    !       remineralization), an areal rate [mmol/m2/s], times area(ul1,n).
-    !
-    !   Area / cavity handling
-    !   -----------------------
-    !   The redistribution across layers divides by area(ul1,n), not
-    !   area(1,n) (0 at cavity nodes). Only the final step -- converting the
-    !   flux into a tracer tendency for cell nz -- should divide by that
-    !   cell's own volume-area areasvol(nz,n), since that is what turns a
-    !   flux into a per-volume concentration tendency for cell nz.
     !===============================================================================
     subroutine diff_ver_recom_expl(nl, ulevels_nod2D, nlevels_nod2D, nod_in_elem2D_num, &
             nod_in_elem2D, nlevels, elem_area, area, areasvol, hnode_new, tracer_id, myDim_nod2d, &
@@ -489,33 +471,28 @@ contains
         areal_flux = .false.
 
 #if defined(__recom)
-        ! ----------------------------------------------------------------
-        ! Per-node bottom flux: MEDUSA gives a total flux [mol/time],
-        ! GlodecayBenthos an areal rate (made total in the node loop).
-        ! ----------------------------------------------------------------
         if (use_MEDUSA .and. (sedflx_num /= 0)) then
-            ! Note (CV/OG): GloSed is a flux per area (mol/time/area); multiply
-            ! by area(1,:) to match the mol/time convention used below.
+            areal_flux = .true.
             select case (tracer_id)
             case (1001)
-                bottom_flux = GloSed(:, 1) * area(1, :) ! DIN     !CHECK: (areasvol(ul1,:) OG: 02.06.2026
+                bottom_flux = GloSed(:, 1)
             case (1002)
-                bottom_flux = GloSed(:, 2) * area(1, :) ! DIC
+                bottom_flux = GloSed(:, 2) ! DIC
             case (1003)
-                bottom_flux = GloSed(:, 3) * area(1, :) ! Alk
+                bottom_flux = GloSed(:, 3) ! Alk
             case (1018)
-                bottom_flux = GloSed(:, 4) * area(1, :) ! Si
+                bottom_flux = GloSed(:, 4) ! Si
             case (1019)
-                bottom_flux = GloSed(:, 1) * Fe2N_benthos * area(1, :) ! DFe, scaled from N flux
+                bottom_flux = GloSed(:, 1) * Fe2N_benthos ! DFe, scaled from N flux
             case (1022)
-                bottom_flux = GloSed(:, 5) * area(1, :) ! O2
+                bottom_flux = GloSed(:, 5) ! O2
             case (1302)
                 if (ciso) then
-                    bottom_flux = GloSed(:, 6) * area(1, :) ! DIC_13 (organic + calcite)
+                    bottom_flux = GloSed(:, 6) ! DIC_13 (organic + calcite)
                 end if
             case (1402)
                 if (ciso) then
-                    bottom_flux = GloSed(:, 7) * area(1, :) ! DIC_14 (organic + calcite)
+                    bottom_flux = GloSed(:, 7) ! DIC_14 (organic + calcite)
                 end if
             case default
                 if (mype == 0) then
@@ -576,14 +553,13 @@ contains
             !_______________________________________________________________________
             ! Bottom flux, distributed over the layers in proportion to the seafloor
             ! area under each layer (see ver_sinking_recom_benthos).
-            ! GlodecayBenthos is per area: make it a total flux like MEDUSA's.
-            tot_flux = bottom_flux(n)
-            if (areal_flux) tot_flux = tot_flux * area(ul1, n)
             seafloor = 0._WP
             do j = 1, nod_in_elem2D_num(n)
                 e = nod_in_elem2D(j, n)
                 seafloor(nlevels(e) - 1) = seafloor(nlevels(e) - 1) + elem_area(e) / 3.0_WP
             end do
+            tot_flux = bottom_flux(n)
+            if (areal_flux) tot_flux = tot_flux * sum(seafloor(ul1:nl1))
             ! seafloor under layer nz is its bottom face, vd_flux(nz+1), which cell nz
             ! receives below; weights sum to 1, so the return equals the benthic loss
             do nz = ul1, nl1
