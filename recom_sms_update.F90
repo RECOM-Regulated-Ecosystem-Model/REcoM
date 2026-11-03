@@ -25,7 +25,6 @@ contains
                 tiny_n, tiny_n_c, tiny_n_d, tiny_n_p, tiny_si, vttemp_phyto, vttemp_diatoms, &
                 vttemp_cocco, vttemp_phaeo, chl_lower, chl_upper
 
-        use recom_config, only: use_DICremin
         use recom_config, only: a_chl, ae, beta_phaeo, c2k, chl2n_max, chl2n_max_c, chl2n_max_d, &
                 chl2n_max_p, enable_3zoo2det, enable_coccos, expon_cocco, expon_d, expon_phy, &
                 grazing_detritus, ialk, icchl, icocc, icocn, idchl, idetc, idetcal, idetn, &
@@ -98,7 +97,7 @@ contains
         DIC = max(tiny, state(k, idic) + sms(k, idic))
         ALK = max(tiny, state(k, ialk) + sms(k, ialk))
         O2 = max(tiny, state(k, ioxy) + sms(k, ioxy))
-        if (use_DICremin) DICremin = max(tiny, state(k, idicremin) + sms(k, idicremin))
+        DICremin = max(tiny, state(k, idicremin) + sms(k, idicremin))
 
         !-----------------------------------------------------------------------
         ! DISSOLVED ORGANIC MATTER
@@ -1078,7 +1077,6 @@ contains
                 recipdet, recipdet2, recipqzoo, recipqzoo2, recipqzoo3, &
                 is_coccos, is_3zoo2det, si_assim, reminsit, qsin
 
-        use recom_config, only: use_DICremin
         use recom_config, only: &
                 idin, idic, ialk, iphyn, iphyc, ipchl, iphycal, &
                 idian, idiac, idchl, idiasi, &
@@ -3058,11 +3056,9 @@ contains
         ! 37. DIC remineralzation tracer to track remineralization as an diagnostics
         !===============================================================================
         !   idicremin       : Tracer for remineralization diagnostics (added by Sina)
-        if (use_DICremin) then
-            sms(k, idicremin) = (                 &
-                + rho_c1 * arrFunc * O2Func * EOC &
-                ) * dt_b + sms(k,idicremin)
-        end if
+        sms(k, idicremin) = (                 &
+            + rho_c1 * arrFunc * O2Func * EOC &
+            ) * dt_b + sms(k,idicremin)
 
         if (ciso) then
 

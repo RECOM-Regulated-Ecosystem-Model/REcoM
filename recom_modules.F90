@@ -566,7 +566,6 @@ module recom_config
     logical :: ciso = .false. !MB main switch to enable/disable carbon isotopes (13|14C)
     integer :: benthos_num = 4 !MB number of sediment tracers = 8 if ciso = .true.
     logical :: use_MEDUSA = .false. ! main switch for sediment model
-    logical :: use_DICremin = .false.
     integer :: sedflx_num = 0 ! number of sedimentary fluxs from MEDUSA, = 7 if ciso
     logical :: add_loopback = .false.
     real(kind=wp) :: lb_tscale = 1.d0 ! time scale to balance the burial loss
@@ -599,7 +598,7 @@ module recom_config
             firstyearoffesomcycle, lastyearoffesomcycle, numofCO2cycles, &
             currentCO2cycle, Nmocsy, &
             recom_debug, ciso, benthos_num, &
-            use_MEDUSA, use_DICremin, sedflx_num, bottflx_num, &
+            use_MEDUSA, sedflx_num, bottflx_num, &
             add_loopback, lb_tscale, use_atbox, use_virt_tracers
 
     !!------------------------------------------------------------------------------
@@ -1029,7 +1028,7 @@ contains
             imiczooc = 36
 
             ! Terrestrial DOC input (when enable_R2OMIP is enabled)
-            if (use_DICremin) idicremin = 37       ! <- DICremin always gets the lower slot
+            idicremin = 37       ! <- DICremin always gets the lower slot
 
 
             recom_cocco_tracer_id = [1029, 1030, 1031]
@@ -1080,7 +1079,7 @@ contains
             iphac = 27
             iphachl = 28
 
-            if (use_DICremin) idicremin = 29       ! <- DICremin always gets the lower slot
+            idicremin = 29       ! <- DICremin always gets the lower slot
 
             recom_cocco_tracer_id = [1023, 1024, 1025]
             recom_phaeo_tracer_id = [1026, 1027, 1028]
@@ -1114,7 +1113,7 @@ contains
             imiczoon = 29
             imiczooc = 30
 
-            if (use_DICremin) idicremin = 31       ! <- DICremin always gets the lower slot
+            idicremin = 31       ! <- DICremin always gets the lower slot
 
             recom_det2_tracer_id = [1025, 1026, 1027, 1028]
 
@@ -1143,7 +1142,7 @@ contains
             ! Detritus: det1 only
             ! (All indices already set to default values)
 
-            if (use_DICremin) idicremin = 23       ! <- DICremin always gets the lower slot
+            idicremin = 23       ! <- DICremin always gets the lower slot
 
             ! Det1 sinking: 1007,1008,1017,1021
             ! Phy  sinking: 1004,1005,1020,1006
@@ -1280,7 +1279,6 @@ contains
 
         end if
 
-        if (.not. use_DICremin) expected_bgc_num = expected_bgc_num - 1
         expected_bgc_num = expected_bgc_num + size(ciso_ids)
 
         !   T, S  +  BGC  +  age (opt)  +  transit (opt)
@@ -1328,7 +1326,7 @@ contains
             expected_tracer_ids(bgc_offset + 12) = 1034 ! PhaeoChl
             expected_tracer_ids(bgc_offset + 13) = 1035 ! Zoo3N
             expected_tracer_ids(bgc_offset + 14) = 1036 ! Zoo3C
-            if (use_DICremin) expected_tracer_ids(bgc_offset + 15) = 1037 ! DIC remin
+            expected_tracer_ids(bgc_offset + 15) = 1037 ! DIC remin
 
         else if (enable_coccos .and. .not.enable_3zoo2det) then
             ! Coccos only: base + 1023-1028 (coccos+phaeo)
@@ -1338,7 +1336,7 @@ contains
             expected_tracer_ids(bgc_offset + 4) = 1026 ! PhaeoN
             expected_tracer_ids(bgc_offset + 5) = 1027 ! PhaeoC
             expected_tracer_ids(bgc_offset + 6) = 1028 ! PhaeoChl
-            if (use_DICremin) expected_tracer_ids(bgc_offset + 7) = 1037 ! DIC remin
+            expected_tracer_ids(bgc_offset + 7) = 1037 ! DIC remin
 
         else if (enable_3zoo2det .and. .not.enable_coccos) then
             ! 3Zoo2Det only: base + 1023-1030 (zoo2+det2+zoo3)
@@ -1350,12 +1348,12 @@ contains
             expected_tracer_ids(bgc_offset + 6) = 1028 ! DetZ2Calc
             expected_tracer_ids(bgc_offset + 7) = 1029 ! Zoo3N
             expected_tracer_ids(bgc_offset + 8) = 1030 ! Zoo3C
-            if (use_DICremin) expected_tracer_ids(bgc_offset + 9) = 1037 ! DIC remin
+            expected_tracer_ids(bgc_offset + 9) = 1037 ! DIC remin
 
         else
 
             ! else: base configuration only needs tracers 1, 2, 1001-1022
-            if (use_DICremin) expected_tracer_ids(bgc_offset + 1) = 1037 ! add DIC remin tracer to base BGC tracers
+            expected_tracer_ids(bgc_offset + 1) = 1037 ! add DIC remin tracer to base BGC tracers
 
         end if
 
@@ -1428,8 +1426,7 @@ contains
                 call recom_info('expected count for the current configuration')
                 call recom_kv('difference', actual_bgc_num - expected_bgc_num)
                 call recom_info('required tracer IDs for this configuration:')
-                call recom_info('  base (always)        1001-1022 (22 tracers)')
-                if (use_DICremin) call recom_info('  DICremin             1037')
+                call recom_info('  base (always)        1001-1022 (22 tracers) + 1037 (DICremin)')
 
                 if (enable_3zoo2det .and. .not.enable_coccos) then
                     call recom_info('  3Zoo2Det extension   1023-1030 (8 tracers)')
@@ -1693,7 +1690,6 @@ contains
             ! Additional DICremin: 1 tracer (1037)
             bgc_num_local = 23
         end if
-        if (.not. use_DICremin) bgc_num_local = bgc_num_local - 1
         bgc_num_local = bgc_num_local + size(ciso_ids)
 
         ! Allocate expected IDs array
@@ -1715,19 +1711,19 @@ contains
             expected_ids(n_base_physical+23:n_base_physical+28) = [1023, 1024, 1025, 1026, 1027, 1028]
             expected_ids(n_base_physical+29:n_base_physical+34) = [1029, 1030, 1031, 1032, 1033, 1034]
             expected_ids(n_base_physical+35:n_base_physical+36) = [1035, 1036]
-            if (use_DICremin) expected_ids(n_base_physical+37)    = 1037 ! DICremin
+            expected_ids(n_base_physical+37)    = 1037 ! DICremin
 
         else if (enable_coccos .and. .not.enable_3zoo2det) then
             expected_ids(n_base_physical+23:n_base_physical+28) = [1023, 1024, 1025, 1026, 1027, 1028]
-            if (use_DICremin) expected_ids(n_base_physical+29)    = 1037 ! DICremin
+            expected_ids(n_base_physical+29)    = 1037 ! DICremin
 
         else if (enable_3zoo2det .and. .not.enable_coccos) then
             expected_ids(n_base_physical+23:n_base_physical+30) = [1023, 1024, 1025, 1026, 1027, 1028, 1029, 1030]
-            if (use_DICremin) expected_ids(n_base_physical+31)    = 1037 ! DICremin
+            expected_ids(n_base_physical+31)    = 1037 ! DICremin
 
         else
             ! Base configuration
-            if (use_DICremin) expected_ids(n_base_physical+23)    = 1037 ! DICremin
+            expected_ids(n_base_physical+23)    = 1037 ! DICremin
         end if
 
         expected_ids(n_base_physical + bgc_num_local - size(ciso_ids) + 1: &
