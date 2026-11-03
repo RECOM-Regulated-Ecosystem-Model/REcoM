@@ -23,6 +23,7 @@ contains
                 tiny_n_d, tiny_n_p, tiny_si, vttemp_phyto, vttemp_diatoms, vttemp_cocco, &
                 vttemp_phaeo, temp_diatoms, chl_lower, chl_upper
 
+        use recom_config, only: use_DICremin
         use recom_config, only: a_chl, ae, beta_phaeo, c2k, chl2n_max, chl2n_max_c, chl2n_max_d, &
                 chl2n_max_p, enable_3zoo2det, enable_coccos, expon_cocco, expon_d, expon_phy, &
                 grazing_detritus, ialk, icchl, icocc, icocn, idchl, idetc, idetcal, idetn, &
@@ -96,7 +97,7 @@ contains
         DIC = max(tiny, state(k, idic) + sms(k, idic))
         ALK = max(tiny, state(k, ialk) + sms(k, ialk))
         O2 = max(tiny, state(k, ioxy) + sms(k, ioxy))
-        DICremin = max(tiny, state(k, idicremin) + sms(k, idicremin))
+        if (use_DICremin) DICremin = max(tiny, state(k, idicremin) + sms(k, idicremin))
 
         !-----------------------------------------------------------------------
         ! DISSOLVED ORGANIC MATTER
