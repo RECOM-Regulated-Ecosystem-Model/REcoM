@@ -42,11 +42,15 @@
 !           Per-tracer names carry the tracer ID, e.g. 'in_tr_1001'.
 !   Step 4: surface boundary condition per REcoM tracer (bc_surface),
 !           split into the terms recom4_step receives, 'surf_<ID>'.
+!   Step 5: (RECOM4 M9) the diagnostics per level and their column sums
+!           (recom_main, after out_gpp_dia), and the final sinking speed of
+!           each detritus class, 'out_wsink_<ID>' (DetCalc, DetZ2Calc), on
+!           the interfaces nzmin..nzmax+1.
 !===============================================================================
 module recom4_dump
-    use recom_declarations, only: wp
+    use recom_declarations, only: wp, tracer_ids
     use recom_config, only: benthos_num
-    use recom_glovar, only: Benthos, GlodecayBenthos
+    use recom_glovar, only: Benthos, GlodecayBenthos, Sinkvel1_tr, Sinkvel2_tr
     use iso_fortran_env, only: int32, real64
     use mpi
     implicit none
@@ -376,10 +380,11 @@ contains
     end subroutine recom4_dump_transport_bf
 
     subroutine recom4_dump_transport_sink(tr_id, mstep, ulevels_nod2D, nlevels_nod2D, &
-            vert_sink, str_bf, tr)
+            vert_sink, str_bf, tr, tr_num)
         integer, intent(in)       :: tr_id, mstep
         integer, intent(in)       :: ulevels_nod2D(:), nlevels_nod2D(:)
         real(kind=wp), intent(in) :: vert_sink(:, :), str_bf(:, :), tr(:, :)
+        integer, intent(in)       :: tr_num
 
         integer :: icol, n, nzmin, nzmax
 
@@ -394,6 +399,15 @@ contains
             call recom4_dump_write(tagged('out_str_bf', tr_id), str_bf(nzmin:nzmax, n))
             call recom4_dump_write(tagged('out_tr_sink', tr_id), tr(nzmin:nzmax, n))
             call recom4_dump_write(tagged('out_benthos', tr_id), Benthos(n, 1:benthos_num))
+            ! Step 5: final sinking speed of the detritus class [m/s], as
+            ! ver_sinking_recom stores it (0 if its loop was skipped)
+            if (tr_id == tracer_ids%detrital_calcite) then
+                call recom4_dump_write(tagged('out_wsink', tr_id), &
+                        Sinkvel1_tr(nzmin:nzmax + 1, n, tr_num))
+            else if (tr_id == tracer_ids%macrozooplankton_detrital_calcite) then
+                call recom4_dump_write(tagged('out_wsink', tr_id), &
+                        Sinkvel2_tr(nzmin:nzmax + 1, n, tr_num))
+            end if
             call recom4_dump_close()
         end do
     end subroutine recom4_dump_transport_sink

@@ -156,7 +156,12 @@ contains
         use recom_forcing_module, only: recom_forcing
         use recom4_dump, only: recom4_dump_column, recom4_dump_step, recom4_dump_open, &
                 recom4_dump_close, recom4_dump_write, DUMP_STEP
-        use recom_declarations, only: vertNPPn, vertGPPn, vertNPPd, vertGPPd
+        use recom_declarations, only: vertNPPn, vertGPPn, vertNPPd, vertGPPd, &
+                vertNNAn, vertNNAd, vertChldegn, vertChldegd, vertrespn, vertrespd, &
+                vertrespmeso, vertrespmacro, vertrespmicro, vertaggn, vertaggd, &
+                vertdocexn, vertdocexd, vertcalcif, vertcalcdiss, &
+                locNPPn, locNPPd, locGPPn, locGPPd, locNNAn, locNNAd, &
+                locChldegn, locChldegd
         use recom_atbox_module, only: recom_atbox
         use recom_log, only: recom_trace, recom_section, recom_kv
 
@@ -591,6 +596,33 @@ contains
                     call recom4_dump_write('out_gpp_phy', vertGPPn(nzmin:nzmax))
                     call recom4_dump_write('out_npp_dia', vertNPPd(nzmin:nzmax))
                     call recom4_dump_write('out_gpp_dia', vertGPPd(nzmin:nzmax))
+                    ! RECOM4 dump step 5 (M9): diagnostics per level, summed over
+                    ! the substeps, then their column sums from REcoM_Forcing
+                    call recom4_dump_write('out_nna_phy', vertNNAn(nzmin:nzmax))
+                    call recom4_dump_write('out_nna_dia', vertNNAd(nzmin:nzmax))
+                    call recom4_dump_write('out_chldeg_phy', vertChldegn(nzmin:nzmax))
+                    call recom4_dump_write('out_chldeg_dia', vertChldegd(nzmin:nzmax))
+                    call recom4_dump_write('out_resp_phy', vertrespn(nzmin:nzmax))
+                    call recom4_dump_write('out_resp_dia', vertrespd(nzmin:nzmax))
+                    call recom4_dump_write('out_resp_meso', vertrespmeso(nzmin:nzmax))
+                    if (enable_3zoo2det) then
+                        call recom4_dump_write('out_resp_macro', vertrespmacro(nzmin:nzmax))
+                        call recom4_dump_write('out_resp_micro', vertrespmicro(nzmin:nzmax))
+                    end if
+                    call recom4_dump_write('out_agg_phy', vertaggn(nzmin:nzmax))
+                    call recom4_dump_write('out_agg_dia', vertaggd(nzmin:nzmax))
+                    call recom4_dump_write('out_docex_phy', vertdocexn(nzmin:nzmax))
+                    call recom4_dump_write('out_docex_dia', vertdocexd(nzmin:nzmax))
+                    call recom4_dump_write('out_calcif', vertcalcif(nzmin:nzmax))
+                    call recom4_dump_write('out_calcdiss', vertcalcdiss(nzmin:nzmax))
+                    call recom4_dump_write('out_npp_phy_col', locNPPn)
+                    call recom4_dump_write('out_npp_dia_col', locNPPd)
+                    call recom4_dump_write('out_gpp_phy_col', locGPPn)
+                    call recom4_dump_write('out_gpp_dia_col', locGPPd)
+                    call recom4_dump_write('out_nna_phy_col', locNNAn)
+                    call recom4_dump_write('out_nna_dia_col', locNNAd)
+                    call recom4_dump_write('out_chldeg_phy_col', locChldegn)
+                    call recom4_dump_write('out_chldeg_dia_col', locChldegd)
                 end if
                 call recom4_dump_close()
             end if
