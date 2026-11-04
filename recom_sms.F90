@@ -82,7 +82,8 @@ contains
                 het_resp_noredfield, ialk, icchl, icocc, icocn, idchl, idetc, idetcal, idetn, &
                 idetz2c, idetz2calc, idetz2n, idetz2si, idiac, idian, idiasi, idic, idin, idoc, &
                 ife, ihetc, ihetn, imiczooc, imiczoon, ioxy, ipchl, iphac, iphachl, iphan, iphyc, &
-                k_fe_d, k_fe_p, k_o2_remin, k_si, k_w, kscavfe, kscavfe2, ligandstabconst, loss_het, &
+                k_fe_d, k_fe_p, k_o2_remin, k_si, k_w, kscavfe, kscavfe_calc, kscavfe_si, &
+                kscavfe2, ligandstabconst, loss_het, &
                 loss_miczoo, loss_zoo2, lossc, lossc_c, lossc_d, lossc_p, lossc_z, lossc_z2, &
                 lossn, lossn_c, lossn_d, lossn_p, lossn_z, lossn_z2, lossn_z3, ncmax, ncmax_c, &
                 ncuptakeratio_d, ncuptakeratio_p, nmaxslope, nminslope, nmocsy, o2dep_remin, &
@@ -2707,6 +2708,10 @@ contains
                     vertScavFe(k) = vertScavFe(k) + ( &
                             +kScavFe * DetC * FreeFe & ! Slow-sinking detritus
                             + kScavFe * DetZ2C * FreeFe * is_3zoo2det & ! Fast-sinking detritus
+                            + kScavFe_calc * DetCalc * FreeFe &
+                            + kScavFe_si * DetSi * FreeFe &
+                            + kScavFe_calc * DetZ2Calc * FreeFe * is_3zoo2det &
+                            + kScavFe_si * DetZ2Si * FreeFe * is_3zoo2det &
                             + kScavFe2 * FreeFe & ! Background
                             ) * recipbiostep
 

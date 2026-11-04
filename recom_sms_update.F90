@@ -1094,7 +1094,7 @@ contains
                 lossc, lossc_d, lossc_c, lossc_p, &
                 lossc_z, lossc_z2, lossc_z3, &
                 reminn, reminc, rho_n, rho_c1, &
-                fe2n, kscavfe, kscavfe2, redo2c, calc_diss_guts, &
+                fe2n, kscavfe, kscavfe_calc, kscavfe_si, kscavfe2, redo2c, calc_diss_guts, &
                 grazeff2, grazeff3, ciso, tiny
 
 
@@ -2864,6 +2864,10 @@ contains
         !---------------------------------------------------------------------------
                 - kScavFe * DetC * FreeFe & ! Slow-sinking detritus
                 - kScavFe * DetZ2C * FreeFe * is_3zoo2det & ! Fast-sinking detritus
+                - kScavFe_calc * DetCalc * FreeFe &
+                - kScavFe_si * DetSi * FreeFe &
+                - kScavFe_calc * DetZ2Calc * FreeFe * is_3zoo2det &
+                - kScavFe_si * DetZ2Si * FreeFe * is_3zoo2det &
                 - kScavFe2 * FreeFe &
                 ) * dt_b + sms(k, ife)
 
