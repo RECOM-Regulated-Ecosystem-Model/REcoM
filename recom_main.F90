@@ -117,8 +117,8 @@ contains
             eDim_nod2D, mype, MPI_COMM_FESOM, tracers_info, num_tracers, tra_recom_sms, &
             npes, sn, rn, s_mpitype_nod2D, r_mpitype_nod2D, s_mpitype_nod3D, r_mpitype_nod3D, &
             sPE, rPE, requests, nreq, dt, daynew, month, mstep, ndpyr, yearold, timenew, rad, &
-            kappa, press_air, u_wind, v_wind, shortwave, use_age_tracer, use_transit, &
-            l_sf6, l_f11, l_f12, l_r14c, l_r39ar)
+            kappa, press_air, u_wind, v_wind, stress_atmoce_x, stress_atmoce_y, shortwave, &
+            use_age_tracer, use_transit, l_sf6, l_f11, l_f12, l_r14c, l_r39ar)
 
         use recom_g_comm_auto, only: recom_exchange_nod
 
@@ -137,7 +137,7 @@ contains
         use recom_ciso, only: locatmco2_13, locatmco2_14, r_atm_13, r_atm_14, ciso_14, &
                 lat_val, production_rate_to_flux_14, x_co2atm_13, x_co2atm_14, &
                 atmco2_13, gloco2flux_seaicemask_13, co2flux_seaicemask_13, cosmic_14, &
-                co2flux_seaicemask_14, gloco2flux_seaicemask_14, lat_zone, atmco2_14
+                co2flux_seaicemask_14, gloco2flux_seaicemask_14, lat_zone, atmco2_14, wind_10
 
         use recom_glovar, only: tracers_info_type, benthos, co23d, ph3d, pco23d, hco33d, co33d, &
                 omegac3d, kspc3d, rhosw3d, glodecaybenthos, par3d, chldegc, chldegd, chldegn, &
@@ -170,6 +170,7 @@ contains
         real(kind=WP), intent(in) :: ocean_area, rad
         real(kind=WP), intent(in), dimension(:) :: ice_data_values, press_air
         real(kind=WP), intent(in), dimension(:) :: u_wind, v_wind, shortwave
+        real(kind=WP), intent(in), dimension(:) :: stress_atmoce_x, stress_atmoce_y
         real(kind=WP), intent(in), dimension(:, :) :: hnode, z_3d_n, zbar_3d_n
         real(kind=WP), intent(in), dimension(:, :) :: geo_coord_nod2D, areasvol
         real(kind=WP), intent(inout), dimension(:, :, :) :: tra_recom_sms
@@ -377,11 +378,7 @@ contains
             ! Derive 10m-wind speed from wind stress fields, see module recom_ciso.
             ! This is an ad-hoc solution as long as 10m-winds are not handled from OASIS.
             ! Not for OpenIFS: it sends 10 m winds (u10w_oce, v10w_oce) into u_wind, v_wind.
-            ! Coupled to ECHAM, FESOM receives 10 m winds only with icebergs, but the stress
-            ! is not passed to recom() since REcoM became a separate library: stop at compile
-            ! time until it is.
-#error "REcoM coupled (__oasis) but not to OIFS (__oifs) is not supported: 10m wind calculation from wind stress needs stress_atmoce_x/y passed to recom()"
-            ! Uloc = wind_10(stress_atmoce_x(n), stress_atmoce_y(n))
+            ULoc = wind_10(stress_atmoce_x(n), stress_atmoce_y(n))
 #endif
 
             !-----------------------------------------------------------------------
