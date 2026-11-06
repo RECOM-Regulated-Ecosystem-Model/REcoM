@@ -243,6 +243,9 @@ contains
         integer                    :: num_physical_tracers
         integer                    :: n_transit_tracers   ! number of active transit tracers
         integer                    :: bgc_start, bgc_end  ! first/last slot of the BGC-only block
+        ! step of the year (1 at the first step of 1 January) and the step that schedules
+        ! the carbonate chemistry of a column (1 = update now)
+        integer                    :: step_of_year, carb_step
  
         !---------------------------------------------------------------------------
         ! Allocate per-column work arrays (full depth nl-1)
@@ -328,6 +331,11 @@ contains
 
         ! ======================================================================================
         !********************************* LOOP STARTS *****************************************
+
+        ! The carbonate chemistry is updated on a fixed calendar (calculate_carbonate_chemistry),
+        ! not counted from the first step of the run: a restarted run then updates at the same
+        ! steps as a continuous one, and continues from the 3D fields in the bio restart.
+        step_of_year = (daynew - 1) * nint(SecondsPerDay / dt) + nint(timenew / dt)
 
         do n = 1, myDim_nod2D ! needs exchange_nod in the end
 
@@ -452,6 +460,9 @@ contains
             OmegaA_watercolumn(nzmin:nzmax) = OmegaA3D(nzmin:nzmax, n)
             kspc_watercolumn(nzmin:nzmax)   = kspc3D(nzmin:nzmax, n)
             rhoSW_watercolumn(nzmin:nzmax)  = rhoSW3D(nzmin:nzmax, n)
+            ! no carbonate chemistry yet (cold start, or a restart without it): compute it now
+            carb_step = step_of_year
+            if (rhoSW3D(nzmin, n) <= 0.0_wp) carb_step = 1
 
             !-----------------------------------------------------------------------
             ! BGC tracer concentrations (offset by 2 for T and S at front)
@@ -515,7 +526,7 @@ contains
                     rhoSW_watercolumn, & ! NEW DISS in-situ density of seawater [mol/m^3]
                     PAR, MPI_COMM_FESOM, mype, myDim_nod2D, &
                     eDim_nod2D, nl, hnode, zbar_3d_n, &
-                    geo_coord_nod2D, daynew, ndpyr, dt, kappa, mstep, rad)
+                    geo_coord_nod2D, daynew, ndpyr, dt, kappa, carb_step, rad)
 
             do tr_num = bgc_start, bgc_end
                 tracers_info%data_pointers(tr_num)%tracer_data(nzmin:nzmax, n) = C(nzmin:nzmax, tr_num-num_physical_tracers)

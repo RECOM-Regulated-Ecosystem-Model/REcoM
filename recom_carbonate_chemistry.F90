@@ -61,7 +61,9 @@ contains
         !   - Multiple equilibrium constant formulations available
         !
         ! Update Strategy:
-        !   - Initialize on first time step (mstep = 1)
+        !   - mstep is the step of the year (recom_main), so the updates fall on the same
+        !     steps in a continuous and in a restarted run; mstep = 1 forces an update
+        !     (first step of the year, or a column without carbonate chemistry yet)
         !   - Euphotic zone (PAR > 1% surface): 7-day updates
         !   - Deep waters (PAR < 1% surface): 30-day updates
         !   - Rationale: Biological activity drives rapid changes near surface
@@ -97,7 +99,7 @@ contains
         ! Variables:
         !   dpos(1)                 : Depth for pressure calculations [m, positive down]
         !   zF(k)                   : Model depth coordinate [m, negative down]
-        !   mstep                   : Model time step counter [-]
+        !   mstep                   : Step of the year, 1 forces an update [-]
         !   k                       : Vertical layer index [-]
         !
         ! Input Arrays for MOCSY:
