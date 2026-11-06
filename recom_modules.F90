@@ -566,6 +566,7 @@ module recom_config
     logical :: ciso = .false. !MB main switch to enable/disable carbon isotopes (13|14C)
     integer :: benthos_num = 4 !MB number of sediment tracers = 8 if ciso = .true.
     logical :: use_MEDUSA = .false. ! main switch for sediment model
+    logical :: use_DICremin = .false.
     integer :: sedflx_num = 0 ! number of sedimentary fluxs from MEDUSA, = 7 if ciso
     logical :: add_loopback = .false.
     real(kind=wp) :: lb_tscale = 1.d0 ! time scale to balance the burial loss
@@ -598,7 +599,7 @@ module recom_config
             firstyearoffesomcycle, lastyearoffesomcycle, numofCO2cycles, &
             currentCO2cycle, Nmocsy, &
             recom_debug, ciso, benthos_num, &
-            use_MEDUSA, sedflx_num, bottflx_num, &
+            use_MEDUSA, use_DICremin, sedflx_num, bottflx_num, &
             add_loopback, lb_tscale, use_atbox, use_virt_tracers
 
     !!------------------------------------------------------------------------------
@@ -929,12 +930,15 @@ module recom_config
     ! will have to be tuned. [umol/m2/day]
     real(kind=wp) :: Fe2N_benthos = 0.15d0
     real(kind=wp) :: kScavFe = 0.07d0
+    real(kind=wp) :: kScavFe_calc = 0.d0
+    real(kind=wp) :: kScavFe_si = 0.d0
     ! Background scavenging loss, independent of detrital particle concentration
     ! (i.e. not multiplied by DetC/DetZ2C) [day-1]
     real(kind=wp) :: kScavFe2 = 0.d0
     real(kind=wp) :: dust_sol = 0.02d0 !Dissolution of Dust for bioavaliable
     real(kind=wp) :: RiverFeConc = 100d0 ! mean DFe concentration in rivers
-    namelist /pairon/ Fe2N, Fe2N_benthos, kScavFe, kScavFe2, dust_sol, RiverFeConc
+    namelist /pairon/ Fe2N, Fe2N_benthos, kScavFe, kScavFe_calc, kScavFe_si, kScavFe2, dust_sol, &
+            RiverFeConc
     !!------------------------------------------------------------------------------
     !! *** Calcification ***
     real(kind=wp) :: calc_prod_ratio = 0.02d0
@@ -1028,7 +1032,7 @@ contains
             imiczooc = 36
 
             ! Terrestrial DOC input (when enable_R2OMIP is enabled)
-            idicremin = 37       ! <- DICremin always gets the lower slot
+            if (use_DICremin) idicremin = 37       ! <- DICremin always gets the lower slot
 
 
             recom_cocco_tracer_id = [1029, 1030, 1031]
@@ -1079,7 +1083,7 @@ contains
             iphac = 27
             iphachl = 28
 
-            idicremin = 29       ! <- DICremin always gets the lower slot
+            if (use_DICremin) idicremin = 29       ! <- DICremin always gets the lower slot
 
             recom_cocco_tracer_id = [1023, 1024, 1025]
             recom_phaeo_tracer_id = [1026, 1027, 1028]
@@ -1113,7 +1117,7 @@ contains
             imiczoon = 29
             imiczooc = 30
 
-            idicremin = 31       ! <- DICremin always gets the lower slot
+            if (use_DICremin) idicremin = 31       ! <- DICremin always gets the lower slot
 
             recom_det2_tracer_id = [1025, 1026, 1027, 1028]
 
@@ -1142,7 +1146,7 @@ contains
             ! Detritus: det1 only
             ! (All indices already set to default values)
 
-            idicremin = 23       ! <- DICremin always gets the lower slot
+            if (use_DICremin) idicremin = 23       ! <- DICremin always gets the lower slot
 
             ! Det1 sinking: 1007,1008,1017,1021
             ! Phy  sinking: 1004,1005,1020,1006
@@ -1162,6 +1166,7 @@ contains
         end if
     end subroutine initialize_tracer_indices
 
+
     ! ==============================================================================
     ! SUBROUTINE: validate_recom_tracers
     ! ==============================================================================
@@ -1177,7 +1182,7 @@ contains
     ! after the optional age tracer.
     ! ==============================================================================
     subroutine validate_recom_tracers(num_tracers, use_age_tracer, use_transit, l_sf6, l_f11, l_f12&
-            , l_r14c, l_r39ar, mype)
+            , l_r14c, l_r39ar, mype, ciso_ids)
         use mpi, only: MPI_Abort, MPI_COMM_WORLD
         use recom_log, only: recom_section, recom_kv, recom_info, recom_ok, recom_warn, &
                 recom_error, recom_itoa
@@ -1188,6 +1193,7 @@ contains
         integer, intent(in) :: num_tracers ! Total number of tracers from namelist
         logical, intent(in) :: use_age_tracer, use_transit, l_sf6, l_f11, l_f12, l_r14c, l_r39ar
         integer, intent(in) :: mype ! MPI rank
+        integer, dimension(:), intent(in) :: ciso_ids
 
         ! Local variables
         integer :: expected_bgc_num
@@ -1197,6 +1203,7 @@ contains
         integer :: n_transit_tracers ! number of active transit tracers
         integer :: MPIErr
         logical :: config_error
+        integer :: required_benthos_num, required_bottflx_num, required_sedflx_num
 
         ! For tracer ID validation
         integer :: i
@@ -1276,6 +1283,9 @@ contains
 
         end if
 
+        if (.not. use_DICremin) expected_bgc_num = expected_bgc_num - 1
+        expected_bgc_num = expected_bgc_num + size(ciso_ids)
+
         !   T, S  +  BGC  +  age (opt)  +  transit (opt)
         expected_total_tracers = n_base_physical + expected_bgc_num
         if (use_age_tracer) expected_total_tracers = expected_total_tracers + 1
@@ -1321,7 +1331,7 @@ contains
             expected_tracer_ids(bgc_offset + 12) = 1034 ! PhaeoChl
             expected_tracer_ids(bgc_offset + 13) = 1035 ! Zoo3N
             expected_tracer_ids(bgc_offset + 14) = 1036 ! Zoo3C
-            expected_tracer_ids(bgc_offset + 15) = 1037 ! DIC remin
+            if (use_DICremin) expected_tracer_ids(bgc_offset + 15) = 1037 ! DIC remin
 
         else if (enable_coccos .and. .not.enable_3zoo2det) then
             ! Coccos only: base + 1023-1028 (coccos+phaeo)
@@ -1331,7 +1341,7 @@ contains
             expected_tracer_ids(bgc_offset + 4) = 1026 ! PhaeoN
             expected_tracer_ids(bgc_offset + 5) = 1027 ! PhaeoC
             expected_tracer_ids(bgc_offset + 6) = 1028 ! PhaeoChl
-            expected_tracer_ids(bgc_offset + 7) = 1037 ! DIC remin
+            if (use_DICremin) expected_tracer_ids(bgc_offset + 7) = 1037 ! DIC remin
 
         else if (enable_3zoo2det .and. .not.enable_coccos) then
             ! 3Zoo2Det only: base + 1023-1030 (zoo2+det2+zoo3)
@@ -1343,14 +1353,17 @@ contains
             expected_tracer_ids(bgc_offset + 6) = 1028 ! DetZ2Calc
             expected_tracer_ids(bgc_offset + 7) = 1029 ! Zoo3N
             expected_tracer_ids(bgc_offset + 8) = 1030 ! Zoo3C
-            expected_tracer_ids(bgc_offset + 9) = 1037 ! DIC remin
+            if (use_DICremin) expected_tracer_ids(bgc_offset + 9) = 1037 ! DIC remin
 
         else
 
             ! else: base configuration only needs tracers 1, 2, 1001-1022
-            expected_tracer_ids(bgc_offset + 1) = 1037 ! add DIC remin tracer to base BGC tracers
+            if (use_DICremin) expected_tracer_ids(bgc_offset + 1) = 1037 ! add DIC remin tracer to base BGC tracers
 
         end if
+
+        expected_tracer_ids(n_base_physical + expected_bgc_num - size(ciso_ids) + 1: &
+                n_base_physical + expected_bgc_num) = ciso_ids
 
         ! ---- Age tracer (ID=100): appended immediately after the last BGC slot -----
         slot = n_base_physical + expected_bgc_num + 1
@@ -1418,19 +1431,18 @@ contains
                 call recom_info('expected count for the current configuration')
                 call recom_kv('difference', actual_bgc_num - expected_bgc_num)
                 call recom_info('required tracer IDs for this configuration:')
-                call recom_info('  base (always)        1001-1022 (22 tracers) + 1037 (DICremin)')
+                call recom_info('  base (always)        1001-1022 (22 tracers)')
+                if (use_DICremin) call recom_info('  DICremin             1037')
 
                 if (enable_3zoo2det .and. .not.enable_coccos) then
                     call recom_info('  3Zoo2Det extension   1023-1030 (8 tracers)')
                     call recom_info('    Zoo2N, Zoo2C       1023-1024')
                     call recom_info('    DetZ2 pool         1025-1028')
                     call recom_info('    MicZooN, MicZooC   1029-1030')
-                    call recom_info('  DICremin             1037')
                 else if (enable_coccos .and. .not.enable_3zoo2det) then
                     call recom_info('  Coccos extension     1023-1028 (6 tracers)')
                     call recom_info('    CoccoN, C, Chl     1023-1025')
                     call recom_info('    PhaeoN, C, Chl     1026-1028')
-                    call recom_info('  DICremin             1037')
                 else if (enable_3zoo2det .and. enable_coccos) then
                     call recom_info('    Zoo2N, Zoo2C       1023-1024')
                     call recom_info('  3Zoo2Det extension   1025-1028 (4 tracers for det2)')
@@ -1438,8 +1450,8 @@ contains
                     call recom_info('    CoccoN, C, Chl     1029-1031')
                     call recom_info('    PhaeoN, C, Chl     1032-1034')
                     call recom_info('  MicroZoo extension   1035-1036 (2 tracers)')
-                    call recom_info('  DICremin             1037')
                 end if
+                if (size(ciso_ids) > 0) call recom_kv('  carbon isotopes', ciso_ids)
 
                 call recom_info('action required:')
                 call recom_info('  1. check the tracer_list section of namelist.config')
@@ -1462,6 +1474,77 @@ contains
                         '  expected=' // recom_itoa(expected_bgc_num))
                 call recom_info('bgc_num may not have been updated after changing')
                 call recom_info('enable_3zoo2det or enable_coccos')
+            end if
+            config_error = .true.
+        end if
+
+        required_benthos_num = 4
+        required_bottflx_num = 4
+        required_sedflx_num = 5
+        if (size(ciso_ids) > 0) then
+            required_benthos_num = 6
+            required_bottflx_num = 6
+            required_sedflx_num = 6
+        end if
+        if (size(ciso_ids) > 8) then
+            required_benthos_num = 8
+            required_bottflx_num = 8
+            required_sedflx_num = 7
+        end if
+
+        if (benthos_num < required_benthos_num) then
+            if (mype == 0) then
+                write(*, *) '======================================================================&
+                        &===='
+                write(*, *) 'ERROR: benthos_num too small!'
+                write(*, *) '======================================================================&
+                        &===='
+                write(*, *) 'The benthos_num parameter is smaller than required.'
+                write(*, *) '  Current benthos_num value: ', benthos_num
+                write(*, *) '  Required minimum:      ', required_benthos_num
+                write(*, *) ''
+                write(*, *) 'Set benthos_num = 4 (no ciso), 6 (ciso) or 8 (ciso_14) in namelist.recom.'
+                write(*, *) '======================================================================&
+                        &===='
+                write(*, *) ''
+            end if
+            config_error = .true.
+        end if
+
+        if (use_MEDUSA .and. bottflx_num < required_bottflx_num) then
+            if (mype == 0) then
+                write(*, *) '======================================================================&
+                        &===='
+                write(*, *) 'ERROR: bottflx_num too small!'
+                write(*, *) '======================================================================&
+                        &===='
+                write(*, *) 'The bottflx_num parameter is smaller than required.'
+                write(*, *) '  Current bottflx_num value: ', bottflx_num
+                write(*, *) '  Required minimum:      ', required_bottflx_num
+                write(*, *) ''
+                write(*, *) 'Set bottflx_num = 4 (no ciso), 6 (ciso) or 8 (ciso_14) in namelist.recom.'
+                write(*, *) '======================================================================&
+                        &===='
+                write(*, *) ''
+            end if
+            config_error = .true.
+        end if
+
+        if (use_MEDUSA .and. sedflx_num /= 0 .and. sedflx_num < required_sedflx_num) then
+            if (mype == 0) then
+                write(*, *) '======================================================================&
+                        &===='
+                write(*, *) 'ERROR: sedflx_num too small!'
+                write(*, *) '======================================================================&
+                        &===='
+                write(*, *) 'The sedflx_num parameter is smaller than required.'
+                write(*, *) '  Current sedflx_num value: ', sedflx_num
+                write(*, *) '  Required minimum:      ', required_sedflx_num
+                write(*, *) ''
+                write(*, *) 'Set sedflx_num = 0 or 5 (no ciso), 6 (ciso) or 7 (ciso_14) in namelist.recom.'
+                write(*, *) '======================================================================&
+                        &===='
+                write(*, *) ''
             end if
             config_error = .true.
         end if
@@ -1571,7 +1654,7 @@ contains
     ! mirroring the append order in tracer_init.
     ! ==============================================================================
     subroutine validate_tracer_id_sequence(tracer_ids, num_tracers, use_age_tracer, use_transit, &
-            l_sf6, l_f11, l_f12, l_r14c, l_r39ar, mype)
+            l_sf6, l_f11, l_f12, l_r14c, l_r39ar, mype, ciso_ids)
         use mpi, only: MPI_Abort, MPI_COMM_WORLD
         use recom_log, only: recom_section, recom_kv, recom_info, recom_ok, recom_warn, &
                 recom_error, recom_itoa
@@ -1583,6 +1666,7 @@ contains
         integer, intent(in) :: num_tracers ! Number of tracers
         logical, intent(in) :: use_age_tracer, use_transit, l_sf6, l_f11, l_f12, l_r14c, l_r39ar
         integer, intent(in) :: mype ! MPI rank
+        integer, dimension(:), intent(in) :: ciso_ids
 
         ! Local variables
         integer :: i, j
@@ -1612,6 +1696,8 @@ contains
             ! Additional DICremin: 1 tracer (1037)
             bgc_num_local = 23
         end if
+        if (.not. use_DICremin) bgc_num_local = bgc_num_local - 1
+        bgc_num_local = bgc_num_local + size(ciso_ids)
 
         ! Allocate expected IDs array
         allocate(expected_ids(num_tracers))
@@ -1632,20 +1718,23 @@ contains
             expected_ids(n_base_physical+23:n_base_physical+28) = [1023, 1024, 1025, 1026, 1027, 1028]
             expected_ids(n_base_physical+29:n_base_physical+34) = [1029, 1030, 1031, 1032, 1033, 1034]
             expected_ids(n_base_physical+35:n_base_physical+36) = [1035, 1036]
-            expected_ids(n_base_physical+37)    = 1037 ! DICremin
+            if (use_DICremin) expected_ids(n_base_physical+37)    = 1037 ! DICremin
 
         else if (enable_coccos .and. .not.enable_3zoo2det) then
             expected_ids(n_base_physical+23:n_base_physical+28) = [1023, 1024, 1025, 1026, 1027, 1028]
-            expected_ids(n_base_physical+29)    = 1037 ! DICremin
+            if (use_DICremin) expected_ids(n_base_physical+29)    = 1037 ! DICremin
 
         else if (enable_3zoo2det .and. .not.enable_coccos) then
             expected_ids(n_base_physical+23:n_base_physical+30) = [1023, 1024, 1025, 1026, 1027, 1028, 1029, 1030]
-            expected_ids(n_base_physical+31)    = 1037 ! DICremin
+            if (use_DICremin) expected_ids(n_base_physical+31)    = 1037 ! DICremin
 
         else
             ! Base configuration
-            expected_ids(n_base_physical+23)    = 1037 ! DICremin
+            if (use_DICremin) expected_ids(n_base_physical+23)    = 1037 ! DICremin
         end if
+
+        expected_ids(n_base_physical + bgc_num_local - size(ciso_ids) + 1: &
+                n_base_physical + bgc_num_local) = ciso_ids
 
         ! ---- age tracer (running slot, right after BGC) ----------------------------
         slot = n_base_physical + bgc_num_local + 1
@@ -2418,10 +2507,10 @@ module REcoM_ciso
     real(kind=wp), dimension(3, 12) :: AtmCO2_14
 
     ! [uatm] Surface ocean 13|14CO2 partial pressure
-    real(kind=wp), allocatable, dimension(:) :: GloPCO2surf_13, GloPCO2surf_14
+    !real(kind=wp), allocatable, dimension(:) :: GloPCO2surf_13, GloPCO2surf_14
 
     ! [mmol/m2/day] Positive downwards
-    real(kind=wp), allocatable, dimension(:) :: GloCO2flux_13, GloCO2flux_14
+    !real(kind=wp), allocatable, dimension(:) :: GloCO2flux_13, GloCO2flux_14
     real(kind=wp), allocatable, dimension(:) :: GloCO2flux_seaicemask_13, GloCO2flux_seaicemask_14
     real(kind=wp), allocatable, dimension(:) :: RiverineDOCOrig_13, RiverineDOCOrig_14, &
             RiverDOC2D_13, RiverDOC2D_14
