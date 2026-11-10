@@ -82,7 +82,8 @@ contains
                 het_resp_noredfield, ialk, icchl, icocc, icocn, idchl, idetc, idetcal, idetn, &
                 idetz2c, idetz2calc, idetz2n, idetz2si, idiac, idian, idiasi, idic, idin, idoc, &
                 ife, ihetc, ihetn, imiczooc, imiczoon, ioxy, ipchl, iphac, iphachl, iphan, iphyc, &
-                k_fe_d, k_fe_p, k_o2_remin, k_si, k_w, kscavfe, kscavfe2, ligandstabconst, loss_het, &
+                k_fe_d, k_fe_p, k_o2_remin, k_si, k_w, kscavfe, kscavfe_calc, kscavfe_si, &
+                kscavfe2, ligandstabconst, loss_het, &
                 loss_miczoo, loss_zoo2, lossc, lossc_c, lossc_d, lossc_p, lossc_z, lossc_z2, &
                 lossn, lossn_c, lossn_d, lossn_p, lossn_z, lossn_z2, lossn_z3, ncmax, ncmax_c, &
                 ncuptakeratio_d, ncuptakeratio_p, nmaxslope, nminslope, nmocsy, o2dep_remin, &
@@ -109,6 +110,7 @@ contains
                 ncuptakeratio, ncuptakeratio_c, pzcocco3, pzdet, pzdet2, pzdetz2, pzdetz22, &
                 pzdia, pzdia2, pzdia3, pzhet, pzmiczoo
 
+        use recoM_ciso, only: lambda_14
         use recoM_ciso, only: alpha_calc_13, alpha_calc_14, alpha_dcal_13, alpha_dcal_14, &
                 calc_diss_13, calc_diss_14, calc_loss_agg_13, calc_loss_agg_14, calc_loss_gra_13, &
                 calc_loss_gra_14, calcification_13, calcification_14, ciso_14, ciso_organic_14, &
@@ -1395,10 +1397,8 @@ contains
                 !   C_flux = Σ(grazingFlux_i × C:N_ratio_i × grazEff)
                 !-------------------------------------------------------------------------------
 
-                ! Calculate food-dependent grazing efficiency
-                ! Increases with food availability, representing improved assimilation at higher
-                ! constant efficiency by REcoM_Grazing_Variable_Efficiency (ported from old
-                ! recom).
+                ! Grazing efficiency: food-dependent with REcoM_Grazing_Variable_Efficiency,
+                ! otherwise constant (gfin)
                 if (REcoM_Grazing_Variable_Efficiency) then
                     grazEff = gfin + 1.0 / (0.2 * food + 2.0)
                 else
@@ -2608,7 +2608,7 @@ contains
 
                         ! Calcification with 14C fractionation
                         ! 14C fractionation is approximately twice that of 13C
-                        calcification_14 = calc_prod_ratio * Cphot * PhyC_14 * alpha_calc_14
+                        calcification_14 = calcification * alpha_calc_14
 
                         ! 14C losses through aggregation
                         calc_loss_agg_14 = aggregationRate * PhyCalc_14
@@ -2708,6 +2708,10 @@ contains
                     vertScavFe(k) = vertScavFe(k) + ( &
                             +kScavFe * DetC * FreeFe & ! Slow-sinking detritus
                             + kScavFe * DetZ2C * FreeFe * is_3zoo2det & ! Fast-sinking detritus
+                            + kScavFe_calc * DetCalc * FreeFe &
+                            + kScavFe_si * DetSi * FreeFe &
+                            + kScavFe_calc * DetZ2Calc * FreeFe * is_3zoo2det &
+                            + kScavFe_si * DetZ2Si * FreeFe * is_3zoo2det &
                             + kScavFe2 * FreeFe & ! Background
                             ) * recipbiostep
 
@@ -3831,6 +3835,8 @@ contains
 
                             ! Update benthic 14C-calcite pool
                             LocBenthos(8) = LocBenthos(8) - decayBenthos(8) * dt_b
+
+                            LocBenthos(7:8) = LocBenthos(7:8) * (1 - lambda_14 * dt_b * SecondsPerDay)
 
                         else
                             !---------------------------------------------------------------

@@ -167,10 +167,7 @@ contains
                 add_benthos_2d(n) = add_benthos_2d(n) - (aux(nz)) * dt
             end do
 
-            ! ----------------------------------------------------------------
-            ! Deposit [mmol] -> [mmol/m2] as Benthos expects; area(1,n) is 0 in cavities
-            ! ----------------------------------------------------------------
-            add_benthos_2d(n) = add_benthos_2d(n) / area(ul1, n)
+            add_benthos_2d(n) = add_benthos_2d(n) / sum(seafloor(ul1:nl1))
 
             ! CMIP7 diagnostic: flux into the benthos [mmol m-2 s-1]
             if (Diags .and. iel > 0) BotFlux(n, iel) = BotFlux(n, iel) + add_benthos_2d(n) / dt
@@ -320,6 +317,10 @@ contains
                         tracer_id == 1314) then !idiac_13
 
 #if defined(__usetp)
+                    ! kh 25.03.22 buffer sums per tracer index to avoid non bit identical
+                    ! results regarding global sums when running the tracer loop in parallel;
+                    ! summed into Benthos across tr_num by oce_ale_tracer.F90 after the
+                    ! tracer loop
                     Benthos_tr(n, 5, tr_num) = Benthos_tr(n, 5, tr_num) + add_benthos_2d(n)
 
                     if (use_MEDUSA) then
@@ -406,6 +407,8 @@ contains
         if (use_MEDUSA) then
             do n = 1, bottflx_num
 #if defined(__usetp)
+                ! kh 25.03.22 buffer sums per tracer index to avoid non bit identical results
+                ! regarding global sums when running the tracer loop in parallel
                 call recom_exchange_nod(SinkFlx_tr(:, n, tr_num), npes, sn, rn, MPI_COMM_FESOM, &
                         mype, s_mpitype_nod2D, r_mpitype_nod2D, sPE, rPE, requests, nreq)
 #else
@@ -434,21 +437,6 @@ contains
     !   back up into the bottom-most water-column cells as a source term
     !   (dtr_bf), for dissolved tracers (DIN, DIC, Alk, Si, DFe, O2, and their
     !   isotopologues).
-    !
-    !   Two flux sources depending on configuration:
-    !     - use_MEDUSA & sedflx_num /= 0 : flux comes from GloSed (MEDUSA sediment
-    !       model), converted from mol/time/area to mol/time by multiplying by
-    !       area(1,:). NOTE: zero at cavity nodes (area(1,n) = 0); not fixed.
-    !     - otherwise (default): GlodecayBenthos (REcoM's benthic
-    !       remineralization), an areal rate [mmol/m2/s], times area(ul1,n).
-    !
-    !   Area / cavity handling
-    !   -----------------------
-    !   The redistribution across layers divides by area(ul1,n), not
-    !   area(1,n) (0 at cavity nodes). Only the final step -- converting the
-    !   flux into a tracer tendency for cell nz -- should divide by that
-    !   cell's own volume-area areasvol(nz,n), since that is what turns a
-    !   flux into a per-volume concentration tendency for cell nz.
     !===============================================================================
     subroutine diff_ver_recom_expl(nl, ulevels_nod2D, nlevels_nod2D, nod_in_elem2D_num, &
             nod_in_elem2D, nlevels, elem_area, area, areasvol, hnode_new, tracer_id, myDim_nod2d, &
@@ -483,33 +471,28 @@ contains
         areal_flux = .false.
 
 #if defined(__recom)
-        ! ----------------------------------------------------------------
-        ! Per-node bottom flux: MEDUSA gives a total flux [mol/time],
-        ! GlodecayBenthos an areal rate (made total in the node loop).
-        ! ----------------------------------------------------------------
         if (use_MEDUSA .and. (sedflx_num /= 0)) then
-            ! Note (CV/OG): GloSed is a flux per area (mol/time/area); multiply
-            ! by area(1,:) to match the mol/time convention used below.
+            areal_flux = .true.
             select case (tracer_id)
             case (1001)
-                bottom_flux = GloSed(:, 1) * area(1, :) ! DIN     !CHECK: (areasvol(ul1,:) OG: 02.06.2026
+                bottom_flux = GloSed(:, 1)
             case (1002)
-                bottom_flux = GloSed(:, 2) * area(1, :) ! DIC
+                bottom_flux = GloSed(:, 2) ! DIC
             case (1003)
-                bottom_flux = GloSed(:, 3) * area(1, :) ! Alk
+                bottom_flux = GloSed(:, 3) ! Alk
             case (1018)
-                bottom_flux = GloSed(:, 4) * area(1, :) ! Si
+                bottom_flux = GloSed(:, 4) ! Si
             case (1019)
-                bottom_flux = GloSed(:, 1) * Fe2N_benthos * area(1, :) ! DFe, scaled from N flux
+                bottom_flux = GloSed(:, 1) * Fe2N_benthos ! DFe, scaled from N flux
             case (1022)
-                bottom_flux = GloSed(:, 5) * area(1, :) ! O2
+                bottom_flux = GloSed(:, 5) ! O2
             case (1302)
                 if (ciso) then
-                    bottom_flux = GloSed(:, 6) * area(1, :) ! DIC_13 (organic + calcite)
+                    bottom_flux = GloSed(:, 6) ! DIC_13 (organic + calcite)
                 end if
             case (1402)
                 if (ciso) then
-                    bottom_flux = GloSed(:, 7) * area(1, :) ! DIC_14 (organic + calcite)
+                    bottom_flux = GloSed(:, 7) ! DIC_14 (organic + calcite)
                 end if
             case default
                 if (mype == 0) then
@@ -570,14 +553,13 @@ contains
             !_______________________________________________________________________
             ! Bottom flux, distributed over the layers in proportion to the seafloor
             ! area under each layer (see ver_sinking_recom_benthos).
-            ! GlodecayBenthos is per area: make it a total flux like MEDUSA's.
-            tot_flux = bottom_flux(n)
-            if (areal_flux) tot_flux = tot_flux * area(ul1, n)
             seafloor = 0._WP
             do j = 1, nod_in_elem2D_num(n)
                 e = nod_in_elem2D(j, n)
                 seafloor(nlevels(e) - 1) = seafloor(nlevels(e) - 1) + elem_area(e) / 3.0_WP
             end do
+            tot_flux = bottom_flux(n)
+            if (areal_flux) tot_flux = tot_flux * sum(seafloor(ul1:nl1))
             ! seafloor under layer nz is its bottom face, vd_flux(nz+1), which cell nz
             ! receives below; weights sum to 1, so the return equals the benthic loss
             do nz = ul1, nl1
@@ -661,18 +643,22 @@ contains
         if (tracer_id == tracer_ids%detrital_nitrogen .or. & ! idetn
                 tracer_id == tracer_ids%detrital_carbon .or. & ! idetc
                 tracer_id == tracer_ids%detrital_silica .or. & ! idetsi
-                tracer_id == tracer_ids%detrital_calcite) then ! idetcal
+                tracer_id == tracer_ids%detrital_calcite .or. & ! idetcal
+                tracer_id == 1308 .or. tracer_id == 1321 .or. &
+                tracer_id == 1408 .or. tracer_id == 1421) then
             Vsink = VDet
 
         elseif (tracer_id == tracer_ids%phytoplankton_nitrogen .or. & ! iphyn
                     tracer_id == tracer_ids%phytoplankton_carbon .or. & ! iphyc
-                    tracer_id == tracer_ids%phytoplankton_chlorophyll) then ! ipchl
+                    tracer_id == tracer_ids%phytoplankton_chlorophyll .or. & ! ipchl
+                    tracer_id == 1305 .or. tracer_id == 1405) then
             Vsink = VPhy
 
         elseif (tracer_id == tracer_ids%diatom_nitrogen .or. & ! idian
                     tracer_id == tracer_ids%diatom_carbon .or. & ! idiac
                     tracer_id == tracer_ids%diatom_silica .or. & ! idiasi
-                    tracer_id == tracer_ids%diatom_chlorophyll) then ! idchl
+                    tracer_id == tracer_ids%diatom_chlorophyll .or. & ! idchl
+                    tracer_id == 1314 .or. tracer_id == 1414) then
             Vsink = VDia
 
         elseif (enable_coccos .and. &
@@ -687,7 +673,8 @@ contains
                     tracer_id == tracer_ids%phaeocystis_chlorophyll)) then ! iphachl
             Vsink = VPhaeo
 
-        elseif (tracer_id == tracer_ids%phytoplankton_calcite) then ! iphycal
+        elseif (tracer_id == tracer_ids%phytoplankton_calcite .or. & ! iphycal
+                    tracer_id == 1320 .or. tracer_id == 1420) then
             ! Calcite is produced by either coccolithophores or (in simpler
             ! configs without coccos) generic phytoplankton, so it inherits
             ! whichever group's sinking speed applies.
@@ -751,7 +738,9 @@ contains
                             if (tracer_id == tracer_ids%detrital_nitrogen .or. & !idetn
                                     tracer_id == tracer_ids%detrital_carbon .or. & !idetc
                                     tracer_id == tracer_ids%detrital_silica .or. & !idetsi
-                                    tracer_id == tracer_ids%detrital_calcite) then !idetcal
+                                    tracer_id == tracer_ids%detrital_calcite .or. & !idetcal
+                                    tracer_id == 1308 .or. tracer_id == 1321 .or. &
+                                    tracer_id == 1408 .or. tracer_id == 1421) then
                                 Wvel_flux(nz) = w_ref1 * scaling_density1_3D(nz, n) &
                                         * scaling_visc_3D(nz, n)
 
@@ -826,8 +815,8 @@ contains
 
                 ! ----------------------------------------------------------------
                 ! 3rd-order DST (Direct Space Time) advection scheme with a TVD
-                ! flux limiter (ported from the original REcoM code). Computes
-                ! the advective flux vd_flux(nz) through each interface nz.
+                ! flux limiter. Computes the advective flux vd_flux(nz) through
+                ! each interface nz.
                 ! ----------------------------------------------------------------
                 k = nod_in_elem2D_num(n)
                 ! Screen minimum depth among neighbouring nodes around node n.
@@ -1073,16 +1062,9 @@ contains
                 scaling_density1_3D(k, row) = 1.0_WP
                 scaling_density2_3D(k, row) = 1.0_WP
 
-                ! MERGE-REVIEW: int_recom's ballast only recomputed scaling_density1_3D/
-                ! scaling_density2_3D from their 1.0 default when the detrital-carbon tracer's
-                ! own concentration exceeded a 0.001 guard (tracers%data(tr_num)%values(k,row)
-                ! > 0.001), avoiding wild scaling ratios from near-zero detrital carbon -- see
-                ! the commented-out remnants of that guard directly below. This subroutine no
-                ! longer receives per-tracer identity/concentration (it's now called once per
-                ! timestep with T/S, from oce_ale_tracer.F90, not per-tracer with a tr_num as
-                ! in int_recom), so restoring the guard's intent would mean threading DetC/
-                ! DetZ2C concentration into this subroutine's argument list -- left unresolved
-                ! rather than guessing at that redesign.
+                ! Open issue: the density scaling is applied without the guard DetC > 0.001
+                ! (commented out below), so near-zero detrital carbon can give extreme scaling
+                ! ratios; DetC/DetZ2C are not passed to this routine.
                 if (use_density_scaling) then
                     ! Ratio of the particle's excess density (relative to local
                     ! seawater) to the reference excess density used to define
