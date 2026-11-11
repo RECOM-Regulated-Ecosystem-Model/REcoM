@@ -192,7 +192,8 @@ contains
 
         !---------------------------------------------------------------------------
         ! Piston velocity kw660 at 25 deg C [m/s]
-        !   Computed unconditionally; set to zero inside REcoM_sms for cavities.
+        !   Computed unconditionally; at cavity nodes (nzmin > 1) the CO2 and O2 fluxes
+        !   below are not applied.
         !   Ice-cover fraction is already folded in by pistonvel - do not reapply.
         !---------------------------------------------------------------------------
 

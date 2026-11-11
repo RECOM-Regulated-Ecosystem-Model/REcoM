@@ -228,6 +228,8 @@ contains
         ! Convert model depth coordinate to positive depth for MOCSY
         ! Model convention: zF(k) is negative (e.g., -100 m)
         ! MOCSY convention: depth is positive (e.g., 100 m)
+        ! zF(k) is the top interface of layer k, so the pressure corrections use the
+        ! depth of the layer top, not its mid-depth (layer 1 at 0 m).
         dpos(1) = -zF(k)
 
         ! Calculate update frequencies based on model time step

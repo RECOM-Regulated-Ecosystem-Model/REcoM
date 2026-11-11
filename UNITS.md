@@ -265,8 +265,6 @@ These variables are used with `use_atbox = .true.`.
 | `decayBenthos` | Benthic release, `decayRateBen* * LocBenthos` | mmol m-2 d-1 |
 | `GlodecayBenthos` | Benthic release passed to FESOM | mmol m-2 s-1 |
 | `SinkFlx`, `SinkFlx_tr` | Sinking flux into the bottom layer (MEDUSA) | mmol m-2 s-1 |
-| `wFluxDet`, `wFluxPhy`, `wFluxDia`, `wFluxCocco`, `wFluxPhaeo` | Sinking fluxes into the benthos | mmol m-2 d-1 |
-| `Vben_*` | Sinking speed into the benthos, converted to m s-1 in `recom_sinking` | m d-1 |
 | `Ironflux` | Iron flux from sediment | umolFe m-2 d-1 |
 | `Fe2N_benthos` | Fe:N ratio of benthic release (0.15) | umolFe mmolN-1 |
 | `q_NC_Denit` | N:C ratio of denitrification (0.86) | mmolN mmolC-1 |

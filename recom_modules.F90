@@ -299,26 +299,6 @@ module REcoM_declarations
     ! [1/day] Decay rate of detritus in the benthic layer
     real(kind=wp), allocatable, dimension(:) :: decayBenthos
 
-    ! [mmol/(m2 * day)] Flux of N,C,Si and calc through sinking of detritus
-    real(kind=wp), allocatable, dimension(:) :: wFluxDet
-
-    ! [mmol/(m2 * day)] Flux of N,C, calc and chl through sinking of phytoplankton
-    real(kind=wp), allocatable, dimension(:) :: wFluxPhy
-
-    ! [mmol/(m2 * day)] Flux of N,C, Si and chl through sinking of diatoms
-    real(kind=wp), allocatable, dimension(:) :: wFluxDia
-
-    ! NEW [mmol/(m2 * day)] Flux of N,C, calc and chl through sinking of coccos
-    real(kind=wp), allocatable, dimension(:) :: wFluxCocco
-
-    ! NEW [mmol/(m2 * day)] Flux of N,C, calc and chl through sinking of Phaeocystis
-    real(kind=wp), allocatable, dimension(:) :: wFluxPhaeo
-    real(kind=wp) :: Vben_det ! [m/day] speed of sinking into benthos from water column
-    real(kind=wp) :: Vben_det_seczoo !second zooplankton sinking benthos
-    real(kind=wp) :: Vben_phy
-    real(kind=wp) :: Vben_dia
-    real(kind=wp) :: Vben_coc
-    real(kind=wp) :: Vben_pha ! Phaeocystis
     real(kind=wp) :: Ironflux ! [umol Fe/(m2*day)] Flux of Fe from sediment to water
     !_______________________________________________________________________________
     ! Arrays added for RECOM implementation:
