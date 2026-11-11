@@ -1183,7 +1183,7 @@ contains
     ! ==============================================================================
     subroutine validate_recom_tracers(num_tracers, use_age_tracer, use_transit, l_sf6, l_f11, l_f12&
             , l_r14c, l_r39ar, mype, ciso_ids)
-        use mpi, only: MPI_Abort, MPI_COMM_WORLD
+        use recom_log, only: recom_abort
         use recom_log, only: recom_section, recom_kv, recom_info, recom_ok, recom_warn, &
                 recom_error, recom_itoa
 
@@ -1201,7 +1201,6 @@ contains
         integer :: expected_total_tracers
         integer :: bgc_offset ! offset of last base-BGC slot (T,S + 22)
         integer :: n_transit_tracers ! number of active transit tracers
-        integer :: MPIErr
         logical :: config_error
         integer :: required_benthos_num, required_bottflx_num, required_sedflx_num
 
@@ -1636,8 +1635,7 @@ contains
             end if
             deallocate(expected_tracer_ids, tracer_found)
             ! Stop execution (use appropriate stop routine for your model)
-            call MPI_ABORT(MPI_COMM_WORLD, 1, MPIErr)
-            stop
+            call recom_abort()
         end if
 
         ! Clean up
@@ -1655,7 +1653,7 @@ contains
     ! ==============================================================================
     subroutine validate_tracer_id_sequence(tracer_ids, num_tracers, use_age_tracer, use_transit, &
             l_sf6, l_f11, l_f12, l_r14c, l_r39ar, mype, ciso_ids)
-        use mpi, only: MPI_Abort, MPI_COMM_WORLD
+        use recom_log, only: recom_abort
         use recom_log, only: recom_section, recom_kv, recom_info, recom_ok, recom_warn, &
                 recom_error, recom_itoa
 
@@ -1671,7 +1669,6 @@ contains
         ! Local variables
         integer :: i, j
         integer, dimension(:), allocatable :: expected_ids
-        integer :: MPIErr
         logical :: error_found
         logical :: duplicate_found
         integer :: bgc_num_local           ! local BGC count derived from config flags
@@ -1837,8 +1834,7 @@ contains
             end if
             deallocate(expected_ids)
             ! Stop execution (use appropriate stop routine for your model)
-            call MPI_ABORT(MPI_COMM_WORLD, 1, MPIErr)
-            stop
+            call recom_abort()
         else
             if (mype == 0) then
                 call recom_ok('tracer IDs match the expected sequence, no clashes')
@@ -1860,13 +1856,12 @@ contains
     !          Call once after the namelists are read.
     ! ==============================================================================
     subroutine validate_grazing_preference(mype)
-        use mpi, only: MPI_Abort, MPI_COMM_WORLD
+        use recom_log, only: recom_abort
         use recom_log, only: recom_kv, recom_info, recom_warn, recom_error
 
         implicit none
 
         integer, intent(in) :: mype
-        integer :: MPIErr
         character(len=16) :: form
         real(kind=wp) :: s_meso(7), s_macro(8), s_micro(4)
         logical :: any_s_set
@@ -1885,8 +1880,7 @@ contains
                         '"' // trim(REcoM_Grazing_Preference_Form) // '"')
                 call recom_info('use "fasham" or "sigmoid"')
             end if
-            call MPI_ABORT(MPI_COMM_WORLD, 1, MPIErr)
-            stop
+            call recom_abort()
         end select
 
         ! Only the constants of grazers/prey that exist in this configuration matter
@@ -1913,8 +1907,7 @@ contains
 
         if (any(s_meso < 0.0_wp) .or. any(s_macro < 0.0_wp) .or. any(s_micro < 0.0_wp)) then
             if (mype == 0) call recom_error('s*Nsq* grazing half-saturations must be >= 0')
-            call MPI_ABORT(MPI_COMM_WORLD, 1, MPIErr)
-            stop
+            call recom_abort()
         end if
 
         if (mype == 0) then

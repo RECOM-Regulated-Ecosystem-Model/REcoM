@@ -120,6 +120,7 @@ contains
     ! stored in (vertical, horizontal) format
     subroutine recom_exchange_nod3D_begin(nod_array3D, npes, sn, rn, MPI_COMM_FESOM, mype, &
             s_mpitype_nod3D, r_mpitype_nod3D, sPE, rPE, requests, nreq, luse_g2g)
+        use recom_log, only: recom_abort
         use recom_log, only: recom_error, recom_info, recom_itoa
         implicit none
 
@@ -152,7 +153,7 @@ contains
                             'nl1=' // recom_itoa(nl1))
                     call recom_info('adding the MPI datatypes is easy, see oce_modules.F90')
                 end if
-                call MPI_Abort(MPI_COMM_FESOM, 1)
+                call recom_abort()
             end if
 
             !$ACC HOST_DATA USE_DEVICE(nod_array3D) IF(lg2g)

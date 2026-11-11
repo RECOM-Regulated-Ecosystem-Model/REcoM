@@ -48,6 +48,7 @@ contains
             eDim_nod2D, mype, MPI_COMM_FESOM, myDim_elem2D, eDim_elem2D, tracers_info, &
             num_tracers, rad, use_age_tracer, use_transit, l_sf6, l_f11, l_f12, l_r14c, l_r39ar, &
             ocean_area)
+        use recom_log, only: recom_abort
 
         use REcoM_declarations, only: wp, tracer_ids
         use REcoM_GloVar, only: tracers_info_type
@@ -58,7 +59,6 @@ contains
                 idiac_14, iphycal_14, idetcal_14
 #if defined(__oifs)
         use recom_config, only: use_atbox
-        use mpi, only: MPI_Abort, MPI_COMM_WORLD
         use recom_log, only: recom_error, recom_info
 #endif
 
@@ -81,7 +81,6 @@ contains
         integer :: n_transit_tracers ! number of active transit tracers
         integer :: bgc_start, bgc_end ! first/last slot of the BGC-only block
 #if defined(__oifs)
-        integer :: MPIErr
 
         ! Coupled to OpenIFS, x_co2atm is received from the atmosphere every coupling step.
         ! The atmospheric box model would use the same array as its prognostic state: the
@@ -93,8 +92,7 @@ contains
                 call recom_info('atmospheric CO2 comes from OpenIFS: set use_atbox = .false.')
                 call recom_info('model execution stopped')
             end if
-            call MPI_Abort(MPI_COMM_WORLD, 1, MPIErr)
-            stop
+            call recom_abort()
         end if
 #endif
 

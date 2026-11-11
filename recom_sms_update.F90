@@ -1052,6 +1052,7 @@ contains
             DetN, DetC, DetSi, DetCalc, &
             DetZ2N, DetZ2C, DetZ2Si, DetZ2Calc, &
             DON, EOC, FreeFe)
+        use recom_log, only: recom_abort
 
         use recom_declarations, only: wp, arrfunc, o2func, &
                 n_assim, n_assim_dia, n_assim_cocco, n_assim_phaeo, &
@@ -2600,8 +2601,7 @@ contains
                 print*, 'grazingFlux_Cocco2: ', grazingFlux_Cocco2
                 print*, 'grazingFlux_Cocco3: ', grazingFlux_Cocco3
                 print*, 'recipQuota_cocco: ', recipQuota_cocco
-                call MPI_ABORT(MPI_COMM_FESOM, 1)
-                stop
+                call recom_abort()
             end if
 
             !===============================================================================

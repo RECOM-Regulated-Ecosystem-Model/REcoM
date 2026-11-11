@@ -441,6 +441,7 @@ contains
     subroutine diff_ver_recom_expl(nl, ulevels_nod2D, nlevels_nod2D, nod_in_elem2D_num, &
             nod_in_elem2D, nlevels, elem_area, area, areasvol, hnode_new, tracer_id, myDim_nod2d, &
             eDim_nod2D, mype, MPI_COMM_FESOM, dtr_bf, dt)
+        use recom_log, only: recom_abort
 
         use recom_declarations, only: wp, tracer_ids
         use recom_glovar, only: GloSed, glodecayBenthos
@@ -500,8 +501,7 @@ contains
                             'ID=' // recom_itoa(tracer_id))
                     call recom_info('check the specified boundary conditions; model execution stopped')
                 end if
-                call MPI_ABORT(MPI_COMM_FESOM, 1)
-                stop
+                call recom_abort()
             end select
         else
             areal_flux = .true.
@@ -537,8 +537,7 @@ contains
                             'ID=' // recom_itoa(tracer_id))
                     call recom_info('check the specified boundary conditions; model execution stopped')
                 end if
-                call MPI_ABORT(MPI_COMM_FESOM, 1)
-                stop
+                call recom_abort()
             end select
         end if ! (use_MEDUSA .and. (sedflux_num .gt. 0))
 #endif
