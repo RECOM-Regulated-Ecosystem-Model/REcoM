@@ -19,6 +19,7 @@ contains
             kspc_watercolumn, rhoSW_watercolumn, PAR, MPI_COMM_FESOM, &
             mype, myDim_nod2D, eDim_nod2D, nl, hnode, zbar_3d_n, &
             geo_coord_nod2D, daynew, ndpyr, dt, kappa, mstep, rad)
+        use recom_log, only: recom_abort
 
         use recom_declarations, only: wp, tiny_si, tiny_n, tiny_c, tiny_n_d, tiny_n_c, tiny_n_p, &
                 tiny_c_p, tiny_c_d, tiny_c_c, vertNPPn, vertGPPn, locGPPn, locNPPn, vertNNAn, &
@@ -220,7 +221,7 @@ contains
             call recom_kv('Nmocsy', Nmocsy)
             call recom_kv('lon', Lond(1), 'deg')
             call recom_kv('lat', Latd(1), 'deg')
-            stop
+            call recom_abort()
         end if
 
         if (nzmin == 1) then
@@ -256,7 +257,7 @@ contains
                 call recom_kv('lat', Latd(1), 'deg')
                 call recom_kv('ULoc', ULoc(1), 'm s-1')
                 call recom_kv('ice_conc', Loc_ice_conc(1))
-                stop
+                call recom_abort()
             end if
 
             ! Ice fraction already in piston velocity - do not re-apply here

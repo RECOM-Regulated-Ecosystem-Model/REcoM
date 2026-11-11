@@ -13,6 +13,7 @@ contains
             OmegaC_watercolumn, kspc_watercolumn, rhoSW_watercolumn, Loc_slp, &
             zF, PAR, Latd, daynew, dt, kappa, mstep, MPI_COMM_FESOM, mype, &
             myDim_nod2D, eDim_nod2D, nl, geo_coord_nod2D)
+        use recom_log, only: recom_abort
 
         use, intrinsic :: ieee_arithmetic, only: ieee_is_nan
 
@@ -899,7 +900,7 @@ contains
                     else
                         print*, '  arrFunc =', arrFunc
                     end if
-                    stop
+                    call recom_abort()
                 end if
 
                 ! Diatoms
@@ -910,7 +911,7 @@ contains
                     print*, '  CHL2C_plast_dia =', CHL2C_plast_dia
                     print*, '  PARave =', PARave
                     print*, '  pMax_dia =', pMax_dia
-                    stop
+                    call recom_abort()
                 end if
 
                 ! Additional species (if enabled)
@@ -922,7 +923,7 @@ contains
                         print*, '  CHL2C_plast_cocco =', CHL2C_plast_cocco
                         print*, '  PARave =', PARave
                         print*, '  pMax_cocco =', pMax_cocco
-                        stop
+                        call recom_abort()
                     end if
 
                     if (ieee_is_nan(KOchl_phaeo)) then
@@ -932,7 +933,7 @@ contains
                         print*, '  CHL2C_plast_phaeo =', CHL2C_plast_phaeo
                         print*, '  PARave =', PARave
                         print*, '  pMax_phaeo =', pMax_phaeo
-                        stop
+                        call recom_abort()
                     end if
                 end if
 

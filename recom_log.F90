@@ -72,7 +72,7 @@ module recom_log
     end interface recom_kv
 
     public :: recom_tag, recom_section, recom_trace, recom_kv, recom_range
-    public :: recom_ok, recom_info, recom_warn, recom_error, recom_itoa
+    public :: recom_ok, recom_info, recom_warn, recom_error, recom_itoa, recom_abort
 
 contains
 
@@ -329,5 +329,17 @@ contains
         write(*, '(a)') recom_tag() // ' ' // &
                 paint(C_ERR, glyph('✗', 'x') // ' ERROR  ') // '  ' // msg // tail
     end subroutine recom_error
+
+    !---------------------------------------------------------------------------
+    ! Stop the whole run after an error, from any rank. MPI_Abort on MPI_COMM_WORLD
+    ! ends all processes, also those of a coupled model; error stop is only reached
+    ! if MPI_Abort returns. Print the error message (recom_error) before calling it.
+    !---------------------------------------------------------------------------
+    subroutine recom_abort()
+        use mpi, only: MPI_Abort, MPI_COMM_WORLD
+        integer :: ierr
+        call MPI_Abort(MPI_COMM_WORLD, 1, ierr)
+        error stop 1
+    end subroutine recom_abort
 
 end module recom_log
