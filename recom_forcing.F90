@@ -108,6 +108,7 @@ contains
         real(kind=wp) :: Latd(1)       ! latitude [degrees]
         real(kind=wp) :: Lond(1)       ! longitude [degrees]
         real(kind=wp) :: REcoM_T(1)    ! Surface temperature, clamped for Lueker K1/K2 [deg C]
+        real(kind=wp) :: O2_T(1)       ! Surface temperature for the O2 flux, limited to -2..40 deg C (O2 solubility and Schmidt fits)
         real(kind=wp) :: REcoM_S(1)    ! clamped for Lueker K1/K2
         real(kind=wp) :: Patm(1)       ! Atmospheric pressure [atm]
         real(kind=wp) :: Latr          ! Latitude [radians], scalar scratch
@@ -281,7 +282,8 @@ contains
         ppo = Loc_slp / Pa2atm  ! sea-level pressure normalised to 1 atm
 
         if (nzmin == 1) then
-            call o2flux(REcoM_T, REcoM_S, kw660, ppo, REcoM_O2, Nmocsy, o2ex)
+            O2_T = min(40.d0, max(-2.d0, Temp(nzmin)))
+            call o2flux(O2_T, REcoM_S, kw660, ppo, REcoM_O2, Nmocsy, o2ex)
             oflux              = o2ex * 1.e3 * SecondsPerDay  ! mol/m2/s -> mmol/m2/d
             o2flux_seaicemask  = o2ex * 1.e3                  ! mol/m2/s -> mmol/m2/s
         else  ! cavity: NaN fill for the output flux; the O2 boundary-condition flux stays 0
