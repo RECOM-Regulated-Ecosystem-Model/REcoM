@@ -52,14 +52,19 @@ elseif(${CMAKE_Fortran_COMPILER_ID} STREQUAL  GNU )
 
     # Sets the fortran flag to allow files with no line length limit
     set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -ffree-line-length-none")
-    target_compile_options(recom PRIVATE -ffree-line-length-none)
+    # REcoM is real64 throughout and relies on zero-initialised locals, as with
+    # -r8 -init=zero for Intel: promote the default real kind (unsuffixed
+    # literals such as 1.0/3.0) and zero locals in every GNU build, not only in CI
+    # and independent of FESOM's USE_SINGLE_PRECISION
+    target_compile_options(recom PRIVATE -ffree-line-length-none -fdefault-real-8 -fdefault-double-8
+        -finit-local-zero -cpp)
 
 endif()
 
 if(DEFINED ENV{GITHUB_ACTIONS})
 
     if(${CMAKE_Fortran_COMPILER_ID} STREQUAL  GNU )
-        target_compile_options(recom PRIVATE -O2 -g -fbacktrace -ffloat-store -finit-local-zero  -finline-functions -fimplicit-none -fdefault-real-8 -fdefault-double-8 -cpp)
+        target_compile_options(recom PRIVATE -O2 -g -fbacktrace -ffloat-store -finline-functions -fimplicit-none)
     endif()
 
 endif()
