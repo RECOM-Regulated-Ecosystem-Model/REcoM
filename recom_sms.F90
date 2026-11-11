@@ -2812,20 +2812,20 @@ contains
                     ! Diatom net N assimilation
                     vertNNAd(k) = vertNNAd(k) + ( &
                             +N_assim_dia * DiaC &
-                            - lossN * limitFacN_dia * DiaN &
+                            - lossN_d * limitFacN_dia * DiaN &
                             ) * recipbiostep
 
                     if (enable_coccos) then
                         ! Coccolithophore net N assimilation
                         vertNNAc(k) = vertNNAc(k) + ( &
                                 +N_assim_cocco * CoccoC &
-                                - lossN * limitFacN_cocco * CoccoN &
+                                - lossN_c * limitFacN_cocco * CoccoN &
                                 ) * recipbiostep
 
                         ! Phaeocystis net N assimilation
                         vertNNAp(k) = vertNNAp(k) + ( &
                                 +N_assim_phaeo * PhaeoC &
-                                - lossN * limitFacN_phaeo * PhaeoN &
+                                - lossN_p * limitFacN_phaeo * PhaeoN &
                                 ) * recipbiostep
                     end if
 
