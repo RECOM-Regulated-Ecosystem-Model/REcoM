@@ -121,6 +121,7 @@ contains
             use_age_tracer, use_transit, l_sf6, l_f11, l_f12, l_r14c, l_r39ar)
 
         use recom_g_comm_auto, only: recom_exchange_nod
+        use recom_extra, only: cobeta
 
         use recom_declarations, only: wp, decaybenthos, tracer_ids
         use bio_fluxes_interface, only: bio_fluxes
@@ -336,6 +337,9 @@ contains
         ! not counted from the first step of the run: a restarted run then updates at the same
         ! steps as a continuous one, and continues from the 3D fields in the bio restart.
         step_of_year = (daynew - 1) * nint(SecondsPerDay / dt) + nint(timenew / dt)
+
+        ! Solar geometry (cosAI) for all nodes, once per step; used in REcoM_sms
+        call Cobeta(daynew, ndpyr, myDim_nod2D, geo_coord_nod2D)
 
         do n = 1, myDim_nod2D ! needs exchange_nod in the end
 

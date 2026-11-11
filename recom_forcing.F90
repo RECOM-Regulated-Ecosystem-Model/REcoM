@@ -57,7 +57,7 @@ contains
                 locatmco2, o2ex, o2flux_seaicemask, oflux, omegaa, omegac, p, pco2surf, ph, rhosw, &
                 tempis, uloc, co2flux, co3, co2flux_seaicemask, dflux
 
-        use recom_extra, only: cobeta, depth_calculations
+        use recom_extra, only: depth_calculations
         use recom_sms_module, only: recom_sms
         use gasx, only: scco2, flxco2, pistonvel, o2flux
         use recom_log, only: recom_trace, recom_error, recom_kv, recom_itoa
@@ -139,7 +139,6 @@ contains
         !---------------------------------------------------------------------------
         ! Grid geometry for this column
         !---------------------------------------------------------------------------
-        call Cobeta(daynew, ndpyr, myDim_nod2D, geo_coord_nod2D)
         call Depth_calculations(n, nzmin, Nn, SinkVel, zF, thick, recipthick, nl, hnode, zbar_3d_n)
 
         !===========================================================================

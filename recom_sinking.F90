@@ -108,7 +108,7 @@ contains
 
             aux = 0._WP
             Vben = 0._WP
-            add_benthos_2d = 0._WP
+            add_benthos_2d(n) = 0._WP
 
             ! ----------------------------------------------------------------
             ! Select sinking velocity by tracer functional group
