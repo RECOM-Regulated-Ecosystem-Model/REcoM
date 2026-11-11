@@ -22,6 +22,10 @@ module recom_sinking
     public :: get_particle_density
     public :: get_seawater_viscosity
 
+    ! sinking groups (sinking_group)
+    integer, parameter :: SG_DET1 = 1, SG_DET2 = 2, SG_PHY = 3, SG_DIA = 4, SG_COCCO = 5, &
+            SG_PHAEO = 6, SG_PHYCALC = 7
+
 contains
 
     !===============================================================================
@@ -55,10 +59,7 @@ contains
         use recom_declarations, only: wp, tracer_ids
         use recom_glovar, only: Benthos, Benthos_tr, SinkFlx, SinkFlx_tr, BotFlux
 
-        use recom_config, only: allow_var_sinking, benthos_num, bottflx_num, ciso, Vdet, VPhy, &
-            VDia, VDet_zoo2, VCocco, VPhaeo, enable_3zoo2det, enable_coccos, use_MEDUSA, sedflx_num, recom_det_tracer_id, &
-            Diags, &
-            recom_phy_tracer_id, recom_dia_tracer_id, recom_cocco_tracer_id, recom_phaeo_tracer_id, SecondsPerDay, vdet_a
+        use recom_config, only: benthos_num, bottflx_num, ciso, use_MEDUSA, sedflx_num, Diags
 
         use recom_ciso, only: ciso_organic_14
         use recom_log, only: recom_warn, recom_kv, recom_itoa
@@ -88,6 +89,8 @@ contains
         integer :: iel ! element of this tracer for BotFlux (0: not counted)
         real(kind=WP) :: Vben(nl), aux(nl - 1), add_benthos_2d(myDim_nod2D)
         real(kind=WP) :: seafloor(nl) ! seafloor area [m2] under each layer of node n
+        ! Margin below one layer content per step, as cfl_safety in ver_sinking_recom
+        real(kind=WP), parameter :: cfl_safety = 0.9_WP
         real(kind=WP) :: tv
         ! Print caps per MPI rank (cavity/open ocean separately)
         integer, parameter :: n_si_deposit_diag_prints_max = 5
@@ -113,36 +116,18 @@ contains
             ! ----------------------------------------------------------------
             ! Select sinking velocity by tracer functional group
             ! ----------------------------------------------------------------
-            if (any(recom_det_tracer_id == tracer_id)) Vben = Vdet
-            if (any(recom_phy_tracer_id == tracer_id)) Vben = VPhy
-            if (any(recom_dia_tracer_id == tracer_id)) Vben = VDia
-            if (enable_coccos) then
-                if (any(recom_cocco_tracer_id == tracer_id)) Vben = VCocco
-                if (any(recom_phaeo_tracer_id == tracer_id)) Vben = VPhaeo
-                ! PhyCalc (1020) is in recom_phy_tracer_id, so it gets VPhy above.
-                ! With coccos on, ver_sinking_recom sinks it at VCocco; match that
-                ! here so calcite leaves the bottom cell at the rate it arrives.
-                if (tracer_id == tracer_ids%phytoplankton_calcite) Vben = VCocco
+            ! Speed through the seafloor under layer nz [m/s]: sinking_speed at the
+            ! depth of the layer's bottom, with the ballasting factors of the layer,
+            ! as in ver_sinking_recom (at nl1 this is its bottom interface). Tracers
+            ! that do not sink (base_sinking_speed <= 0.1 m/day) are not deposited.
+            ! Capped like the water column, so a step removes at most cfl_safety of
+            ! the layer content.
+            if (base_sinking_speed(tracer_id) > 0.1_WP) then
+                do nz = ul1, nl1
+                    Vben(nz) = min(sinking_speed(tracer_id, abs(zbar_3d_n(nz + 1, n)), nz, n), &
+                            cfl_safety * (zbar_3d_n(nz, n) - zbar_3d_n(nz + 1, n)) / dt)
+                end do
             end if
-            if (allow_var_sinking) then
-                Vben = Vdet_a * abs(zbar_3d_n(:, n)) + Vben
-            end if
-
-            ! ----------------------------------------------------------------
-            ! Second detritus class (macrozooplankton faecal pellets) uses a
-            ! constant, separate sinking speed, overriding the above.
-            ! ----------------------------------------------------------------
-            if (enable_3zoo2det) then
-                if (tracer_id == tracer_ids%macrozooplankton_detrital_nitrogen .or. & !idetz2n
-                    tracer_id == tracer_ids%macrozooplankton_detrital_carbon .or. & !idetz2c
-                    tracer_id == tracer_ids%macrozooplankton_detrital_silica .or. & !idetz2si
-                    tracer_id == tracer_ids%macrozooplankton_detrital_calcite) then !idetz2calc
-                    Vben = VDet_zoo2
-                end if
-            end if
-
-            ! conversion [m/d] --> [m/s] (vertical velocity, note that it is positive here)
-            Vben = Vben / SecondsPerDay
 
             ! ----------------------------------------------------------------
             ! Seafloor area under layer nz: 1/3 of every surrounding element whose
@@ -598,12 +583,9 @@ contains
 
         use REcoM_declarations, only: wp, tracer_ids
 
-        use REcoM_GloVar, only: sinkvel1_tr, sinkvel2_tr, scaling_visc_3D, scaling_density1_3D, &
-            scaling_density2_3D, ExpFlux
+        use REcoM_GloVar, only: sinkvel1_tr, sinkvel2_tr, ExpFlux
 
-        use recom_config, only: allow_var_sinking, depth_scaling1, depth_scaling2, &
-            max_sinking_velocity, use_ballasting, enable_3zoo2det, VDet_zoo2, enable_coccos, &
-            secondsPerDay, vcocco, vdet, vdet_a, vdia, vphaeo, vphy, w_ref1, w_ref2, Diags
+        use recom_config, only: enable_3zoo2det, Diags
 
         implicit none
 
@@ -632,65 +614,9 @@ contains
 
         real(kind=wp), dimension(nl) :: Wvel_flux, vd_flux, dz_trr
 
-        ! ----------------------------------------------------------------
-        ! Select base sinking speed [m/day] by tracer functional group.
-        ! Any tracer not matched below keeps Vsink = 0 and is skipped by
-        ! the "Vsink > 0.1" guard further down.
-        ! ----------------------------------------------------------------
-        Vsink = 0.0_WP
-
-        if (tracer_id == tracer_ids%detrital_nitrogen .or. & ! idetn
-                tracer_id == tracer_ids%detrital_carbon .or. & ! idetc
-                tracer_id == tracer_ids%detrital_silica .or. & ! idetsi
-                tracer_id == tracer_ids%detrital_calcite .or. & ! idetcal
-                tracer_id == 1308 .or. tracer_id == 1321 .or. &
-                tracer_id == 1408 .or. tracer_id == 1421) then
-            Vsink = VDet
-
-        elseif (tracer_id == tracer_ids%phytoplankton_nitrogen .or. & ! iphyn
-                    tracer_id == tracer_ids%phytoplankton_carbon .or. & ! iphyc
-                    tracer_id == tracer_ids%phytoplankton_chlorophyll .or. & ! ipchl
-                    tracer_id == 1305 .or. tracer_id == 1405) then
-            Vsink = VPhy
-
-        elseif (tracer_id == tracer_ids%diatom_nitrogen .or. & ! idian
-                    tracer_id == tracer_ids%diatom_carbon .or. & ! idiac
-                    tracer_id == tracer_ids%diatom_silica .or. & ! idiasi
-                    tracer_id == tracer_ids%diatom_chlorophyll .or. & ! idchl
-                    tracer_id == 1314 .or. tracer_id == 1414) then
-            Vsink = VDia
-
-        elseif (enable_coccos .and. &
-                    (tracer_id == tracer_ids%coccolithophore_nitrogen .or. & ! icocn
-                    tracer_id == tracer_ids%coccolithophore_carbon .or. & ! icocc
-                    tracer_id == tracer_ids%coccolithophore_chlorophyll)) then ! icchl
-            Vsink = VCocco
-
-        elseif (enable_coccos .and. &
-                    (tracer_id == tracer_ids%phaeocystis_nitrogen .or. & ! iphan
-                    tracer_id == tracer_ids%phaeocystis_carbon .or. & ! iphac
-                    tracer_id == tracer_ids%phaeocystis_chlorophyll)) then ! iphachl
-            Vsink = VPhaeo
-
-        elseif (tracer_id == tracer_ids%phytoplankton_calcite .or. & ! iphycal
-                    tracer_id == 1320 .or. tracer_id == 1420) then
-            ! Calcite is produced by either coccolithophores or (in simpler
-            ! configs without coccos) generic phytoplankton, so it inherits
-            ! whichever group's sinking speed applies.
-            if (enable_coccos) then
-                Vsink = VCocco
-            else
-                Vsink = VPhy
-            end if
-
-        elseif (enable_3zoo2det .and. &
-                (tracer_id == tracer_ids%macrozooplankton_detrital_nitrogen .or. & !idetz2n
-                 tracer_id == tracer_ids%macrozooplankton_detrital_carbon .or. & !idetz2c
-                 tracer_id == tracer_ids%macrozooplankton_detrital_silica .or. & !idetz2si
-                 tracer_id == tracer_ids%macrozooplankton_detrital_calcite)) then !idetz2calc
-            Vsink = VDet_zoo2
-
-        end if
+        ! Base sinking speed [m/day] of the tracer's group; tracers at or below
+        ! 0.1 m/day are skipped by the guard below (and not deposited either)
+        Vsink = base_sinking_speed(tracer_id)
 
         iel = sinking_element(tracer_id)
 
@@ -718,72 +644,9 @@ contains
                 ! ----------------------------------------------------------------
                 do nz = nzmin, nzmax + 1
 
-                    Wvel_flux(nz) = -Vsink / SecondsPerDay ! base case: constant speed
-
-                    if (allow_var_sinking) then
-                        ! Depth-proportional speed-up (applies the same
-                        ! detritus-derived Vdet_a term to whichever tracer is
-                        ! currently being processed -- consistent with the
-                        ! main detritus branch below, since ballasting further
-                        ! overwrites this for detritus specifically).
-                        Wvel_flux(nz) = -((Vdet_a * abs(zbar_3d_n(nz, n)) / SecondsPerDay) &
-                                + Vsink / SecondsPerDay)
-
-                        if (use_ballasting) then
-                            ! Ballasting (Cram et al. 2018) overrides the speed
-                            ! for the *first* detritus class only, using
-                            ! density/viscosity scaling factors precomputed by
-                            ! `ballast`.
-                            if (tracer_id == tracer_ids%detrital_nitrogen .or. & !idetn
-                                    tracer_id == tracer_ids%detrital_carbon .or. & !idetc
-                                    tracer_id == tracer_ids%detrital_silica .or. & !idetsi
-                                    tracer_id == tracer_ids%detrital_calcite .or. & !idetcal
-                                    tracer_id == 1308 .or. tracer_id == 1321 .or. &
-                                    tracer_id == 1408 .or. tracer_id == 1421) then
-                                Wvel_flux(nz) = w_ref1 * scaling_density1_3D(nz, n) &
-                                        * scaling_visc_3D(nz, n)
-
-                                if (depth_scaling1 > 0.0) Wvel_flux(nz) = Wvel_flux(nz) &
-                                        + (depth_scaling1 * abs(zbar_3d_n(nz, n)))
-
-                                ! Cap at max_sinking_velocity for numerical stability
-                                if (abs(Wvel_flux(nz)) > max_sinking_velocity) Wvel_flux(nz) = &
-                                        max_sinking_velocity
-
-                                ! [m/d] -> [m/s], sign flipped to point downward (negative)
-                                Wvel_flux(nz) = -1.0d0 * Wvel_flux(nz) / SecondsPerDay
-                            end if
-                        end if
-                    end if
-
-                    !! ---- Second detritus class always sinks at a constant speed
-                    ! Parenthesized explicitly: .and. binds tighter than .or. in Fortran, so
-                    ! without these parens this read as (enable_3zoo2det .and. ...nitrogen) .or.
-                    ! ...carbon .or. ...silica .or. ...calcite instead of the intended
-                    ! enable_3zoo2det .and. (...nitrogen .or. ...carbon .or. ...silica .or.
-                    ! ...calcite). Harmless today only because disabled tracer_ids default to a
-                    ! -1 sentinel that a real tracer_id never matches, but keep the parens.
-                    if (enable_3zoo2det .and. &
-                        (tracer_id == tracer_ids%macrozooplankton_detrital_nitrogen .or. & !idetz2n
-                         tracer_id == tracer_ids%macrozooplankton_detrital_carbon .or. & !idetz2c
-                         tracer_id == tracer_ids%macrozooplankton_detrital_silica .or. & !idetz2si
-                         tracer_id == tracer_ids%macrozooplankton_detrital_calcite)) then !idetz2calc
-                        Wvel_flux(nz) = -VDet_zoo2 / SecondsPerDay
-
-                        if (use_ballasting) then
-                            Wvel_flux(nz) = w_ref2 * scaling_density2_3D(nz, n) &
-                                    * scaling_visc_3D(nz, n)
-
-                            if (depth_scaling2 > 0.0) Wvel_flux(nz) = Wvel_flux(nz) &
-                                    + (depth_scaling2 * abs(zbar_3d_n(nz, n)))
-
-                            if (abs(Wvel_flux(nz)) > max_sinking_velocity) Wvel_flux(nz) = &
-                                    max_sinking_velocity
-
-                            Wvel_flux(nz) = -1.0d0 * Wvel_flux(nz) / SecondsPerDay ! [m/d] -> [m/s]
-                        end if
-
-                    end if
+                    ! Speed at interface nz, downward (negative); the same definition
+                    ! as for the deposition into the benthos (sinking_speed)
+                    Wvel_flux(nz) = -sinking_speed(tracer_id, abs(zbar_3d_n(nz, n)), nz, n)
 
                     ! ----------------------------------------------------------------
                     ! Cap the sinking CFL at cfl_safety: the DST3/TVD limiter below needs
@@ -970,6 +833,153 @@ contains
         end if
 
     end function sinking_element
+
+    !===============================================================================
+    ! base_sinking_speed
+    !   Namelist sinking speed of the tracer's group [m/day]: Vdet, VDet_zoo2, VPhy,
+    !   VDia, VCocco, VPhaeo (phytoplankton calcite: VCocco with coccolithophores,
+    !   VPhy without), 0 for tracers that do not sink. Tracers with
+    !   base_sinking_speed <= 0.1 m/day neither sink nor reach the benthos.
+    !===============================================================================
+    function base_sinking_speed(tracer_id) result(v)
+
+        use REcoM_declarations, only: wp
+        use recom_config, only: enable_coccos, VDet, VDet_zoo2, VPhy, VDia, VCocco, VPhaeo
+
+        implicit none
+
+        integer, intent(in) :: tracer_id
+        real(kind=wp) :: v
+
+        v = 0.0_wp
+        select case (sinking_group(tracer_id))
+        case (SG_DET1)
+            v = VDet
+        case (SG_DET2)
+            v = VDet_zoo2
+        case (SG_PHY)
+            v = VPhy
+        case (SG_DIA)
+            v = VDia
+        case (SG_COCCO)
+            v = VCocco
+        case (SG_PHAEO)
+            v = VPhaeo
+        case (SG_PHYCALC)
+            if (enable_coccos) then
+                v = VCocco
+            else
+                v = VPhy
+            end if
+        end select
+    end function base_sinking_speed
+
+    !===============================================================================
+    ! sinking_speed
+    !   Sinking speed [m/s, positive downward] of a tracer at depth z [m, positive],
+    !   with the ballasting factors of level kd of node n. One definition for the
+    !   sinking through the water column (ver_sinking_recom) and the deposition into
+    !   the benthos (ver_sinking_recom_benthos), so that material leaves the bottom
+    !   cell at the speed it sinks with. The rules (and the order of the arithmetic)
+    !   are those the water column has always used:
+    !     all groups   base_sinking_speed; allow_var_sinking adds Vdet_a * z
+    !     detritus 1   with allow_var_sinking and use_ballasting:
+    !                  w_ref1 * density and viscosity scaling (+ depth_scaling1 * z)
+    !     detritus 2   VDet_zoo2; with use_ballasting:
+    !                  w_ref2 * density and viscosity scaling (+ depth_scaling2 * z)
+    !     ballasted speeds are capped at max_sinking_velocity
+    !===============================================================================
+    function sinking_speed(tracer_id, z, kd, n) result(speed)
+
+        use REcoM_declarations, only: wp
+        use REcoM_GloVar, only: scaling_visc_3D, scaling_density1_3D, scaling_density2_3D
+        use recom_config, only: allow_var_sinking, depth_scaling1, depth_scaling2, max_sinking_velocity, &
+            use_ballasting, SecondsPerDay, VDet_zoo2, Vdet_a, w_ref1, w_ref2
+
+        implicit none
+
+        integer, intent(in) :: tracer_id, kd, n
+        real(kind=wp), intent(in) :: z
+        real(kind=wp) :: speed
+        real(kind=wp) :: vsink, w
+
+        vsink = base_sinking_speed(tracer_id)
+        speed = vsink / SecondsPerDay
+
+        if (allow_var_sinking) then
+            speed = (Vdet_a * z / SecondsPerDay) + vsink / SecondsPerDay
+            if (use_ballasting .and. sinking_group(tracer_id) == SG_DET1) then
+                w = w_ref1 * scaling_density1_3D(kd, n) * scaling_visc_3D(kd, n)
+                if (depth_scaling1 > 0.0) w = w + (depth_scaling1 * z)
+                if (abs(w) > max_sinking_velocity) w = max_sinking_velocity
+                speed = 1.0d0 * w / SecondsPerDay
+            end if
+        end if
+
+        if (sinking_group(tracer_id) == SG_DET2) then
+            speed = VDet_zoo2 / SecondsPerDay
+            if (use_ballasting) then
+                w = w_ref2 * scaling_density2_3D(kd, n) * scaling_visc_3D(kd, n)
+                if (depth_scaling2 > 0.0) w = w + (depth_scaling2 * z)
+                if (abs(w) > max_sinking_velocity) w = max_sinking_velocity
+                speed = 1.0d0 * w / SecondsPerDay
+            end if
+        end if
+    end function sinking_speed
+
+    !===============================================================================
+    ! sinking_group
+    !   Sinking group of a tracer (SG_*), 0 for tracers that do not sink.
+    !===============================================================================
+    integer function sinking_group(tracer_id)
+
+        use REcoM_declarations, only: tracer_ids
+        use recom_config, only: enable_3zoo2det, enable_coccos
+
+        implicit none
+
+        integer, intent(in) :: tracer_id
+
+        sinking_group = 0
+        if (tracer_id == tracer_ids%detrital_nitrogen .or. &
+                tracer_id == tracer_ids%detrital_carbon .or. &
+                tracer_id == tracer_ids%detrital_silica .or. &
+                tracer_id == tracer_ids%detrital_calcite .or. &
+                tracer_id == 1308 .or. tracer_id == 1321 .or. &
+                tracer_id == 1408 .or. tracer_id == 1421) then
+            sinking_group = SG_DET1
+        elseif (tracer_id == tracer_ids%phytoplankton_nitrogen .or. &
+                tracer_id == tracer_ids%phytoplankton_carbon .or. &
+                tracer_id == tracer_ids%phytoplankton_chlorophyll .or. &
+                tracer_id == 1305 .or. tracer_id == 1405) then
+            sinking_group = SG_PHY
+        elseif (tracer_id == tracer_ids%diatom_nitrogen .or. &
+                tracer_id == tracer_ids%diatom_carbon .or. &
+                tracer_id == tracer_ids%diatom_silica .or. &
+                tracer_id == tracer_ids%diatom_chlorophyll .or. &
+                tracer_id == 1314 .or. tracer_id == 1414) then
+            sinking_group = SG_DIA
+        elseif (enable_coccos .and. &
+                (tracer_id == tracer_ids%coccolithophore_nitrogen .or. &
+                tracer_id == tracer_ids%coccolithophore_carbon .or. &
+                tracer_id == tracer_ids%coccolithophore_chlorophyll)) then
+            sinking_group = SG_COCCO
+        elseif (enable_coccos .and. &
+                (tracer_id == tracer_ids%phaeocystis_nitrogen .or. &
+                tracer_id == tracer_ids%phaeocystis_carbon .or. &
+                tracer_id == tracer_ids%phaeocystis_chlorophyll)) then
+            sinking_group = SG_PHAEO
+        elseif (tracer_id == tracer_ids%phytoplankton_calcite .or. &
+                tracer_id == 1320 .or. tracer_id == 1420) then
+            sinking_group = SG_PHYCALC
+        elseif (enable_3zoo2det .and. &
+                (tracer_id == tracer_ids%macrozooplankton_detrital_nitrogen .or. &
+                tracer_id == tracer_ids%macrozooplankton_detrital_carbon .or. &
+                tracer_id == tracer_ids%macrozooplankton_detrital_silica .or. &
+                tracer_id == tracer_ids%macrozooplankton_detrital_calcite)) then
+            sinking_group = SG_DET2
+        end if
+    end function sinking_group
 
 
     !===============================================================================
