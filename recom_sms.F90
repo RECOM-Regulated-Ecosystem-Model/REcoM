@@ -126,7 +126,7 @@ contains
         use mvars, only: vars_sprac
         use recom_glovar, only: cosAI
         use recom_extra, only: krill_resp
-        use recom_sms_update, only: sms_update_state, sms_update_tracer_scalars
+        use recom_sms_update, only: sms_update_state
         use recom_carbonate_chemistry, only: calculate_carbonate_chemistry
         use recom_sms_init
         use recom_log, only: recom_warn, recom_info, recom_kv, recom_itoa
