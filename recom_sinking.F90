@@ -781,7 +781,7 @@ contains
                 do nz = nzmin, nzmax
                     vert_sink(nz, n) = vert_sink(nz, n) &
                             + (vd_flux(nz) - vd_flux(nz + 1)) * dt / areasvol(nz, n) &
-                            / hnode_new(nz, n)
+                            / hnode(nz, n) ! FESOM adds vert_sink before its T* update, i.e. on hnode
                 end do
             end do
         end if ! Vsink > 0.1
