@@ -53,7 +53,8 @@ contains
         use REcoM_declarations, only: wp, tracer_ids
         use REcoM_GloVar, only: tracers_info_type
         use recom_config, only: validate_recom_tracers, initialize_tracer_indices, &
-                validate_tracer_id_sequence, bgc_num, validate_grazing_preference
+                validate_tracer_id_sequence, bgc_num, validate_grazing_preference, &
+                validate_iron_chemistry
         use recom_ciso, only: idic_13, iphyc_13, idetc_13, ihetc_13, idoc_13, idiac_13, &
                 iphycal_13, idetcal_13, idic_14, iphyc_14, idetc_14, ihetc_14, idoc_14, &
                 idiac_14, iphycal_14, idetcal_14
@@ -118,6 +119,9 @@ contains
 
         ! Grazing preference form (fasham | sigmoid) and s*Nsq* consistency
         call validate_grazing_preference(mype)
+
+        ! fe_2ligands only with fe_compl_nica
+        call validate_iron_chemistry(mype)
 
         ! T,S | BGC | [age] | [transit] num_physical_tracers
         ! is always just T,S (=2): BGC tracers start right after them, regardless

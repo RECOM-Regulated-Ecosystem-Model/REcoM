@@ -1922,6 +1922,30 @@ contains
 
     end subroutine validate_grazing_preference
 
+    ! ==============================================================================
+    ! SUBROUTINE: validate_iron_chemistry
+    ! Purpose: fe_2ligands is only implemented with the pH/DOC dependent stability
+    !          constants (fe_compl_nica); without them freeFe was never computed and
+    !          iron scavenging was silently off. Call once after the namelists are read.
+    ! ==============================================================================
+    subroutine validate_iron_chemistry(mype)
+        use recom_log, only: recom_abort, recom_error, recom_info
+
+        implicit none
+
+        integer, intent(in) :: mype
+
+        if (fe_2ligands .and. .not. fe_compl_nica) then
+            if (mype == 0) then
+                call recom_error('fe_2ligands = .true. needs fe_compl_nica = .true.')
+                call recom_info('the two-ligand model only has the pH/DOC dependent constants (Ye et al. 2020)')
+                call recom_info('set fe_compl_nica = .true., or fe_2ligands = .false. for one ligand')
+            end if
+            call recom_abort()
+        end if
+    end subroutine validate_iron_chemistry
+
+
 end module recom_config
 !===============================================================================
 ! For arrays needed for the whole 2D or 3D domain, but only needed in REcoM
