@@ -864,7 +864,7 @@ contains
                             (1.d0 - cfl) / (1.d-20 + cfl) * thetaM))
 !                            (1.d0 - cfl) / (1.d-20 - cfl) * thetaM))
                     tv = (0.5 * wPs * (tracer_data_values(nz, n) + psiM * Rj) + &
-                            0.5 * wM * (tracer_data_values(max(nzmin, nz - 1), n) + psiP * Rj))
+                            0.5 * wM * (tracer_data_values(max(nzmin, nz - 1), n) - psiP * Rj))
                     vd_flux(nz) = -tv * area(nz, n)
                 end do
 
