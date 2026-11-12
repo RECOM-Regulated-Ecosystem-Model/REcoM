@@ -358,12 +358,8 @@ contains
         !   biostep  : Total number of sub-steps per physics step [-]
         !   kdzUpper : Cumulative light attenuation from surface [dimensionless]
         !   sms      : Source-minus-sink flux array [mmol m-3 day-1]
-        !   tiny     : Threshold for negligible fluxes [mmol m-3 day-1]
         !
-        ! Numerical Cleanup:
-        !   - Removes negligible SMS values before applying
-        !   - Prevents accumulation of numerical noise
-        !   - Improves computational efficiency
+        ! sms accumulates over the sub-steps; it is set to zero once, before the loop.
         !-------------------------------------------------------------------------------
 
         do step = one, biostep
@@ -371,10 +367,6 @@ contains
             ! Reset upper light attenuation (top of the cell) at start of each sub-step
             ! Light attenuation integrates downward through water column
             kdzUpper = 0.d0
-
-            ! Clean up negligible SMS values to prevent numerical issues
-            ! Sets very small fluxes to exactly zero
-            if (any(abs(sms(:, :)) <= tiny)) sms(:, :) = zero
 
             !===========================================================================
             ! VERTICAL LOOP THROUGH WATER COLUMN
