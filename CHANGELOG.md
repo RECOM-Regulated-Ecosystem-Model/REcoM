@@ -9,7 +9,7 @@ All notable changes to REcoM are listed here. Versions follow
 
 FESOM pins REcoM by release tag.
 
-## [v3.2.0] - unreleased
+## [v3.2.0] - #56
 
 Changes since `r3.1.3` (2026-07-16).
 
