@@ -19,7 +19,7 @@ FESOM pins REcoM by release tag.
   only (#58). Bit-identical.
 - `ver_sinking_recom_benthos` no longer exchanges the halo of `Benthos`,
   `Benthos_tr`, `SinkFlx` and `SinkFlx_tr` after each sinking tracer; they
-  are read at own nodes only. Bit-identical.
+  are read at own nodes only (#59). Bit-identical.
 
 ## [v3.2.0] - #56
 
