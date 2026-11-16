@@ -17,6 +17,9 @@ FESOM pins REcoM by release tag.
   halo exchanges of 59 other node fields (surface fluxes, benthos, carbonate
   system, diagnostics) are removed; REcoM and FESOM read these at own nodes
   only (#58). Bit-identical.
+- `ver_sinking_recom_benthos` no longer exchanges the halo of `Benthos`,
+  `Benthos_tr`, `SinkFlx` and `SinkFlx_tr` after each sinking tracer; they
+  are read at own nodes only. Bit-identical.
 
 ## [v3.2.0] - #56
 
