@@ -54,8 +54,6 @@ contains
             myDim_nod2d, str_bf, mype, MPI_COMM_FESOM, npes, sn, rn, s_mpitype_nod2D, &
             r_mpitype_nod2D, s_mpitype_nod3D, r_mpitype_nod3D, sPE, rPE, requests, nreq, dt)
 
-        use recom_g_comm_auto, only: recom_exchange_nod
-
         use recom_declarations, only: wp, tracer_ids
         use recom_glovar, only: Benthos, Benthos_tr, SinkFlx, SinkFlx_tr, BotFlux
 
@@ -385,33 +383,9 @@ contains
 
         end do
 
-        ! ----------------------------------------------------------------
-        ! Halo exchange of accumulated fluxes/benthos buckets across MPI
-        ! partitions so that every rank has consistent boundary values.
-        ! ----------------------------------------------------------------
-        if (use_MEDUSA) then
-            do n = 1, bottflx_num
-#if defined(__usetp)
-                ! kh 25.03.22 buffer sums per tracer index to avoid non bit identical results
-                ! regarding global sums when running the tracer loop in parallel
-                call recom_exchange_nod(SinkFlx_tr(:, n, tr_num), npes, sn, rn, MPI_COMM_FESOM, &
-                        mype, s_mpitype_nod2D, r_mpitype_nod2D, sPE, rPE, requests, nreq)
-#else
-                call recom_exchange_nod(SinkFlx(:, n), npes, sn, rn, MPI_COMM_FESOM, mype, &
-                        s_mpitype_nod2D, r_mpitype_nod2D, sPE, rPE, requests, nreq)
-#endif
-            end do
-        end if ! use_MEDUSA
-
-        do n = 1, benthos_num
-#if defined(__usetp)
-            call recom_exchange_nod(Benthos_tr(:, n, tr_num), npes, sn, rn, MPI_COMM_FESOM, &
-                    mype, s_mpitype_nod2D, r_mpitype_nod2D, sPE, rPE, requests, nreq)
-#else
-            call recom_exchange_nod(Benthos(:, n), npes, sn, rn, MPI_COMM_FESOM, mype, &
-                    s_mpitype_nod2D, r_mpitype_nod2D, sPE, rPE, requests, nreq)
-#endif
-        end do
+        ! No halo exchange of Benthos, Benthos_tr, SinkFlx or SinkFlx_tr: they are
+        ! written and read at own nodes only (REcoM, FESOM conservation, output,
+        ! restart), so their halo values are never used.
 
     end subroutine ver_sinking_recom_benthos
 
