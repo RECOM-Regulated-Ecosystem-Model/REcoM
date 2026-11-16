@@ -9,6 +9,15 @@ All notable changes to REcoM are listed here. Versions follow
 
 FESOM pins REcoM by release tag.
 
+## [Unreleased]
+
+### Performance
+
+- `recom()` exchanges only the BGC tracers at the end of the time step. The
+  halo exchanges of 59 other node fields (surface fluxes, benthos, carbonate
+  system, diagnostics) are removed; REcoM and FESOM read these at own nodes
+  only (#58). Bit-identical.
+
 ## [v3.2.0] - #56
 
 Changes since `r3.1.3` (2026-07-16).
