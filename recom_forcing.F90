@@ -44,7 +44,7 @@ contains
                 diags, enable_3zoo2det, enable_coccos, grazing_detritus, ialk, icchl, icocc, &
                 idchl, idiac, idian, idiasi, idic, idin, ioxy, ipchl, &
                 iphac, iphachl, iphan, iphyc, iphyn, isi, nmocsy, &
-                one, pa2atm, recom_debug, secondsperday, tiny, tiny_chl, icocn
+                one, pa2atm, recom_debug, secondsperday, tiny, tiny_chl, icocn, diag_tiny_clamp
 
         use recom_ciso, only: alpha_aq_13, alpha_aq_14, alpha_dic_13, alpha_dic_14, alpha_k_13, &
                 alpha_k_14, alpha_p_13, alpha_p_14, alpha_p_dia_13, alpha_p_dia_14, ciso_14, &
@@ -55,7 +55,8 @@ contains
 
         use recom_locvar, only: betad, co2, co2ex, dpco2surf, fco2, hco3, k0, kw660, loc_ice_conc, &
                 locatmco2, o2ex, o2flux_seaicemask, oflux, omegaa, omegac, p, pco2surf, ph, rhosw, &
-                tempis, uloc, co2flux, co3, co2flux_seaicemask, dflux
+                tempis, uloc, co2flux, co3, co2flux_seaicemask, dflux, clamp_entry_col, &
+                clamp_created_col
 
         use recom_extra, only: depth_calculations
         use recom_sms_module, only: recom_sms
@@ -132,6 +133,10 @@ contains
         real(kind=wp), dimension(nl, 6)  :: SinkVel    ! Sinking velocities [m/d]
         real(kind=wp), dimension(nl - 1) :: thick      ! Layer thickness [m]
         real(kind=wp), dimension(nl - 1) :: recipthick ! 1/thick [1/m]
+
+        ! diag_tiny_clamp: lower bound of each BGC tracer, as applied after the SMS update
+        real(kind=wp), dimension(bgc_num) :: lower_bound
+        integer :: itr
 
         ! tiny_N, tiny_C, tiny_N_d, tiny_C_d, tiny_Si (and cocco/phaeo): lower bounds after the
         ! SMS update, computed once in initialize_tiny_thresholds (recom_init.F90)
@@ -297,6 +302,34 @@ contains
         !===========================================================================
         if (recom_debug .and. mype == 0) call recom_trace('REcoM_sms', 2)
 
+        !---------------------------------------------------------------------------
+        ! diag_tiny_clamp: how far the tracers are below their lower bounds on entry
+        ! (lowered by transport, sinking or dilution since the last REcoM step)
+        !---------------------------------------------------------------------------
+        if (diag_tiny_clamp) then
+            lower_bound = tiny
+            lower_bound(ipchl)  = tiny_chl
+            lower_bound(iphyn)  = tiny_N
+            lower_bound(iphyc)  = tiny_C
+            lower_bound(idchl)  = tiny_chl
+            lower_bound(idian)  = tiny_N_d
+            lower_bound(idiac)  = tiny_C_d
+            lower_bound(idiasi) = tiny_Si
+            if (enable_coccos) then
+                lower_bound(icchl)   = tiny_chl
+                lower_bound(icocn)   = tiny_N_c
+                lower_bound(icocc)   = tiny_C_c
+                lower_bound(iphachl) = tiny_chl
+                lower_bound(iphan)   = tiny_N_p
+                lower_bound(iphac)   = tiny_C_p
+            end if
+            clamp_entry_col = 0.0_WP
+            clamp_created_col = 0.0_WP
+            do itr = 1, bgc_num
+                clamp_entry_col(nzmin:nn, itr) = max(0.0_WP, lower_bound(itr) - state(nzmin:nn, itr))
+            end do
+        end if
+
         call REcoM_sms(n, nzmin, Nn, state, thick, SurfSW, sms, Temp, Sali_depth, &
                 CO2_watercolumn, & ! MOCSY [mol/m3]
                 pH_watercolumn, & ! MOCSY on total scale
@@ -312,6 +345,14 @@ contains
         !---------------------------------------------------------------------------
         ! Apply SMS tendency and enforce lower concentration bounds
         !---------------------------------------------------------------------------
+        ! diag_tiny_clamp: amount the lower bounds below add to state + sms
+        if (diag_tiny_clamp) then
+            do itr = 1, bgc_num
+                clamp_created_col(nzmin:nn, itr) = max(0.0_WP, lower_bound(itr) &
+                        - (state(nzmin:nn, itr) + sms(nzmin:nn, itr)))
+            end do
+        end if
+
         state(nzmin:nn, :) = max(tiny, state(nzmin:nn, :) + sms(nzmin:nn, :))
 
         ! Per-species lower bounds (tighter than the generic 'tiny')

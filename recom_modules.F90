@@ -543,6 +543,9 @@ module recom_config
     integer :: currentCO2cycle = 1 ! Which CO2 cycle we are currently running
     integer :: Nmocsy = 1 ! Length of the vector that is passed to mocsy (always one for recom)
     logical :: recom_debug = .false.
+    ! Diagnostic of the mass added by the lower bounds (tiny, tiny_N, ...) in REcoM_Forcing:
+    ! global totals per tracer and element, printed once per model day. Does not change results.
+    logical :: diag_tiny_clamp = .false.
     logical :: ciso = .false. !MB main switch to enable/disable carbon isotopes (13|14C)
     integer :: benthos_num = 4 !MB number of sediment tracers = 8 if ciso = .true.
     logical :: use_MEDUSA = .false. ! main switch for sediment model
@@ -578,7 +581,7 @@ module recom_config
             useErosion, NitrogenSS, useAeolianN, &
             firstyearoffesomcycle, lastyearoffesomcycle, numofCO2cycles, &
             currentCO2cycle, Nmocsy, &
-            recom_debug, ciso, benthos_num, &
+            recom_debug, diag_tiny_clamp, ciso, benthos_num, &
             use_MEDUSA, use_DICremin, sedflx_num, bottflx_num, &
             add_loopback, lb_tscale, use_atbox, use_virt_tracers
 
@@ -2363,6 +2366,14 @@ module REcoM_locVar
     real(kind=wp) :: OmegaA_depth(1)
     ! Aragonite saturation state of the water column of the current node [-]
     real(kind=wp), allocatable, dimension(:) :: OmegaA_watercolumn
+
+    ! diag_tiny_clamp, column of the current node (level, BGC tracer) [tracer unit]:
+    !   clamp_entry_col   amount below the lower bound when REcoM_Forcing starts
+    !   clamp_created_col amount added by the lower bounds after the SMS update
+    real(kind=wp), allocatable, dimension(:, :) :: clamp_entry_col, clamp_created_col
+    ! the same, summed over the own nodes and the steps since the last print
+    ! [tracer unit * m3, i.e. mmol; umol for Fe; mg for chlorophyll]
+    real(kind=wp), allocatable, dimension(:) :: clamp_entry_sum, clamp_created_sum
 
     ! NEW MOCSY Omega for calcite, i.e., the   calcite saturation state
     real(kind=wp) :: OmegaC_depth(1)

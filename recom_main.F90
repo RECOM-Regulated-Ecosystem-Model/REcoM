@@ -121,7 +121,7 @@ contains
             use_age_tracer, use_transit, l_sf6, l_f11, l_f12, l_r14c, l_r39ar)
 
         use recom_g_comm_auto, only: recom_exchange_nod
-        use recom_extra, only: cobeta
+        use recom_extra, only: cobeta, global_sum_recom
 
         use recom_declarations, only: wp, decaybenthos, tracer_ids
         use bio_fluxes_interface, only: bio_fluxes
@@ -129,11 +129,12 @@ contains
         use recom_config, only: benthos_num, bgc_num, ciso, diags, dust_sol, enable_3zoo2det, &
                 enable_coccos, ialk, parfrac, recom_debug, restore_alkalinity, secondsperday, &
                 use_atbox, tiny, pa2atm, ioxy, idic, idoc, iphyc, idiac, idetc, ihetc, izoo2c, &
-                idetz2c, imiczooc, icocc, iphac
+                idetz2c, imiczooc, icocc, iphac, diag_tiny_clamp
 
         use recom_locvar, only: LocBenthos, locatmco2, fedust, hplus, loc_ice_conc, ndust, uloc, &
                 ph, kw660, k0, pco2surf, dpco2surf, dflux, co2flux_seaicemask, o2flux_seaicemask, &
-                oflux, OmegaA_watercolumn
+                oflux, OmegaA_watercolumn, clamp_entry_col, clamp_created_col, &
+                clamp_entry_sum, clamp_created_sum
 
         use recom_ciso, only: locatmco2_13, locatmco2_14, r_atm_13, r_atm_14, ciso_14, &
                 lat_val, production_rate_to_flux_14, x_co2atm_13, x_co2atm_14, &
@@ -154,7 +155,8 @@ contains
         use recom_atbox_module, only: recom_atbox
         use gasx, only: o2sato, vapress
         use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
-        use recom_log, only: recom_trace, recom_section, recom_kv
+        use recom_log, only: recom_trace, recom_section, recom_kv, &
+                             recom_itoa
 
         implicit none
 
@@ -242,7 +244,13 @@ contains
         ! step of the year (1 at the first step of 1 January) and the step that schedules
         ! the carbonate chemistry of a column (1 = update now)
         integer                    :: step_of_year, carb_step
- 
+
+        ! diag_tiny_clamp: global totals per BGC tracer and per element (N, C, Si, Fe, Alk, O2)
+        real(kind=wp) :: clamp_entry_glo(bgc_num), clamp_created_glo(bgc_num)
+        real(kind=wp) :: clamp_entry_el(6), clamp_created_el(6)
+        integer       :: itr
+        character(len=3), parameter :: clamp_el_name(6) = ['N  ', 'C  ', 'Si ', 'Fe ', 'Alk', 'O2 ']
+
         !---------------------------------------------------------------------------
         ! Allocate per-column work arrays (full depth nl-1)
         !---------------------------------------------------------------------------
@@ -254,6 +262,12 @@ contains
                 rhoSW_watercolumn(nl - 1))
         ! module array (filled in calculate_carbonate_chemistry), kept between calls
         if (.not. allocated(OmegaA_watercolumn)) allocate(OmegaA_watercolumn(nl - 1))
+        if (diag_tiny_clamp .and. .not. allocated(clamp_entry_col)) then
+            allocate(clamp_entry_col(nl - 1, bgc_num), source=0.0_WP)
+            allocate(clamp_created_col(nl - 1, bgc_num), source=0.0_WP)
+            allocate(clamp_entry_sum(bgc_num), source=0.0_WP)
+            allocate(clamp_created_sum(bgc_num), source=0.0_WP)
+        end if
 
         num_physical_tracers = 2
 
@@ -527,6 +541,16 @@ contains
                 tracers_info%data_pointers(tr_num)%tracer_data(nzmin:nzmax, n) = C(nzmin:nzmax, tr_num-num_physical_tracers)
             end do
 
+            ! diag_tiny_clamp: volume integral of this column, added to the rank totals
+            if (diag_tiny_clamp) then
+                do itr = 1, bgc_num
+                    clamp_entry_sum(itr) = clamp_entry_sum(itr) + sum(clamp_entry_col(nzmin:nzmax, itr) &
+                            * hnode(nzmin:nzmax, n) * areasvol(nzmin:nzmax, n))
+                    clamp_created_sum(itr) = clamp_created_sum(itr) + sum(clamp_created_col(nzmin:nzmax, itr) &
+                            * hnode(nzmin:nzmax, n) * areasvol(nzmin:nzmax, n))
+                end do
+            end if
+
             !-----------------------------------------------------------------------
             ! CMIP7 state diagnostics of the updated column (o2sat, dpo2, o2min,
             ! intdic, intdoc, intpoc)
@@ -654,6 +678,37 @@ contains
             rhoSW3D(nzmin:nzmax, n) = rhoSW_watercolumn(nzmin:nzmax)
         end do
 
+        !---------------------------------------------------------------------------
+        ! diag_tiny_clamp: global totals since the last print, at the last step of the day
+        !---------------------------------------------------------------------------
+        if (diag_tiny_clamp .and. nint(timenew / dt) == nint(SecondsPerDay / dt)) then
+            call global_sum_recom(clamp_entry_sum, clamp_entry_glo, bgc_num, MPI_COMM_FESOM)
+            call global_sum_recom(clamp_created_sum, clamp_created_glo, bgc_num, MPI_COMM_FESOM)
+            clamp_entry_sum = 0.0_WP
+            clamp_created_sum = 0.0_WP
+
+            if (mype == 0) then
+                call clamp_element_sums(clamp_entry_glo, clamp_entry_el)
+                call clamp_element_sums(clamp_created_glo, clamp_created_el)
+
+                call recom_section('lower bounds, day ' // recom_itoa(daynew) // ' of ' // &
+                        recom_itoa(yearold))
+                ! per tracer: only those with a non-zero total (chlorophyll in mg, Fe in umol)
+                do itr = 1, bgc_num
+                    if (clamp_entry_glo(itr) > 0.0_WP .or. clamp_created_glo(itr) > 0.0_WP) then
+                        tracer_id = tracers_info%ids(bgc_start - 1 + itr)
+                        call recom_kv(recom_itoa(tracer_id) // ' entry', clamp_entry_glo(itr), 'mmol d-1')
+                        call recom_kv(recom_itoa(tracer_id) // ' created', clamp_created_glo(itr), 'mmol d-1')
+                    end if
+                end do
+                ! per element (Fe in umol)
+                do itr = 1, 6
+                    call recom_kv(trim(clamp_el_name(itr)) // ' entry', clamp_entry_el(itr), 'mmol d-1')
+                    call recom_kv(trim(clamp_el_name(itr)) // ' created', clamp_created_el(itr), 'mmol d-1')
+                end do
+            end if
+        end if
+
         ! ======================================================================================
         !************************** EXCHANGE NODAL INFORMATION *********************************
 
@@ -669,5 +724,42 @@ contains
         ! integrals, coupling, output, restart), so they are not exchanged.
 
     end subroutine recom
+
+    !===============================================================================
+    ! Element totals (N, C, Si, Fe, Alk, O2) of a vector over the BGC tracers
+    ! (diag_tiny_clamp). Chlorophyll, DICremin and the carbon isotopes are not counted.
+    !===============================================================================
+    subroutine clamp_element_sums(g, el)
+
+        use recom_declarations, only: wp
+        use recom_config, only: enable_3zoo2det, enable_coccos, idin, iphyn, idetn, ihetn, idon, &
+                idian, izoo2n, idetz2n, imiczoon, icocn, iphan, idic, iphyc, idetc, ihetc, idoc, &
+                idiac, iphycal, idetcal, izoo2c, idetz2c, idetz2calc, imiczooc, icocc, iphac, isi, &
+                idiasi, idetsi, idetz2si, ife, ialk, ioxy
+
+        implicit none
+
+        real(kind=wp), intent(in), dimension(:) :: g
+        real(kind=wp), intent(out), dimension(6) :: el
+
+        el(1) = g(idin) + g(iphyn) + g(idetn) + g(ihetn) + g(idon) + g(idian)
+        el(2) = g(idic) + g(iphyc) + g(idetc) + g(ihetc) + g(idoc) + g(idiac) + g(iphycal) &
+                + g(idetcal)
+        el(3) = g(isi) + g(idiasi) + g(idetsi)
+        el(4) = g(ife)
+        el(5) = g(ialk)
+        el(6) = g(ioxy)
+
+        if (enable_3zoo2det) then
+            el(1) = el(1) + g(izoo2n) + g(idetz2n) + g(imiczoon)
+            el(2) = el(2) + g(izoo2c) + g(idetz2c) + g(idetz2calc) + g(imiczooc)
+            el(3) = el(3) + g(idetz2si)
+        end if
+
+        if (enable_coccos) then
+            el(1) = el(1) + g(icocn) + g(iphan)
+            el(2) = el(2) + g(icocc) + g(iphac)
+        end if
+    end subroutine clamp_element_sums
 
 end module recom_interface
