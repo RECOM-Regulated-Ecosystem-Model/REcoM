@@ -16,7 +16,7 @@ FESOM pins REcoM by release tag.
 - `recom()` exchanges only the BGC tracers at the end of the time step. The
   halo exchanges of 59 other node fields (surface fluxes, benthos, carbonate
   system, diagnostics) are removed; REcoM and FESOM read these at own nodes
-  only. Bit-identical.
+  only (#58). Bit-identical.
 
 ## [v3.2.0] - #56
 
