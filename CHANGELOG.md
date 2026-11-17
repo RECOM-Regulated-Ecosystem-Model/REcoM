@@ -40,7 +40,7 @@ FESOM pins REcoM by release tag.
 - The lower bounds in `REcoM_Forcing` add mass where tracers arrive below them. In the
   2p3z2d test (1959, one year after a cold start) they add about 4 Tg C, 2 Tg N,
   0.4 Tmol Si and 1.7 Tmol O2 per year. C, N and Si are added in the interior, where
-  Redi isopycnal diffusion makes tracers close to zero negative (97 % less with
+  Redi isopycnal diffusion makes tracers close to zero negative (over 99 % less with
   `Redi = .false.`); O2 in the bottom layer, where the benthic O2 uptake exceeds the O2
   of anoxic cells (see `O2dep_benthos`).
 
