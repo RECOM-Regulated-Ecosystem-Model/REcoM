@@ -19,7 +19,24 @@ FESOM pins REcoM by release tag.
   only (#58). Bit-identical.
 - `ver_sinking_recom_benthos` no longer exchanges the halo of `Benthos`,
   `Benthos_tr`, `SinkFlx` and `SinkFlx_tr` after each sinking tracer; they
-  are read at own nodes only. Bit-identical.
+  are read at own nodes only (#59). Bit-identical.
+
+### Added
+
+- `diag_tiny_clamp` (`&pavariables`, default `.false.`): global totals of the mass that
+  the lower bounds (`tiny`, `tiny_N`, `tiny_C`, `tiny_chl`, ...) add in `REcoM_Forcing`,
+  per tracer and element, split into top wet layer, interior and bottom layer, together
+  with the deficit the tracers have on entry to REcoM; printed once per model day (#60).
+  Bit-identical when off.
+
+### Known limitations
+
+- The lower bounds in `REcoM_Forcing` add mass where tracers arrive below them. In the
+  2p3z2d test (1959, one year after a cold start) they add about 4 Tg C, 2 Tg N,
+  0.4 Tmol Si and 1.7 Tmol O2 per year. C, N and Si are added in the interior, where
+  Redi isopycnal diffusion makes tracers close to zero negative (97 % less with
+  `Redi = .false.`); O2 in the bottom layer, where the benthic O2 uptake exceeds the O2
+  of anoxic cells.
 
 ## [v3.2.0] - #56
 
