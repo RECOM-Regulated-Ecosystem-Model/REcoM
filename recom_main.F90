@@ -538,7 +538,7 @@ contains
                     rhoSW_watercolumn, & ! NEW DISS in-situ density of seawater [mol/m^3]
                     PAR, MPI_COMM_FESOM, mype, myDim_nod2D, &
                     eDim_nod2D, nl, hnode, zbar_3d_n, &
-                    geo_coord_nod2D, daynew, ndpyr, dt, kappa, carb_step, rad)
+                    geo_coord_nod2D, daynew, ndpyr, dt, kappa, carb_step, rad, areasvol(:, n))
 
             do tr_num = bgc_start, bgc_end
                 tracers_info%data_pointers(tr_num)%tracer_data(nzmin:nzmax, n) = C(nzmin:nzmax, tr_num-num_physical_tracers)
