@@ -156,7 +156,7 @@ contains
         use gasx, only: o2sato, vapress
         use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
         use recom_log, only: recom_trace, recom_section, recom_kv, &
-                             recom_itoa
+                             recom_itoa, recom_info
 
         implicit none
 
@@ -245,10 +245,13 @@ contains
         ! the carbonate chemistry of a column (1 = update now)
         integer                    :: step_of_year, carb_step
 
-        ! diag_tiny_clamp: global totals per BGC tracer and per element (N, C, Si, Fe, Alk, O2)
-        real(kind=wp) :: clamp_entry_glo(bgc_num), clamp_created_glo(bgc_num)
-        real(kind=wp) :: clamp_entry_el(6), clamp_created_el(6)
-        integer       :: itr
+        ! diag_tiny_clamp: global totals per BGC tracer and per element (N, C, Si, Fe, Alk, O2),
+        ! by location (1: top wet layer, 2: interior, 3: bottom layer)
+        real(kind=wp) :: clamp_entry_glo(bgc_num, 3), clamp_created_glo(bgc_num, 3)
+        real(kind=wp) :: clamp_entry_el(6, 3), clamp_created_el(6, 3)
+        real(kind=wp) :: clamp_vol(nl - 1) ! layer volume of the column [m3]
+        integer       :: itr, kloc
+        character(len=96) :: clamp_line
         character(len=3), parameter :: clamp_el_name(6) = ['N  ', 'C  ', 'Si ', 'Fe ', 'Alk', 'O2 ']
 
         !---------------------------------------------------------------------------
@@ -265,8 +268,8 @@ contains
         if (diag_tiny_clamp .and. .not. allocated(clamp_entry_col)) then
             allocate(clamp_entry_col(nl - 1, bgc_num), source=0.0_WP)
             allocate(clamp_created_col(nl - 1, bgc_num), source=0.0_WP)
-            allocate(clamp_entry_sum(bgc_num), source=0.0_WP)
-            allocate(clamp_created_sum(bgc_num), source=0.0_WP)
+            allocate(clamp_entry_sum(bgc_num, 3), source=0.0_WP)
+            allocate(clamp_created_sum(bgc_num, 3), source=0.0_WP)
         end if
 
         num_physical_tracers = 2
@@ -541,13 +544,26 @@ contains
                 tracers_info%data_pointers(tr_num)%tracer_data(nzmin:nzmax, n) = C(nzmin:nzmax, tr_num-num_physical_tracers)
             end do
 
-            ! diag_tiny_clamp: volume integral of this column, added to the rank totals
+            ! diag_tiny_clamp: volume integral of this column, added to the rank totals of
+            ! the top wet layer, the interior and the bottom layer (a column of one layer
+            ! counts as top layer only)
             if (diag_tiny_clamp) then
+                clamp_vol(nzmin:nzmax) = hnode(nzmin:nzmax, n) * areasvol(nzmin:nzmax, n)
                 do itr = 1, bgc_num
-                    clamp_entry_sum(itr) = clamp_entry_sum(itr) + sum(clamp_entry_col(nzmin:nzmax, itr) &
-                            * hnode(nzmin:nzmax, n) * areasvol(nzmin:nzmax, n))
-                    clamp_created_sum(itr) = clamp_created_sum(itr) + sum(clamp_created_col(nzmin:nzmax, itr) &
-                            * hnode(nzmin:nzmax, n) * areasvol(nzmin:nzmax, n))
+                    clamp_entry_sum(itr, 1) = clamp_entry_sum(itr, 1) &
+                            + clamp_entry_col(nzmin, itr) * clamp_vol(nzmin)
+                    clamp_created_sum(itr, 1) = clamp_created_sum(itr, 1) &
+                            + clamp_created_col(nzmin, itr) * clamp_vol(nzmin)
+                    if (nzmax > nzmin) then
+                        clamp_entry_sum(itr, 2) = clamp_entry_sum(itr, 2) &
+                                + sum(clamp_entry_col(nzmin + 1:nzmax - 1, itr) * clamp_vol(nzmin + 1:nzmax - 1))
+                        clamp_created_sum(itr, 2) = clamp_created_sum(itr, 2) &
+                                + sum(clamp_created_col(nzmin + 1:nzmax - 1, itr) * clamp_vol(nzmin + 1:nzmax - 1))
+                        clamp_entry_sum(itr, 3) = clamp_entry_sum(itr, 3) &
+                                + clamp_entry_col(nzmax, itr) * clamp_vol(nzmax)
+                        clamp_created_sum(itr, 3) = clamp_created_sum(itr, 3) &
+                                + clamp_created_col(nzmax, itr) * clamp_vol(nzmax)
+                    end if
                 end do
             end if
 
@@ -682,29 +698,38 @@ contains
         ! diag_tiny_clamp: global totals since the last print, at the last step of the day
         !---------------------------------------------------------------------------
         if (diag_tiny_clamp .and. nint(timenew / dt) == nint(SecondsPerDay / dt)) then
-            call global_sum_recom(clamp_entry_sum, clamp_entry_glo, bgc_num, MPI_COMM_FESOM)
-            call global_sum_recom(clamp_created_sum, clamp_created_glo, bgc_num, MPI_COMM_FESOM)
+            call global_sum_recom(clamp_entry_sum, clamp_entry_glo, 3 * bgc_num, MPI_COMM_FESOM)
+            call global_sum_recom(clamp_created_sum, clamp_created_glo, 3 * bgc_num, MPI_COMM_FESOM)
             clamp_entry_sum = 0.0_WP
             clamp_created_sum = 0.0_WP
 
             if (mype == 0) then
-                call clamp_element_sums(clamp_entry_glo, clamp_entry_el)
-                call clamp_element_sums(clamp_created_glo, clamp_created_el)
+                do kloc = 1, 3
+                    call clamp_element_sums(clamp_entry_glo(:, kloc), clamp_entry_el(:, kloc))
+                    call clamp_element_sums(clamp_created_glo(:, kloc), clamp_created_el(:, kloc))
+                end do
 
                 call recom_section('lower bounds, day ' // recom_itoa(daynew) // ' of ' // &
                         recom_itoa(yearold))
-                ! per tracer: only those with a non-zero total (chlorophyll in mg, Fe in umol)
+                call recom_info('mmol d-1 (Fe umol d-1, chlorophyll mg d-1); top = top wet layer')
+                write(clamp_line, '(a8, 3x, 3a10, 3x, 3a10)') 'ID', 'entry top', 'interior', &
+                        'bottom', 'added top', 'interior', 'bottom'
+                call recom_info(trim(clamp_line))
+                ! per tracer: only those with a non-zero total
                 do itr = 1, bgc_num
-                    if (clamp_entry_glo(itr) > 0.0_WP .or. clamp_created_glo(itr) > 0.0_WP) then
+                    if (any(clamp_entry_glo(itr, :) > 0.0_WP) .or. &
+                            any(clamp_created_glo(itr, :) > 0.0_WP)) then
                         tracer_id = tracers_info%ids(bgc_start - 1 + itr)
-                        call recom_kv(recom_itoa(tracer_id) // ' entry', clamp_entry_glo(itr), 'mmol d-1')
-                        call recom_kv(recom_itoa(tracer_id) // ' created', clamp_created_glo(itr), 'mmol d-1')
+                        write(clamp_line, '(i8, 3x, 3es10.2, 3x, 3es10.2)') tracer_id, &
+                                clamp_entry_glo(itr, :), clamp_created_glo(itr, :)
+                        call recom_info(trim(clamp_line))
                     end if
                 end do
-                ! per element (Fe in umol)
+                ! per element
                 do itr = 1, 6
-                    call recom_kv(trim(clamp_el_name(itr)) // ' entry', clamp_entry_el(itr), 'mmol d-1')
-                    call recom_kv(trim(clamp_el_name(itr)) // ' created', clamp_created_el(itr), 'mmol d-1')
+                    write(clamp_line, '(a8, 3x, 3es10.2, 3x, 3es10.2)') trim(clamp_el_name(itr)), &
+                            clamp_entry_el(itr, :), clamp_created_el(itr, :)
+                    call recom_info(trim(clamp_line))
                 end do
             end if
         end if

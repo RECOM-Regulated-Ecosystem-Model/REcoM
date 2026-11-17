@@ -2371,9 +2371,10 @@ module REcoM_locVar
     !   clamp_entry_col   amount below the lower bound when REcoM_Forcing starts
     !   clamp_created_col amount added by the lower bounds after the SMS update
     real(kind=wp), allocatable, dimension(:, :) :: clamp_entry_col, clamp_created_col
-    ! the same, summed over the own nodes and the steps since the last print
+    ! the same, summed over the own nodes and the steps since the last print, by location
+    ! (BGC tracer, 1: top wet layer, 2: interior, 3: bottom layer)
     ! [tracer unit * m3, i.e. mmol; umol for Fe; mg for chlorophyll]
-    real(kind=wp), allocatable, dimension(:) :: clamp_entry_sum, clamp_created_sum
+    real(kind=wp), allocatable, dimension(:, :) :: clamp_entry_sum, clamp_created_sum
 
     ! NEW MOCSY Omega for calcite, i.e., the   calcite saturation state
     real(kind=wp) :: OmegaC_depth(1)
