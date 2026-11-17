@@ -8,6 +8,8 @@ module recom_extra
     public :: Depth_calculations
     public :: calculate_solar_declination
     public :: solar_incidence_cosine
+    public :: global_sum_recom
+
 
 contains
 
@@ -278,5 +280,26 @@ contains
         call MPI_Allreduce(lval, int2D, 1, MPI_DOUBLE_PRECISION, MPI_SUM, &
                 MPI_COMM_FESOM, MPIerr)
     end subroutine integrate_nod_2D_recom
+
+    !===============================================================================
+    ! Sum of a vector of rank-local values over all MPI ranks (diag_tiny_clamp)
+    !===============================================================================
+    subroutine global_sum_recom(loc, glo, nval, MPI_COMM_FESOM)
+
+        use recom_declarations, only: wp
+        use mpi
+
+        implicit none
+
+        integer, intent(in) :: nval, MPI_COMM_FESOM
+        real(kind=WP), intent(in), dimension(nval) :: loc
+        real(kind=WP), intent(out), dimension(nval) :: glo
+
+        integer :: MPIerr
+
+        glo = 0.0_WP
+        call MPI_Allreduce(loc, glo, nval, MPI_DOUBLE_PRECISION, MPI_SUM, &
+                MPI_COMM_FESOM, MPIerr)
+    end subroutine global_sum_recom
 
 end module recom_extra
