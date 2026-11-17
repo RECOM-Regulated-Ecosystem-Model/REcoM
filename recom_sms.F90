@@ -87,7 +87,7 @@ contains
                 kscavfe2, ligandstabconst, loss_het, &
                 loss_miczoo, loss_zoo2, lossc, lossc_c, lossc_d, lossc_p, lossc_z, lossc_z2, &
                 lossn, lossn_c, lossn_d, lossn_p, lossn_z, lossn_z2, lossn_z3, ncmax, ncmax_c, &
-                ncuptakeratio_d, ncuptakeratio_p, nmaxslope, nminslope, nmocsy, o2dep_remin, &
+                ncuptakeratio_d, ncuptakeratio_p, nmaxslope, nminslope, nmocsy, o2dep_remin, o2dep_benthos, &
                 omegac_diss, one, ord_cocco, ord_d, ord_phy, p_cm, p_cm_d, pa2atm, pzcocco, &
                 pzmiczoo2, pzphaeo, pzphaeo2, pzphaeo3, pzphy, pzphy2, pzphy3, &
                 recom_grazing_variable_preference, recom_grazing_variable_efficiency, &
@@ -192,6 +192,12 @@ contains
 
         !< [day] Reciprocal of respiration by heterotrophs and mortality (loss to detritus)
         real(kind=wp) :: recip_res_het
+
+        ! O2dep_benthos: bottom-layer O2 [mmol m-3], factor on the benthic remineralisation of
+        ! organic matter [-], benthic C remineralisation and its O2-limited maximum
+        ! [mmolC m-2 d-1]; at most cfl_ben_o2 of the bottom-layer O2 is used per ocean step
+        real(kind=wp) :: O2_ben, ben_o2_fac, ben_c_decay, ben_c_decay_max
+        real(kind=wp), parameter :: cfl_ben_o2 = 0.9_wp
         real(kind=wp) :: Sink_Vel
         real(kind=wp) :: aux
         real(kind=wp) :: lightlim
@@ -3595,8 +3601,30 @@ contains
                 !   Higher rates in warm, oxygenated sediments
                 !---------------------------------------------------------------------------
 
+                !---------------------------------------------------------------------------
+                ! O2 limitation of the benthic remineralisation of organic matter (O2dep_benthos)
+                !   The O2 for the benthic C remineralisation is taken from the bottom water
+                !   (diff_ver_recom_expl, redO2C per C). Without a limit it can exceed the O2
+                !   there, and the lower bound on O2 then creates O2. With O2dep_benthos the
+                !   organic N and C (and 13C, 14C) remineralisation is scaled by
+                !   O2 / (k_o2_remin + O2) of the bottom layer, as in the water column, and
+                !   capped so that one ocean step uses at most cfl_ben_o2 of the O2 in the
+                !   bottom layer. Material not remineralised stays in the benthos.
+                !   Calcite and opal dissolution do not use O2 and are not scaled.
+                !---------------------------------------------------------------------------
+                ben_o2_fac = 1.0_wp
+                if (O2dep_benthos) then
+                    O2_ben = max(tiny, state(Nn, ioxy) + sms(Nn, ioxy))
+                    ben_o2_fac = O2_ben / (k_o2_remin + O2_ben)
+                    ben_c_decay = decayRateBenC * LocBenthos(2) * ben_o2_fac
+                    ben_c_decay_max = cfl_ben_o2 * O2_ben * thick(Nn) / (redO2C * dt_d)
+                    if (ben_c_decay > ben_c_decay_max) then
+                        ben_o2_fac = ben_o2_fac * ben_c_decay_max / ben_c_decay
+                    end if
+                end if
+
                 ! Calculate N remineralization flux [mmolN m-2 day-1]
-                decayBenthos(1) = decayRateBenN * LocBenthos(1)
+                decayBenthos(1) = decayRateBenN * LocBenthos(1) * ben_o2_fac
 
                 ! ----------------------------------------------------------------
                 ! Diagnostic: benthic N remineralization > 10 mmolN/m2/d
@@ -3647,7 +3675,7 @@ contains
                 !---------------------------------------------------------------------------
 
                 ! Calculate C remineralization flux [mmolC m-2 day-1]
-                decayBenthos(2) = decayRateBenC * LocBenthos(2)
+                decayBenthos(2) = decayRateBenC * LocBenthos(2) * ben_o2_fac
 
                 ! Update benthic C pool
                 LocBenthos(2) = LocBenthos(2) - decayBenthos(2) * dt_b
@@ -3764,7 +3792,7 @@ contains
 
                     ! Calculate 13C remineralization flux
                     ! Ignores isotopic fractionation during remineralization (alpha ≈ 1)
-                    decayBenthos(5) = alpha_dcal_13 * decayRateBenC * LocBenthos(5)
+                    decayBenthos(5) = alpha_dcal_13 * decayRateBenC * LocBenthos(5) * ben_o2_fac
 
                     ! Update benthic 13C pool
                     LocBenthos(5) = LocBenthos(5) - decayBenthos(5) * dt_b
@@ -3807,7 +3835,8 @@ contains
 
                             ! Calculate 14C remineralization flux
                             ! Ignores isotopic fractionation during remineralization
-                            decayBenthos(7) = alpha_dcal_14 * decayRateBenC * LocBenthos(7)
+                            decayBenthos(7) = alpha_dcal_14 * decayRateBenC * LocBenthos(7) &
+                                    * ben_o2_fac
 
                             ! Update benthic 14C pool
                             LocBenthos(7) = LocBenthos(7) - decayBenthos(7) * dt_b

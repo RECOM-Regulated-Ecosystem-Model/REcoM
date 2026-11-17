@@ -513,6 +513,9 @@ module recom_config
 
     ! NEW O2remin Add option for O2 dependency of organic matter remineralization
     logical :: O2dep_remin = .true.
+    ! O2 dependency of the benthic remineralisation of organic matter (N, C): limited by
+    ! the O2 of the bottom layer, so the benthic O2 uptake cannot exceed the O2 there
+    logical :: O2dep_benthos = .false.
     logical :: use_ballasting = .true. ! NEW BALL
     logical :: use_density_scaling = .true. ! NEW BALL
     logical :: use_viscosity_scaling = .true. ! NEW BALL
@@ -572,7 +575,7 @@ module recom_config
             Grazing_detritus, &
             het_resp_noredfield, &
             diatom_mucus, &
-            O2dep_remin, use_ballasting, use_density_scaling, & ! O2remin, NEW BALL
+            O2dep_remin, O2dep_benthos, use_ballasting, use_density_scaling, & ! O2remin, NEW BALL
     ! BALL, DISS added OmegaC_diss, added CO2lim
             use_viscosity_scaling, OmegaC_diss, CO2lim, &
             Diags, constant_CO2, &
