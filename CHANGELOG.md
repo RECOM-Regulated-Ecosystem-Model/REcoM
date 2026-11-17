@@ -28,6 +28,12 @@ FESOM pins REcoM by release tag.
   per tracer and element, split into top wet layer, interior and bottom layer, together
   with the deficit the tracers have on entry to REcoM; printed once per model day (#60).
   Bit-identical when off.
+- `O2dep_benthos` (`&pavariables`, default `.false.`): the benthic remineralisation of
+  organic N and C (and 13C, 14C) is scaled by `O2 / (k_o2_remin + O2)` of the bottom layer,
+  as in the water column, and capped so that one ocean step uses at most 0.9 of the O2
+  there; material that is not remineralised stays in the benthos (#61). In the 2p3z2d
+  test the O2 added by the lower bound falls from 1.7 to 0.07 Tmol per year.
+  Bit-identical when off.
 
 ### Known limitations
 
@@ -36,7 +42,7 @@ FESOM pins REcoM by release tag.
   0.4 Tmol Si and 1.7 Tmol O2 per year. C, N and Si are added in the interior, where
   Redi isopycnal diffusion makes tracers close to zero negative (97 % less with
   `Redi = .false.`); O2 in the bottom layer, where the benthic O2 uptake exceeds the O2
-  of anoxic cells.
+  of anoxic cells (see `O2dep_benthos`).
 
 ## [v3.2.0] - #56
 
