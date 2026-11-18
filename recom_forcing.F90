@@ -18,7 +18,7 @@ contains
             HCO3_watercolumn, CO3_watercolumn, OmegaC_watercolumn, &
             kspc_watercolumn, rhoSW_watercolumn, PAR, MPI_COMM_FESOM, &
             mype, myDim_nod2D, eDim_nod2D, nl, hnode, zbar_3d_n, &
-            geo_coord_nod2D, daynew, ndpyr, dt, kappa, mstep, rad)
+            geo_coord_nod2D, daynew, ndpyr, dt, kappa, mstep, rad, areasvol_col)
         use recom_log, only: recom_abort
 
         use recom_declarations, only: wp, tiny_si, tiny_n, tiny_c, tiny_n_d, tiny_n_c, tiny_n_p, &
@@ -44,7 +44,8 @@ contains
                 diags, enable_3zoo2det, enable_coccos, grazing_detritus, ialk, icchl, icocc, &
                 idchl, idiac, idian, idiasi, idic, idin, ioxy, ipchl, &
                 iphac, iphachl, iphan, iphyc, iphyn, isi, nmocsy, &
-                one, pa2atm, recom_debug, secondsperday, tiny, tiny_chl, icocn, diag_tiny_clamp
+                one, pa2atm, recom_debug, secondsperday, tiny, tiny_chl, icocn, diag_tiny_clamp, &
+                conserve_lower_bounds
 
         use recom_ciso, only: alpha_aq_13, alpha_aq_14, alpha_dic_13, alpha_dic_14, alpha_k_13, &
                 alpha_k_14, alpha_p_13, alpha_p_14, alpha_p_dia_13, alpha_p_dia_14, ciso_14, &
@@ -95,6 +96,8 @@ contains
         real(kind=wp), intent(inout), dimension(nl - 1) :: PAR
 
         real(kind=WP), intent(in), dimension(:, :) :: hnode, zbar_3d_n
+        ! area of the node's control volume per level [m2] (conserve_lower_bounds)
+        real(kind=WP), intent(in), dimension(:) :: areasvol_col
         real(kind=WP), intent(in), dimension(:, :) :: geo_coord_nod2D
         real(kind=wp), intent(inout), dimension(nl - 1, bgc_num) :: state
 
@@ -134,7 +137,8 @@ contains
         real(kind=wp), dimension(nl - 1) :: thick      ! Layer thickness [m]
         real(kind=wp), dimension(nl - 1) :: recipthick ! 1/thick [1/m]
 
-        ! diag_tiny_clamp: lower bound of each BGC tracer, as applied after the SMS update
+        ! diag_tiny_clamp, conserve_lower_bounds: lower bound of each BGC tracer, as applied
+        ! after the SMS update
         real(kind=wp), dimension(bgc_num) :: lower_bound
         integer :: itr
 
@@ -303,10 +307,9 @@ contains
         if (recom_debug .and. mype == 0) call recom_trace('REcoM_sms', 2)
 
         !---------------------------------------------------------------------------
-        ! diag_tiny_clamp: how far the tracers are below their lower bounds on entry
-        ! (lowered by transport, sinking or dilution since the last REcoM step)
+        ! Lower bound of each BGC tracer (diag_tiny_clamp, conserve_lower_bounds)
         !---------------------------------------------------------------------------
-        if (diag_tiny_clamp) then
+        if (diag_tiny_clamp .or. conserve_lower_bounds) then
             lower_bound = tiny
             lower_bound(ipchl)  = tiny_chl
             lower_bound(iphyn)  = tiny_N
@@ -323,6 +326,13 @@ contains
                 lower_bound(iphan)   = tiny_N_p
                 lower_bound(iphac)   = tiny_C_p
             end if
+        end if
+
+        !---------------------------------------------------------------------------
+        ! diag_tiny_clamp: how far the tracers are below their lower bounds on entry
+        ! (lowered by transport, sinking or dilution since the last REcoM step)
+        !---------------------------------------------------------------------------
+        if (diag_tiny_clamp) then
             clamp_entry_col = 0.0_WP
             clamp_created_col = 0.0_WP
             do itr = 1, bgc_num
@@ -345,15 +355,22 @@ contains
         !---------------------------------------------------------------------------
         ! Apply SMS tendency and enforce lower concentration bounds
         !---------------------------------------------------------------------------
-        ! diag_tiny_clamp: amount the lower bounds below add to state + sms
+        ! diag_tiny_clamp: state + sms before the lower bounds; the difference to the bounded
+        ! state is taken after the per-species bounds below
         if (diag_tiny_clamp) then
-            do itr = 1, bgc_num
-                clamp_created_col(nzmin:nn, itr) = max(0.0_WP, lower_bound(itr) &
-                        - (state(nzmin:nn, itr) + sms(nzmin:nn, itr)))
-            end do
+            clamp_created_col(nzmin:nn, :) = state(nzmin:nn, :) + sms(nzmin:nn, :)
         end if
 
-        state(nzmin:nn, :) = max(tiny, state(nzmin:nn, :) + sms(nzmin:nn, :))
+        if (conserve_lower_bounds) then
+            ! raise each tracer to its lower bound with mass taken from the same column
+            state(nzmin:nn, :) = state(nzmin:nn, :) + sms(nzmin:nn, :)
+            do itr = 1, bgc_num
+                call fill_lower_bound(state(nzmin:nn, itr), lower_bound(itr), &
+                        thick(nzmin:nn) * areasvol_col(nzmin:nn))
+            end do
+        else
+            state(nzmin:nn, :) = max(tiny, state(nzmin:nn, :) + sms(nzmin:nn, :))
+        end if
 
         ! Per-species lower bounds (tighter than the generic 'tiny')
         state(nzmin:nn, ipchl)  = max(tiny_chl, state(nzmin:nn, ipchl))
@@ -372,6 +389,13 @@ contains
             state(nzmin:nn, iphachl) = max(tiny_chl, state(nzmin:nn, iphachl))
             state(nzmin:nn, iphan)   = max(tiny_N_p, state(nzmin:nn, iphan))
             state(nzmin:nn, iphac)   = max(tiny_C_p, state(nzmin:nn, iphac))
+        end if
+
+        ! diag_tiny_clamp: net amount added by the lower bounds per level. With the clamp it is
+        ! >= 0; with conserve_lower_bounds it is < 0 where mass was taken, and the column sum
+        ! is what the column could not supply.
+        if (diag_tiny_clamp) then
+            clamp_created_col(nzmin:nn, :) = state(nzmin:nn, :) - clamp_created_col(nzmin:nn, :)
         end if
 
         if (recom_debug .and. mype == 0) call recom_trace('ciso', 2)
@@ -532,5 +556,58 @@ contains
 
         end if
     end subroutine REcoM_Forcing
+
+    !===============================================================================
+    ! fill_lower_bound (conserve_lower_bounds)
+    !   Raises the levels of one column that are below the lower bound to the bound and
+    !   takes the same amount from the levels above it, in proportion to their excess over
+    !   the bound, so that the column inventory sum(x * w) is kept. If the column holds less
+    !   above the bound than is missing, all of it is taken and the rest is added, as with
+    !   the plain lower bound: the only mass that is still created.
+    !
+    !   x     : one tracer over the active levels of the column [tracer unit], updated
+    !   floor : lower bound of the tracer [tracer unit]
+    !   w     : volume of each level, layer thickness * area [m3]
+    !===============================================================================
+    subroutine fill_lower_bound(x, floor, w)
+
+        use recom_declarations, only: wp
+
+        implicit none
+
+        real(kind=wp), intent(inout), dimension(:) :: x
+        real(kind=wp), intent(in) :: floor
+        real(kind=wp), intent(in), dimension(:) :: w
+
+        real(kind=wp) :: deficit, surplus, frac
+        integer :: k
+
+        ! amount missing below the bound and amount available above it [tracer unit * m3]
+        deficit = 0.0_wp
+        surplus = 0.0_wp
+        do k = 1, size(x)
+            if (x(k) < floor) then
+                deficit = deficit + (floor - x(k)) * w(k)
+            else
+                surplus = surplus + (x(k) - floor) * w(k)
+            end if
+        end do
+
+        if (deficit <= 0.0_wp) return
+
+        ! take min(deficit, surplus) from the levels above the bound, in proportion to their
+        ! excess; frac <= 1 keeps them at or above the bound (skipped if surplus is 0 or NaN)
+        if (surplus > 0.0_wp) then
+            frac = min(1.0_wp, deficit / surplus)
+            do k = 1, size(x)
+                if (x(k) > floor) x(k) = x(k) - frac * (x(k) - floor)
+            end do
+        end if
+
+        ! raise the levels below the bound
+        do k = 1, size(x)
+            x(k) = max(floor, x(k))
+        end do
+    end subroutine fill_lower_bound
 
 end module recom_forcing_module

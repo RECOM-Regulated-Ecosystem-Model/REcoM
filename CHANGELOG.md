@@ -34,6 +34,14 @@ FESOM pins REcoM by release tag.
   there; material that is not remineralised stays in the benthos (#61). In the 2p3z2d
   test the O2 added by the lower bound falls from 1.7 to 0.07 Tmol per year.
   Bit-identical when off.
+- `conserve_lower_bounds` (`&pavariables`, default `.false.`): when a tracer is raised to
+  its lower bound in `REcoM_Forcing`, the amount is taken from the levels of the same
+  column above the bound, in proportion to their excess, so the column inventory is kept;
+  only what the column cannot supply is still added (#64). With the recommended FESOM2.8
+  GM/Redi setting (`Redi_Kmax = 1500`, `ODM95_Scr = 1.0e-2`) the mass added by the lower
+  bounds in one year falls from 8.3 Tg C, 5.0 Tg N and 0.73 Tmol Si to 0.03 Tg C,
+  0.008 Tg N and 0.0001 Tmol Si; annual means of nutrients, DIC and O2 change by less
+  than 0.05 %, plankton by less than 1 %. Bit-identical when off.
 
 ### Known limitations
 

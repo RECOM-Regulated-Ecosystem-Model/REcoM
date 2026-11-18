@@ -549,6 +549,10 @@ module recom_config
     ! Diagnostic of the mass added by the lower bounds (tiny, tiny_N, ...) in REcoM_Forcing:
     ! global totals per tracer and element, printed once per model day. Does not change results.
     logical :: diag_tiny_clamp = .false.
+    ! Conserve the column inventory when tracers are raised to their lower bounds in
+    ! REcoM_Forcing: the amount needed is taken from the levels of the same column above the
+    ! bound (fill_lower_bound). Only what the column cannot supply is still added.
+    logical :: conserve_lower_bounds = .false.
     logical :: ciso = .false. !MB main switch to enable/disable carbon isotopes (13|14C)
     integer :: benthos_num = 4 !MB number of sediment tracers = 8 if ciso = .true.
     logical :: use_MEDUSA = .false. ! main switch for sediment model
@@ -584,7 +588,7 @@ module recom_config
             useErosion, NitrogenSS, useAeolianN, &
             firstyearoffesomcycle, lastyearoffesomcycle, numofCO2cycles, &
             currentCO2cycle, Nmocsy, &
-            recom_debug, diag_tiny_clamp, ciso, benthos_num, &
+            recom_debug, diag_tiny_clamp, conserve_lower_bounds, ciso, benthos_num, &
             use_MEDUSA, use_DICremin, sedflx_num, bottflx_num, &
             add_loopback, lb_tscale, use_atbox, use_virt_tracers
 
