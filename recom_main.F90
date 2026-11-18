@@ -124,6 +124,8 @@ contains
         use recom_extra, only: cobeta, global_sum_recom
 
         use recom_declarations, only: wp, decaybenthos, tracer_ids
+        use recom_declarations, only: ben_aer_frac
+        use recom_glovar, only: GloBenAerFrac
         use bio_fluxes_interface, only: bio_fluxes
 
         use recom_config, only: benthos_num, bgc_num, ciso, diags, dust_sol, enable_3zoo2det, &
@@ -638,6 +640,8 @@ contains
             ! Convert decay rate from [mmol/m2/d] to [mmol/m2/s]
             GlodecayBenthos(n, 1:benthos_num) = &
                 decayBenthos(1:benthos_num) / SecondsPerDay
+            ! Aerobic fraction of the benthic C remineralisation (scales the O2 uptake)
+            GloBenAerFrac(n) = ben_aer_frac
 
 
             if (recom_debug .and. mype == 0) call recom_trace('benthos + diagnostics', 2, &

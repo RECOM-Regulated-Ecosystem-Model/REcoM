@@ -130,6 +130,8 @@ contains
         use recom_carbonate_chemistry, only: calculate_carbonate_chemistry
         use recom_sms_init
         use recom_log, only: recom_warn, recom_info, recom_kv, recom_itoa
+        use recom_declarations, only: ben_aer_frac
+        use recom_config, only: ben_anox_min
 
         implicit none
 
@@ -3611,8 +3613,15 @@ contains
                 !   capped so that one ocean step uses at most cfl_ben_o2 of the O2 in the
                 !   bottom layer. Material not remineralised stays in the benthos.
                 !   Calcite and opal dissolution do not use O2 and are not scaled.
+                !   With ben_anox_min > 0 the remineralisation does not fall below
+                !   ben_anox_min of the O2-free rate: the part above the O2-limited rate is
+                !   anaerobic and uses no O2 (ben_aer_frac scales the benthic O2 uptake in
+                !   recom_sinking). It stands for denitrification and sulfate reduction in
+                !   the sediment; the N2 loss and the O2 debt of reduced products (H2S) are
+                !   not represented.
                 !---------------------------------------------------------------------------
                 ben_o2_fac = 1.0_wp
+                ben_aer_frac = 1.0_wp
                 if (O2dep_benthos) then
                     O2_ben = max(tiny, state(Nn, ioxy) + sms(Nn, ioxy))
                     ben_o2_fac = O2_ben / (k_o2_remin + O2_ben)
@@ -3620,6 +3629,10 @@ contains
                     ben_c_decay_max = cfl_ben_o2 * O2_ben * thick(Nn) / (redO2C * dt_d)
                     if (ben_c_decay > ben_c_decay_max) then
                         ben_o2_fac = ben_o2_fac * ben_c_decay_max / ben_c_decay
+                    end if
+                    if (ben_anox_min > ben_o2_fac) then
+                        ben_aer_frac = ben_o2_fac / ben_anox_min
+                        ben_o2_fac = ben_anox_min
                     end if
                 end if
 

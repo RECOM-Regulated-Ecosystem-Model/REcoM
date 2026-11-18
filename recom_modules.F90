@@ -298,6 +298,8 @@ module REcoM_declarations
     !! *** Benthos  ***
     ! [1/day] Decay rate of detritus in the benthic layer
     real(kind=wp), allocatable, dimension(:) :: decayBenthos
+    ! [-] Aerobic fraction of the benthic C remineralisation (O2dep_benthos, ben_anox_min)
+    real(kind=wp) :: ben_aer_frac = 1.0_wp
 
     real(kind=wp) :: Ironflux ! [umol Fe/(m2*day)] Flux of Fe from sediment to water
     !_______________________________________________________________________________
@@ -516,6 +518,10 @@ module recom_config
     ! O2 dependency of the benthic remineralisation of organic matter (N, C): limited by
     ! the O2 of the bottom layer, so the benthic O2 uptake cannot exceed the O2 there
     logical :: O2dep_benthos = .false.
+    ! Minimum benthic remineralisation of organic matter (N, C) at low bottom O2, as a fraction
+    ! of the O2-free rate (O2dep_benthos): the part above the O2-limited rate is anaerobic and
+    ! uses no O2. 0 = no anaerobic remineralisation (organic matter stays in the benthos).
+    real(kind=wp) :: ben_anox_min = 0.0_wp
     logical :: use_ballasting = .true. ! NEW BALL
     logical :: use_density_scaling = .true. ! NEW BALL
     logical :: use_viscosity_scaling = .true. ! NEW BALL
@@ -579,7 +585,7 @@ module recom_config
             Grazing_detritus, &
             het_resp_noredfield, &
             diatom_mucus, &
-            O2dep_remin, O2dep_benthos, use_ballasting, use_density_scaling, & ! O2remin, NEW BALL
+            O2dep_remin, O2dep_benthos, ben_anox_min, use_ballasting, use_density_scaling, & ! O2remin, NEW BALL
     ! BALL, DISS added OmegaC_diss, added CO2lim
             use_viscosity_scaling, OmegaC_diss, CO2lim, &
             Diags, constant_CO2, &
@@ -2036,6 +2042,8 @@ module REcoM_GloVar
     real(kind=wp), allocatable, dimension(:) :: GlodPCO2surf
     ! [1/day] Decay rate of detritus in the benthic layer saved for oce_ale_tracer.F90
     real(kind=wp), allocatable, dimension(:, :) :: GlodecayBenthos
+    ! [-] Aerobic fraction of the benthic C remineralisation, scales the benthic O2 uptake
+    real(kind=wp), allocatable, dimension(:) :: GloBenAerFrac
     ! [m s-1]
     real(kind=wp), allocatable, dimension(:) :: PistonVelocity
     ! [mol L-1 atm-1]
