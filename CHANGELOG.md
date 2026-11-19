@@ -32,8 +32,9 @@ FESOM pins REcoM by release tag.
   organic N and C (and 13C, 14C) is scaled by `O2 / (k_o2_remin + O2)` of the bottom layer,
   as in the water column, and capped so that one ocean step uses at most 0.9 of the O2
   there; material that is not remineralised stays in the benthos (#61). In the 2p3z2d
-  test the O2 added by the lower bound falls from 1.7 to 0.07 Tmol per year.
-  Bit-identical when off.
+  test the O2 added by the lower bound falls from 1.7 to 0.07 Tmol per year. Under
+  anoxic bottom water the benthos then accumulates without limit unless
+  `ben_anox_min > 0`. Bit-identical when off.
 - `conserve_lower_bounds` (`&pavariables`, default `.false.`): when a tracer is raised to
   its lower bound in `REcoM_Forcing`, the amount is taken from the levels of the same
   column above the bound, in proportion to their excess, so the column inventory is kept;
@@ -42,6 +43,17 @@ FESOM pins REcoM by release tag.
   bounds in one year falls from 8.3 Tg C, 5.0 Tg N and 0.73 Tmol Si to 0.03 Tg C,
   0.008 Tg N and 0.0001 Tmol Si; annual means of nutrients, DIC and O2 change by less
   than 0.05 %, plankton by less than 1 %. Bit-identical when off.
+- `ben_anox_min` (`&pavariables`, default `0.0`): with `O2dep_benthos`, the benthic
+  remineralisation of organic N and C (and 13C, 14C) does not fall below this fraction of
+  the O2-free rate. The part above the O2-limited rate is anaerobic and uses no O2; it
+  stands for denitrification and sulfate reduction in the sediment, without the N2 loss
+  and the O2 debt of reduced products (#65). Without it, nodes with bottom O2 below
+  15 mmol m-3 (0.8 % of the nodes) account for all of the net benthic N growth in the
+  spinup (1962-1965), which grows linearly. With `ben_anox_min = 0.3` the benthos under
+  anoxic water settles towards a finite stock: after three years benthic N and C are
+  9.8 % and 8.9 % lower, the N returns as DIN, no mass or O2 is added by the lower
+  bounds, and other annual means change by less than 0.25 % (heterotrophic bacteria
+  1 %). Results unchanged when 0.
 
 ### Known limitations
 
