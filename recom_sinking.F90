@@ -403,7 +403,7 @@ contains
         use recom_log, only: recom_abort
 
         use recom_declarations, only: wp, tracer_ids
-        use recom_glovar, only: GloSed, glodecayBenthos
+        use recom_glovar, only: GloSed, glodecayBenthos, GloBenAerFrac
         use recom_config, only: ciso, use_MEDUSA, sedflx_num, redO2C, Fe2N_benthos
         use recom_log, only: recom_error, recom_info, recom_itoa
 
@@ -479,7 +479,9 @@ contains
             case (1019)
                 bottom_flux = GlodecayBenthos(:, 1) * Fe2N_benthos !*** DFe, scaled from N ***
             case (1022)
-                bottom_flux = -GlodecayBenthos(:, 2) * redO2C !*** O2 consumed by C remin ***
+                ! O2 consumed by the aerobic part of the benthic C remineralisation
+                ! (GloBenAerFrac = 1 unless ben_anox_min > 0 and the bottom O2 is low)
+                bottom_flux = -GlodecayBenthos(:, 2) * GloBenAerFrac(:) * redO2C
             case (1302)
                 if (ciso) then
                     !*** DIC_13: organic decay + calcite dissolution ***

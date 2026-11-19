@@ -192,6 +192,7 @@ contains
 
     subroutine initialize_memory(node_size, nl, num_tracers)
         use recom_declarations, only: decayBenthos
+        use recom_glovar, only: GloBenAerFrac
 
         use recom_glovar, only: GloFeDust, AtmFeInput, GloNDust, AtmNInput, RiverDIN2D, &
                 RiverDON2D, RiverDOC2D, RiverDSi2D, RiverDIC2D, RiverAlk2D, RiverFe, &
@@ -268,6 +269,7 @@ contains
         allocate(PistonVelocity(node_size), source=0.d0)
         allocate(alphaCO2(node_size), source=0.d0)
         allocate(GlodecayBenthos(node_size, benthos_num), source=0.d0)
+        allocate(GloBenAerFrac(node_size), source=1.d0)
         allocate(Benthos(node_size, benthos_num), source=0.d0)
 
         ! kh 25.03.22 buffer per tracer index
