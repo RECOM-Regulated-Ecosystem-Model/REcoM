@@ -397,7 +397,10 @@ contains
         ! Correction accounts for non-photosynthetic N (structural proteins, storage)
         ! Formula: Chl2C x (quota / (quota - NCmin))
         ! As quota -> NCmin, more N is in photosynthetic machinery
-        CHL2C_plast = Chl2C * (quota / (quota - NCmin))
+        ! The denominator is kept >= tiny: at or below NCmin (possible when N and C
+        ! are floored or transported separately) the ratio takes its limit from
+        ! above (large), instead of a division by zero or a negative value
+        CHL2C_plast = Chl2C * (quota / max(quota - NCmin, tiny))
 
         !===============================================================================
         ! Diatom Quotas
@@ -447,7 +450,7 @@ contains
 
         ! Plastidic Chlorophyll:Carbon ratio
         ! Corrected for non-photosynthetic nitrogen allocation
-        CHL2C_plast_dia = Chl2C_dia * (quota_dia / (quota_dia - NCmin_d))
+        CHL2C_plast_dia = Chl2C_dia * (quota_dia / max(quota_dia - NCmin_d, tiny))
 
         ! Silicon:Carbon quota
         ! Critical for frustule formation and diatom physiology
@@ -510,7 +513,7 @@ contains
             Chl2N_cocco = CoccoChl / CoccoN
 
             ! Plastidic Chlorophyll:Carbon ratio
-            CHL2C_plast_cocco = Chl2C_cocco * (quota_cocco / (quota_cocco - NCmin_c))
+            CHL2C_plast_cocco = Chl2C_cocco * (quota_cocco / max(quota_cocco - NCmin_c, tiny))
 
             !===========================================================================
             ! Phaeocystis Quotas
@@ -547,7 +550,7 @@ contains
             Chl2N_phaeo = PhaeoChl / PhaeoN
 
             ! Plastidic Chlorophyll:Carbon ratio
-            CHL2C_plast_phaeo = Chl2C_phaeo * (quota_phaeo / (quota_phaeo - NCmin_p))
+            CHL2C_plast_phaeo = Chl2C_phaeo * (quota_phaeo / max(quota_phaeo - NCmin_p, tiny))
 
         end if
 
@@ -809,8 +812,10 @@ contains
             ! (typically cold-temperate waters, 0-10degC)
 
             Temp_phaeo = uopt_phaeo &
-                    * ((Tmax_phaeo - Temp(k)) / (Tmax_phaeo - Topt_phaeo)) ** beta_phaeo &
+                    * (max(0.0_wp, Tmax_phaeo - Temp(k)) / (Tmax_phaeo - Topt_phaeo)) ** beta_phaeo &
                     * exp(-beta_phaeo * (Topt_phaeo - Temp(k)) / (Tmax_phaeo - Topt_phaeo))
+            ! Above Tmax_phaeo the base is set to 0 (growth 0, then tiny below), instead of
+            ! a negative number to a non-integer power (NaN)
             Temp_phaeo = max(Temp_phaeo, tiny) ! Ensure positive values
             if (Diags) VTTemp_phaeo(k) = Temp_phaeo ! Store for diagnostics
 
