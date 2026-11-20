@@ -9,6 +9,22 @@ All notable changes to REcoM are listed here. Versions follow
 
 FESOM pins REcoM by release tag.
 
+## [Unreleased]
+
+### Fixed
+
+- The plastidic Chl:C ratio (`CHL2C_plast`, all phytoplankton groups) divides by
+  `quota - NCmin`, which is zero or negative where the N:C quota reaches `NCmin` (possible
+  when N and C are floored or transported separately). The denominator is now kept at
+  least `tiny`, so the ratio takes its limit from above: chlorophyll degradation is at
+  its maximum there instead of dropping to its minimum, and there is no division by
+  zero (#67). Results change only in cells with N:C at or below `NCmin`; none in a
+  5-day test of the 2p3z2d setup.
+- The Phaeocystis temperature function raised `Tmax_phaeo - T` to a non-integer power,
+  which is NaN above `Tmax_phaeo` (16 degC); `max(NaN, tiny)` then gave `tiny` only by
+  compiler behaviour. The base is now limited to zero, so growth is zero above
+  `Tmax_phaeo` by definition (#67). Same results.
+
 ## [v3.3.0] - #65
 
 All new options are off by default, so results are unchanged unless they are set
