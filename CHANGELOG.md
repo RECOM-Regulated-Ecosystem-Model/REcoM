@@ -9,14 +9,20 @@ All notable changes to REcoM are listed here. Versions follow
 
 FESOM pins REcoM by release tag.
 
-## [Unreleased]
+## [v3.3.0] - #65
+
+All new options are off by default, so results are unchanged unless they are set
+(different builds can differ in the last digits). Recommended for new runs, set in
+`namelist.recom` (`&pavariables`):
+
+```
+O2dep_benthos         = .true.
+ben_anox_min          = 0.3d0
+conserve_lower_bounds = .true.
+```
 
 ### Performance
 
-- `recom()` exchanges only the BGC tracers at the end of the time step. The
-  halo exchanges of 59 other node fields (surface fluxes, benthos, carbonate
-  system, diagnostics) are removed; REcoM and FESOM read these at own nodes
-  only (#58). Bit-identical.
 - `ver_sinking_recom_benthos` no longer exchanges the halo of `Benthos`,
   `Benthos_tr`, `SinkFlx` and `SinkFlx_tr` after each sinking tracer; they
   are read at own nodes only (#59). Bit-identical.
