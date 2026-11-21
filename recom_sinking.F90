@@ -522,9 +522,18 @@ contains
             if (areal_flux) tot_flux = tot_flux * sum(seafloor(ul1:nl1))
             ! seafloor under layer nz is its bottom face, vd_flux(nz+1), which cell nz
             ! receives below; weights sum to 1, so the return equals the benthic loss
-            do nz = ul1, nl1
-                vd_flux(nz + 1) = seafloor(nz) * tot_flux / sum(seafloor(ul1:nl1))
-            end do
+            if (tracer_id == 1022) then
+                ! O2 is the only benthic uptake (all other fluxes are releases). Spread
+                ! over the layers above shallower neighbouring elements it can take more
+                ! O2 than these layers hold, unchecked; the O2 limit of O2dep_benthos is
+                ! computed for the bottom layer. So the O2 uptake goes into the bottom
+                ! layer of the node only.
+                vd_flux(nl1 + 1) = tot_flux
+            else
+                do nz = ul1, nl1
+                    vd_flux(nz + 1) = seafloor(nz) * tot_flux / sum(seafloor(ul1:nl1))
+                end do
+            end if
 
             !_______________________________________________________________________
             ! Add bottom flux into the tracer tendency (rhs). Each cell nz only
