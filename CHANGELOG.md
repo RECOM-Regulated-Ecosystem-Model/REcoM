@@ -9,7 +9,7 @@ All notable changes to REcoM are listed here. Versions follow
 
 FESOM pins REcoM by release tag.
 
-## [Unreleased]
+## [v3.4.0] - 2026-11-21
 
 ### Fixed
 
