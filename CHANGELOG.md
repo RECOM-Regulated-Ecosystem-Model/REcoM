@@ -13,6 +13,15 @@ FESOM pins REcoM by release tag.
 
 ### Fixed
 
+- The benthic O2 uptake (`diff_ver_recom_expl`) was spread, like the benthic release
+  fluxes, over all layers of a node with seafloor beneath them (v3.2.0, #33). O2 is the
+  only uptake among these fluxes, and the layers above shallower neighbouring elements
+  were not checked: where they hold little O2 (slopes under oxygen minimum zones) the
+  uptake made O2 negative, and REcoM's lower bound had to repair it in the next step.
+  The O2 uptake now goes into the bottom layer of the node only, whose O2 the limit of
+  `O2dep_benthos` checks (#68). With rank-1 physics, the Redi limiter and
+  `conserve_lower_bounds` on, the O2 deficit entering REcoM falls from 0.19 Tmol per
+  year to zero; C, N and Si are unchanged. Changes results.
 - The plastidic Chl:C ratio (`CHL2C_plast`, all phytoplankton groups) divides by
   `quota - NCmin`, which is zero or negative where the N:C quota reaches `NCmin` (possible
   when N and C are floored or transported separately). The denominator is now kept at
